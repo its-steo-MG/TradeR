@@ -1,0 +1,65 @@
+{% extends 'accounts/base.html' %}
+
+{% block title %}Account Statements - KCB{% endblock %}
+
+{% block content %}
+
+<h4 class="mb-4">Account Statements</h4>
+
+<div class="card">
+  <div class="card-body">
+    <div class="row mb-4">
+      <div class="col-md-5">
+        <label class="form-label">Period</label>
+        <select class="form-select">
+          <option>Last 30 days</option>
+          <option>Last 90 days</option>
+          <option>This month</option>
+          <option>Last month</option>
+          <option>Custom range</option>
+        </select>
+      </div>
+      <div class="col-md-3 align-self-end">
+        <button class="btn btn-outline-success w-100">Apply</button>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-hover">
+        <thead class="table-light">
+          <tr>
+            <th>Date</th>
+            <th>Description</th>
+            <th>Debit</th>
+            <th>Credit</th>
+            <th>Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>02 Feb 2026</td>
+            <td>Salary – ABC Ltd</td>
+            <td>—</td>
+            <td class="text-success">KES 520,000.00</td>
+            <td>KES 231,520,000.00</td>
+          </tr>
+          <tr>
+            <td>01 Feb 2026</td>
+            <td>Supermarket – Carrefour</td>
+            <td class="text-danger">KES 14,850.00</td>
+            <td>—</td>
+            <td>KES 10,291,000.00</td>
+          </tr>
+          <!-- Add more rows as needed -->
+        </tbody>
+      </table>
+    </div>
+
+    <div class="text-center mt-4">
+      <button class="btn btn-outline-primary">Download PDF</button>
+      <button class="btn btn-outline-secondary ms-2">Export CSV</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
