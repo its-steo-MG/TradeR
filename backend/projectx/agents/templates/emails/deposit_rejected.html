@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Deposit Rejected</title>
+  <style>
+    body { font-family: Arial; background: #f9f9f9; padding: 20px; }
+    .container { max-width: 600px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+    .alert { background: #ffebee; color: #c62828; padding: 15px; border-radius: 8px; margin: 20px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Deposit Rejected</h2>
+    <div class="alert">
+      <p>Your deposit of <strong>{{ amount_kes }} KES</strong> via <strong>{{ agent_name }}</strong> was rejected.</p>
+      <p>Please contact support with your proof for re-submission.</p>
+    </div>
+    <p>Need help? Reply to this email.</p>
+  </div>
+</body>
+</html>

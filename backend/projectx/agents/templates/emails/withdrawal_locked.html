@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Funds Locked!</title>
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; background: #f4f6f9; padding: 20px; }
+    .container { max-width: 500px; margin: auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+    .header { background: linear-gradient(135deg, #7c3aed, #ec4899); padding: 30px; text-align: center; color: white; }
+    .header h1 { margin: 0; font-size: 28px; }
+    .body { padding: 30px; text-align: center; color: #1e293b; }
+    .amount { font-size: 36px; font-weight: bold; color: #7c3aed; margin: 20px 0; }
+    .kes { font-size: 28px; color: #ec4899; }
+    .footer { background: #f1f5f9; padding: 20px; font-size: 12px; color: #64748b; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🔒 Funds Locked</h1>
+    </div>
+    <div class="body">
+      <p>Congratulations! Your withdrawal is <strong>secured</strong>.</p>
+      <div class="amount">${{ amount_usd }}</div>
+      <div class="kes">≈ {{ amount_kes }} KES</div>
+      <p><strong>{{ agent_name }}</strong> will pay you in <strong>under 5 minutes</strong>.</p>
+      <p>Check your {{ method }} now!</p>
+    </div>
+    <div class="footer">
+      © 2025 TradeRiser. Questions? Reply anytime.
+    </div>
+  </div>
+</body>
+</html>

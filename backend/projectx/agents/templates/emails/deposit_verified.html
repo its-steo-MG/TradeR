@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Deposit Verified</title>
+  <style>
+    body { margin: 0; padding: 0; background: #f4f7fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .container { max-width: 600px; margin: 30px auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+    .header { background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%); padding: 40px 30px; text-align: center; color: white; }
+    .header h1 { margin: 0; font-size: 28px; font-weight: 700; }
+    .header p { margin: 10px 0 0; font-size: 16px; opacity: 0.9; }
+    .body { padding: 40px 30px; color: #333; }
+    .highlight { background: #f0f4ff; padding: 20px; border-radius: 12px; margin: 20px 0; text-align: center; }
+    .highlight h2 { margin: 0 0 10px; color: #2575fc; font-size: 24px; }
+    .highlight p { margin: 5px 0; font-size: 16px; color: #555; }
+    .details { background: #f9f9f9; padding: 20px; border-radius: 12px; margin: 20px 0; }
+    .details table { width: 100%; border-collapse: collapse; }
+    .details td { padding: 10px 0; font-size: 15px; }
+    .details td:first-child { color: #666; font-weight: 600; width: 40%; }
+    .footer { background: #1a1a1a; color: #aaa; padding: 25px; text-align: center; font-size: 13px; }
+    .btn { display: inline-block; background: #2575fc; color: white; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 20px 0; }
+    @media (max-width: 600px) {
+      .container { margin: 15px; border-radius: 12px; }
+      .header, .body { padding: 25px 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Deposit Verified!</h1>
+      <p>Your funds have been successfully credited</p>
+    </div>
+
+    <div class="body">
+      <p>Hi <strong>{{ user_name }}</strong>,</p>
+      <p>Great news! Your deposit has been verified and added to your trading account.</p>
+
+      <div class="highlight">
+        <h2>${{ amount_usd }}</h2>
+        <p>Credited to your USD Wallet</p>
+      </div>
+
+      <div class="details">
+        <table>
+          <tr>
+            <td>Deposited Amount</td>
+            <td><strong>{{ amount_kes }} KES</strong></td>
+          </tr>
+          <tr>
+            <td>Agent</td>
+            <td><strong>{{ agent_name }}</strong></td>
+          </tr>
+          <tr>
+            <td>Exchange Rate</td>
+            <td>1 USD = {{ amount_kes|floatformat:2 }} KES</td>
+          </tr>
+          <tr>
+            <td>Status</td>
+            <td><span style="color:#28a745;font-weight:600;">Verified & Credited</span></td>
+          </tr>
+        </table>
+      </div>
+
+      <div style="text-align:center;">
+        <a href="https://yourdomain.com/dashboard" class="btn">View Dashboard</a>
+      </div>
+
+      <p style="color:#666;font-size:14px;">
+        If you have any questions, reply to this email or contact support.
+      </p>
+    </div>
+
+    <div class="footer">
+      <p>© 2025 Your Trading Platform. All rights reserved.</p>
+      <p><a href="#" style="color:#888;text-decoration:none;">Unsubscribe</a> • <a href="#" style="color:#888;text-decoration:none;">Privacy Policy</a></p>
+    </div>
+  </div>
+</body>
+</html>

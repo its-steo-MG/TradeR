@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Your Withdrawal OTP</title>
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; background: #f4f6f9; padding: 20px; }
+    .container { max-width: 500px; margin: auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+    .header { background: linear-gradient(135deg, #7c3aed, #ec4899); padding: 30px; text-align: center; color: white; }
+    .header h1 { margin: 0; font-size: 28px; }
+    .body { padding: 30px; text-align: center; color: #1e293b; }
+    .otp { font-size: 48px; font-weight: bold; letter-spacing: 12px; color: #7c3aed; margin: 30px 0; }
+    .footer { background: #f1f5f9; padding: 20px; font-size: 12px; color: #64748b; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🔐 Withdrawal OTP</h1>
+    </div>
+    <div class="body">
+      <p>Hi <strong>{{ user.first_name|default:"Trader" }}</strong>,</p>
+      <p>You requested to withdraw <strong>${{ amount_usd }}</strong> via <strong>{{ agent_name }}</strong>.</p>
+      <div class="otp">{{ otp }}</div>
+      <p>Enter this code in the app. Expires in <strong>10 minutes</strong>.</p>
+      <p>Never share this OTP.</p>
+    </div>
+    <div class="footer">
+      © 2025 TradeRiser. All rights reserved.<br>
+      Need help? Reply to this email.
+    </div>
+  </div>
+</body>
+</html>
