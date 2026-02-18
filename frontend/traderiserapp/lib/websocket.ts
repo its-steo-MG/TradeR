@@ -1,5 +1,5 @@
-const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
-//const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://traderiserproapp.onrender.com";
+//const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
+const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://traderiserproapp.onrender.com";
 
 interface ChatMessage {
   type: string;
