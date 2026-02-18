@@ -18,7 +18,10 @@ DEBUG = True
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
-    
+    'binaryfx-delta.vercel.app',
+    'binaryfx.onrender.com',
+    'traderiserpro.co.ke',
+    'www.traderiserpro.co.ke',
 ]
 # CORS settings
 CORS_ALLOW_ALL_ORIGINS = False
@@ -26,13 +29,19 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-   
+    "https://binaryfx-delta.vercel.app",
+    "https://binaryfx.onrender.com",
+    'https://traderiserpro.co.ke',
+    'https://www.traderiserpro.co.ke',
 ]
 # REQUIRED FOR DJANGO ADMIN POST/DELETE FROM FRONTEND
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-  
+    "https://binaryfx-delta.vercel.app",
+    "https://binaryfx.onrender.com",
+    "https://traderiserpro.co.ke",
+    "https://www.traderiserpro.co.ke",
 ]
 
 INSTALLED_APPS = [
@@ -92,7 +101,7 @@ TEMPLATES = [
 ]
 AUTH_USER_MODEL = 'accounts.User'
 
-WSGI_APPLICATION = 'projectx.wsgi.application'
+WSGI_APPLICATION = 'traderiser.wsgi.application'
 
 AUTHENTICATION_BACKENDS = [
     'accounts.backends.EmailBackend',
@@ -162,7 +171,7 @@ else:
         }
     }
   
-ASGI_APPLICATION = 'projectx.asgi.application'
+ASGI_APPLICATION = 'traderiser.asgi.application'
 # Redis Layer (already added from earlier)
 import os
 from urllib.parse import urlparse
