@@ -37,7 +37,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_referral_link(self, obj):
         if obj.is_marketo and obj.referral_code:
-            return f"https://traderiserpro.co.ke/signup/?ref={obj.referral_code}"
+            return f"https://traderiserapp.com/signup/?ref={obj.referral_code}"
         return None
 
     def get_suspension_details(self, obj):

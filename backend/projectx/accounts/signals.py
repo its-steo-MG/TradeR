@@ -19,7 +19,7 @@ def send_verification_email(sender, instance, created, **kwargs):
     if created and not instance.is_email_verified:
         token = default_token_generator.make_token(instance)
         uid = urlsafe_base64_encode(force_bytes(instance.pk))
-        verify_link = f"https://yourdomain.com/verify/{uid}/{token}/"
+        verify_link = f"https://traderiserapp.com/verify/{uid}/{token}/"
         send_mail(
             'Verify Your TradeRiser Account',
             f'Click to verify: {verify_link}',
