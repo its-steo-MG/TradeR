@@ -11,7 +11,7 @@ import os
 # ----------------------------------------------------------------------
 # 1. Set the settings module *before* anything else
 # ----------------------------------------------------------------------
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'traderiser.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'projectx.settings')
 
 # ----------------------------------------------------------------------
 # 2. Import Django ASGI application (loads models, settings, etc.)
