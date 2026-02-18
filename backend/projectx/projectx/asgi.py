@@ -1,6 +1,6 @@
 # traderiser/asgi.py
 """
-ASGI config for traderiser project.
+ASGI config for projectx project.
 
 - HTTP → Django views
 - WebSocket → JWT auth → customercare + traderpulse routing
