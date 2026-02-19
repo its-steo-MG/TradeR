@@ -14,6 +14,7 @@ from dashboard.models import Transaction
 
 logger = logging.getLogger('wallet')
 
+
 @receiver(post_save, sender=Account)
 def create_default_wallets(sender, instance, created, **kwargs):
     if created:
@@ -30,6 +31,7 @@ def create_default_wallets(sender, instance, created, **kwargs):
                 defaults={'balance': Decimal('0.00')}
             )
 
+
 @receiver(pre_save, sender=WalletTransaction)
 def pre_save_wallet_transaction(sender, instance, **kwargs):
     if instance.pk:
@@ -41,20 +43,19 @@ def pre_save_wallet_transaction(sender, instance, **kwargs):
     else:
         instance._old_status = None
 
+
 @receiver(post_save, sender=WalletTransaction)
 def post_save_wallet_transaction(sender, instance, **kwargs):
     old_status = getattr(instance, '_old_status', None)
     if old_status == instance.status:
         return  # No status change
 
-    # Skip automatic processing for previously failed transactions
     if old_status == 'failed':
         return  # Admin must manually approve
 
     user = instance.wallet.account.user
     wallet = instance.wallet
 
-    # Handle completion (from pending/failed → completed)
     if instance.status == 'completed' and old_status != 'completed':
         if not instance.completed_at:
             instance.completed_at = timezone.now()
@@ -75,8 +76,48 @@ def post_save_wallet_transaction(sender, instance, **kwargs):
                 dashboard_type = 'deposit'
                 desc_prefix = "Deposit"
 
+                # ────────────────────────────────────────────────
+                # Referral commission → only email notification (no credit)
+                # ────────────────────────────────────────────────
+                if hasattr(user, 'referred_by') and user.referred_by:
+                    upline = user.referred_by
+                    commission_rate = Decimal('0.80')  # 80% commission
+                    commission_usd = (credit_amount * commission_rate).quantize(Decimal('0.01'))
+
+                    try:
+                        comm_ref = f"COMM-{instance.reference_id}"  # or use generate_reference_id() if needed
+
+                        # Only send notification email — no wallet credit, no Transaction creation
+                        send_mail(
+                            subject="Client Deposit – Commission Earned!",
+                            message=(
+                                f"Hi {upline.username},\n\n"
+                                f"Your client {user.username} has successfully deposited "
+                                f"{instance.amount} {instance.currency.code} "
+                                f"(equivalent to {credit_amount:.2f} USD).\n\n"
+                                f"You have earned 80% commission: {commission_usd:.2f} USD.\n"
+                                f"This will be credited to your account soon.\n"
+                                f"Reference: {comm_ref}\n\n"
+                                f"Thank you for growing the TradeRiser community!"
+                            ),
+                            from_email=settings.DEFAULT_FROM_EMAIL,
+                            recipient_list=[upline.email],
+                            fail_silently=True,
+                        )
+
+                        logger.info(
+                            f"Commission notification sent to {upline.username} for deposit {instance.reference_id} "
+                            f"({commission_usd:.2f} USD earned)"
+                        )
+
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to send commission notification for deposit {instance.reference_id} "
+                            f"(upline: {upline.username}): {str(e)}"
+                        )
+
             elif instance.transaction_type == 'transfer_in':
-                credit_amount = instance.amount  # Usually USD to USD
+                credit_amount = instance.amount
                 wallet.balance += credit_amount
                 update_balance = True
 
@@ -94,24 +135,24 @@ def post_save_wallet_transaction(sender, instance, **kwargs):
                 desc_prefix = "Sent transfer"
 
             elif instance.transaction_type == 'withdrawal':
-                # DO NOT touch balance — already deducted on OTP verification
                 adjust_amount = -instance.amount
                 dashboard_type = 'withdrawal'
                 desc_prefix = "Withdrawal"
 
             else:
-                return  # Unknown type
+                return
 
             if update_balance:
                 wallet.save()
 
-            # Always create the dashboard transaction record
-            Transaction.objects.create(
-                account=wallet.account,
-                amount=adjust_amount,
-                transaction_type=dashboard_type,
-                description=f"{desc_prefix}: {instance.reference_id}"
-            )
+            # Dashboard record for the main user
+            if adjust_amount is not None:
+                Transaction.objects.create(
+                    account=wallet.account,
+                    amount=adjust_amount,
+                    transaction_type=dashboard_type,
+                    description=f"{desc_prefix}: {instance.reference_id}"
+                )
 
             # Success emails
             try:
@@ -119,7 +160,7 @@ def post_save_wallet_transaction(sender, instance, **kwargs):
                     send_mail(
                         "Deposit Approved!",
                         f"Hi {user.username},\n\nYour deposit of {instance.amount} {instance.currency.code} has been approved.\n"
-                        f"{instance.converted_amount} {instance.target_currency.code if instance.target_currency else 'USD'} credited.\n"
+                        f"{instance.converted_amount or credit_amount:.2f} USD credited.\n"
                         f"Ref: {instance.reference_id}",
                         settings.DEFAULT_FROM_EMAIL,
                         [user.email],
@@ -128,18 +169,18 @@ def post_save_wallet_transaction(sender, instance, **kwargs):
                 elif instance.transaction_type == 'withdrawal':
                     send_mail(
                         "Withdrawal Paid!",
-                        f"Hi {user.username},\n\n{instance.amount} {instance.currency.code} has been sent to {instance.mpesa_phone}.\n"
+                        f"Hi {user.username},\n\n{instance.amount} {instance.currency.code} has been sent to {instance.mpesa_phone or 'your account'}.\n"
                         f"Ref: {instance.reference_id}",
                         settings.DEFAULT_FROM_EMAIL,
                         [user.email],
                         fail_silently=True
                     )
                 elif instance.transaction_type == 'transfer_in':
-                    from_user = instance.description.split('from ')[-1] if 'from ' in instance.description else 'Another user'
+                    from_user = instance.description.split('from ')[-1] if 'from ' in instance.description else 'another user'
                     send_mail(
                         "You Received Funds!",
                         f"Hi {user.username},\n\nYou have received ${instance.amount} USD in your {wallet.account.account_type} account.\n"
-                        f"From: {from_user}\n\nRef: {instance.reference_id}\nThank you for using TradeRiser!",
+                        f"From: {from_user}\nRef: {instance.reference_id}",
                         settings.DEFAULT_FROM_EMAIL,
                         [user.email],
                         fail_silently=True
@@ -147,7 +188,6 @@ def post_save_wallet_transaction(sender, instance, **kwargs):
             except Exception as e:
                 logger.error(f"Failed to send completion email for {instance.reference_id}: {str(e)}")
 
-    # Handle failure
     elif instance.status == 'failed' and old_status != 'failed':
         try:
             if instance.transaction_type == 'deposit':

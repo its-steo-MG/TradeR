@@ -14,7 +14,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Quick-start development settings - unsuitable for production
 SECRET_KEY = config('SECRET_KEY')
-DEBUG = False
+DEBUG = True
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
@@ -273,7 +273,7 @@ CELERY_TIMEZONE = 'UTC'  # Or your TZ
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'  # For dynamic scheduling
 
 
-POLYGON_API_KEY = 'qZa9l7TuOwcFhEh3Tpj8tYIqBM8F43qQ'
+POLYGON_API_KEY = '4fnUPp1gYZn4WvaLjv25kNBvU61E_D4X'
 
 
 

@@ -129,6 +129,7 @@ class WalletTransaction(models.Model):
         ('withdrawal', 'Withdrawal'),
         ('transfer_out', 'Transfer Out'),
         ('transfer_in', 'Transfer In'),
+        ('commission', 'Commission'),
     ]
 
     wallet = models.ForeignKey(

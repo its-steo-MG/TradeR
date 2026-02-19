@@ -372,15 +372,20 @@ class GenerateSignalView(APIView):
         except Robot.DoesNotExist:
             return Response({'error': 'AI Signal Bot not configured'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        client = RESTClient(settings.POLYGON_API_KEY)
+        # Add timeout to prevent hangs (connect_timeout=seconds to connect, read_timeout=seconds for data)
+        client = RESTClient(settings.POLYGON_API_KEY, connect_timeout=10, read_timeout=15)
+        
         all_markets = list(Market.objects.all())
-        # Limit to 5 random markets to avoid rate limits and timeouts
+        if not all_markets:
+            return Response({'error': 'No markets available for signal generation'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        
+        # Limit to 1 market for speed (increase to 2-3 if paid plan; free tier risks rate limits)
         import random
-        markets = random.sample(all_markets, min(5, len(all_markets))) if all_markets else []
+        markets = random.sample(all_markets, min(1, len(all_markets)))
         signals = []
 
         for market in markets:
-            time.sleep(12)  # Respect free tier rate limit (~5 calls/min)
+            # No sleep here - handle rate limits below
 
             if market.market_type.name.lower() == 'forex':
                 ticker = f"C:{market.name.upper()}"
@@ -393,14 +398,26 @@ class GenerateSignalView(APIView):
             from_date = to_date - timedelta(days=14)
 
             try:
-                aggs = client.get_aggs(
-                    ticker,
-                    multiplier=1,
-                    timespan="hour",
-                    from_=from_date.strftime("%Y-%m-%d"),
-                    to=to_date.strftime("%Y-%m-%d"),
-                    limit=500
-                )
+                # Simple retry for rate limits (429)
+                for attempt in range(3):  # Try up to 3 times
+                    try:
+                        aggs = client.get_aggs(
+                            ticker,
+                            multiplier=1,
+                            timespan="hour",
+                            from_=from_date.strftime("%Y-%m-%d"),
+                            to=to_date.strftime("%Y-%m-%d"),
+                            limit=500
+                        )
+                        break  # Success - exit retry loop
+                    except Exception as e:
+                        if '429' in str(e):  # Rate limit error
+                            logger.warning(f"Rate limit hit for {market.name} (attempt {attempt+1}/3) - sleeping 10s")
+                            time.sleep(10)  # Short sleep only on 429
+                            continue
+                        raise  # Other errors - re-raise
+
+                logger.info(f"Fetched {len(aggs)} bars for {market.name}")
 
                 if len(aggs) < 15:  # Lowered threshold for RSI/ATR (period 14)
                     logger.warning(f"Insufficient data for {market.name}: {len(aggs)} bars")
@@ -457,13 +474,11 @@ class GenerateSignalView(APIView):
                 })
 
             except Exception as e:
-                logger.error(f"Failed to fetch data for {market.name}: {str(e)}")
+                logger.error(f"Failed to fetch data for {market.name}: {str(e)}", exc_info=True)
                 continue
 
         # Final Fallback: If no signals, pick random market with varied prob
         if not signals:
-            if not all_markets:
-                return Response({'error': 'No markets available for signal generation'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             market = random.choice(all_markets)
             current_price = Decimal('1.1000')  # Dummy fallback price
             direction = random.choice(['buy', 'sell'])
