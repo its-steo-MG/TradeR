@@ -178,6 +178,18 @@ export interface AgentWithdrawal {
   created_at: string
 }
 
+interface Transaction {
+  id: number | string
+  created_at: string
+  transaction_type: "deposit" | "withdrawal"
+  amount: number
+  recipient_name?: string
+  recipient_phone?: string
+  mpesa_id?: string
+  description?: string
+  category?: "family_friends" | "business" | "other"
+}
+
 export interface ChatMessage {
   id: number
   content: string
