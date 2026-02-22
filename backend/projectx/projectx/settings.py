@@ -14,7 +14,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Quick-start development settings - unsuitable for production
 SECRET_KEY = config('SECRET_KEY')
-DEBUG = False
+DEBUG = True
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
@@ -31,6 +31,9 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+    'https://mpesa-orpin-gamma.vercel.app',
     'https://traderiserproapp.onrender.com',
     'https://traderiserproapp.vercel.app',
     'https://www.traderiserapp.com',
@@ -41,6 +44,9 @@ CORS_ALLOWED_ORIGINS = [
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+    'https://mpesa-orpin-gamma.vercel.app',
     'https://traderiserproapp.onrender.com',
     'https://traderiserproapp.vercel.app',
     'https://www.traderiserapp.com',
@@ -69,6 +75,7 @@ INSTALLED_APPS = [
     'management',
     'traderpulse',
     'copy_trading.apps.CopyTradingConfig',
+    'mpesa_simulator',
     'channels',
     
 

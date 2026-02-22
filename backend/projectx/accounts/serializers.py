@@ -1,6 +1,7 @@
 # serializers.py
 from rest_framework import serializers
 from .models import User, Account, SuspensionEvidence
+from mpesa_simulator.models import MpesaUser  # Import for check
 
 class AccountSerializer(serializers.ModelSerializer):
     balance = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
@@ -22,17 +23,20 @@ class UserSerializer(serializers.ModelSerializer):
     # New suspension fields
     suspension_details = serializers.SerializerMethodField()
     evidence_status = serializers.SerializerMethodField()  # For permanent
+    mpesa_connected = serializers.SerializerMethodField()  # ← NEW: Check if M-Pesa connected
 
     class Meta:
         model = User
         fields = [
             'id', 'username', 'email', 'phone',
             'is_sashi', 'is_email_verified', 'accounts', 'is_staff',
-            'is_marketo', 'referral_link', 'is_suspended', 'suspension_details', 'evidence_status'
+            'is_marketo', 'referral_link', 'is_suspended', 'suspension_details', 'evidence_status',
+            'mpesa_connected'  # ← Added
         ]
         read_only_fields = [
             'id', 'is_sashi', 'is_email_verified', 'is_staff',
-            'is_marketo', 'referral_link', 'is_suspended', 'suspension_details', 'evidence_status'
+            'is_marketo', 'referral_link', 'is_suspended', 'suspension_details', 'evidence_status',
+            'mpesa_connected'  # ← Added
         ]
 
     def get_referral_link(self, obj):
@@ -59,3 +63,6 @@ class UserSerializer(serializers.ModelSerializer):
         if evidence:
             return SuspensionEvidenceSerializer(evidence).data
         return {'status': 'no_evidence'}
+
+    def get_mpesa_connected(self, obj):  # ← NEW method
+        return MpesaUser.objects.filter(user=obj).exists()
