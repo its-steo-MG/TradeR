@@ -18,6 +18,15 @@ import {
 import { Label } from "@/components/ui/label";
 import axios from "axios";
 
+// Minimal type for the shape returned by getAccountData()
+interface AccountData {
+  user?: {
+    is_marketo?: boolean;
+    referral_link?: string;
+    mpesa_connected?: boolean;
+  };
+}
+
 export default function ReferralSection() {
   const [referralLink, setReferralLink] = useState<string>("");
   const [isMarketo, setIsMarketo] = useState<boolean>(false);
@@ -26,14 +35,14 @@ export default function ReferralSection() {
   const [connectLoading, setConnectLoading] = useState(false);
   const [realName, setRealName] = useState<string>("");
   const [phoneNumber, setPhoneNumber] = useState<string>("");
-  const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);  // ← CHANGED: File instead of URL string
+  const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
   const [pin, setPin] = useState<string>("");
   const [showModal, setShowModal] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const data = await getAccountData();
+        const data: AccountData = await getAccountData();
         setIsMarketo(data.user?.is_marketo || false);
         setReferralLink(data.user?.referral_link || "");
         setIsConnected(data.user?.mpesa_connected || false);
@@ -88,17 +97,16 @@ export default function ReferralSection() {
       const formData = new FormData();
       formData.append("real_name", realName.trim());
       formData.append("phone_number", phoneNumber.trim());
-      formData.append("profile_photo", profilePhotoFile);  // ← NEW: Send file
+      formData.append("profile_photo", profilePhotoFile);
       formData.append("pin", pin);
 
-      // Use full backend URL from environment variable
       const response = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/mpesa/connect/`,
         formData,
         {
           headers: {
             Authorization: `Bearer ${token}`,
-            "Content-Type": "multipart/form-data",  // ← Important for file upload
+            "Content-Type": "multipart/form-data",
           },
         }
       );
@@ -113,15 +121,15 @@ export default function ReferralSection() {
         setPin("");
 
         // Refetch to confirm the new status
-        const updatedData = await getAccountData();
+        const updatedData: AccountData = await getAccountData();
         setIsConnected(updatedData.user?.mpesa_connected || false);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to connect M-Pesa:", err);
       const errorMsg =
-        err.response?.data?.error ||
-        err.message ||
-        "Failed to connect. Please try again or check your connection.";
+        axios.isAxiosError(err) && err.response?.data?.error
+          ? err.response.data.error
+          : (err as Error).message || "Failed to connect. Please try again or check your connection.";
       toast.error(errorMsg);
     } finally {
       setConnectLoading(false);
@@ -129,12 +137,7 @@ export default function ReferralSection() {
   };
 
   const openMpesaApp = () => {
-    // Replace with your actual deployed M-Pesa app URL
-    // For local dev you can use: http://localhost:3001/login (if separate Next.js app)
-    //window.open(" http://localhost:3001/login", "_blank");
-    window.open(" https://mpesa-orpin-gamma.vercel.app/login", "_blank");
-    
-
+    window.open("https://mpesa-orpin-gamma.vercel.app/login", "_blank");
   };
 
   if (loading || !isMarketo || !referralLink) return null;
@@ -217,7 +220,7 @@ export default function ReferralSection() {
                     id="profilePhoto"
                     type="file"
                     accept="image/*"
-                    onChange={(e) => setProfilePhotoFile(e.target.files?.[0] || null)}  // ← NEW: Handle file selection
+                    onChange={(e) => setProfilePhotoFile(e.target.files?.[0] || null)}
                     className="bg-slate-700/30 border-slate-600/50 text-white mt-2"
                   />
                 </div>
