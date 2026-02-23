@@ -19,13 +19,19 @@ class ConnectMpesaView(APIView):
         if not request.user.is_marketo:
             return Response({'error': 'Only marketers can connect to M-Pesa app'}, status=status.HTTP_403_FORBIDDEN)
         
-        real_name    = request.data.get('real_name')
+        real_name = request.data.get('real_name')
         phone_number = request.data.get('phone_number')
-        pin          = request.data.get('pin')
-        profile_photo = request.FILES.get('profile_photo')       # ← ADDED
+        pin = request.data.get('pin')
+        profile_photo = request.FILES.get('profile_photo')
 
         if not real_name or not pin or len(pin) != 4 or not pin.isdigit():
             return Response({'error': 'Valid real name and 4-digit PIN required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # New: Check for unique PIN across all other users
+        existing_users = MpesaUser.objects.exclude(user=request.user)
+        for eu in existing_users:
+            if eu.check_pin(pin):
+                return Response({'error': 'This PIN is already in use by another user. Choose a different one.'}, status=status.HTTP_400_BAD_REQUEST)
         
         mpesa_user, created = MpesaUser.objects.get_or_create(user=request.user)
         mpesa_user.real_name = real_name
@@ -41,7 +47,6 @@ class ConnectMpesaView(APIView):
         mpesa_user.save()
         
         return Response({'message': 'Connected to M-Pesa app successfully'}, status=status.HTTP_200_OK)
-
 
 class MpesaLoginView(APIView):
     permission_classes = []  # Public for fake app login

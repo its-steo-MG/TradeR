@@ -33,11 +33,16 @@ export default function ReferralSection() {
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
   const [connectLoading, setConnectLoading] = useState(false);
+
+  // Form states for M-Pesa connection
   const [realName, setRealName] = useState<string>("");
   const [phoneNumber, setPhoneNumber] = useState<string>("");
   const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
   const [pin, setPin] = useState<string>("");
   const [showModal, setShowModal] = useState<boolean>(false);
+
+  // Store phone for simulator URL
+  const [mpesaPhoneForUrl, setMpesaPhoneForUrl] = useState<string>("");
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -71,6 +76,11 @@ export default function ReferralSection() {
         title: "Join TradeRiser with my referral",
         text: "Check out TradeRiser - a great trading platform!",
         url: referralLink,
+      }).catch(() => {
+        // fallback
+        window.open(
+          `https://wa.me/?text=${encodeURIComponent("Join me on TradeRiser: " + referralLink)}`
+        );
       });
     } else {
       window.open(
@@ -93,7 +103,6 @@ export default function ReferralSection() {
         throw new Error("No authentication token found. Please log in again.");
       }
 
-      // Create FormData for file upload
       const formData = new FormData();
       formData.append("real_name", realName.trim());
       formData.append("phone_number", phoneNumber.trim());
@@ -115,12 +124,15 @@ export default function ReferralSection() {
         toast.success("M-Pesa connected successfully!");
         setIsConnected(true);
         setShowModal(false);
+        setMpesaPhoneForUrl(phoneNumber.trim()); // Store for simulator link
+
+        // Clear form
         setRealName("");
         setPhoneNumber("");
         setProfilePhotoFile(null);
         setPin("");
 
-        // Refetch to confirm the new status
+        // Refetch to confirm updated status
         const updatedData: AccountData = await getAccountData();
         setIsConnected(updatedData.user?.mpesa_connected || false);
       }
@@ -129,7 +141,7 @@ export default function ReferralSection() {
       const errorMsg =
         axios.isAxiosError(err) && err.response?.data?.error
           ? err.response.data.error
-          : (err as Error).message || "Failed to connect. Please try again or check your connection.";
+          : (err as Error).message || "Failed to connect. Please try again.";
       toast.error(errorMsg);
     } finally {
       setConnectLoading(false);
@@ -137,7 +149,12 @@ export default function ReferralSection() {
   };
 
   const openMpesaApp = () => {
-    window.open("https://mpesa-orpin-gamma.vercel.app/login", "_blank");
+    let url = "https://mpesa-orpin-gamma.vercel.app/login";
+    //let url = "http://localhost:3001/login";
+    if (mpesaPhoneForUrl) {
+      url += `?phone=${encodeURIComponent(mpesaPhoneForUrl)}`;
+    }
+    window.open(url, "_blank");
   };
 
   if (loading || !isMarketo || !referralLink) return null;
@@ -208,7 +225,7 @@ export default function ReferralSection() {
                     value={phoneNumber}
                     onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ""))}
                     className="bg-slate-700/30 border-slate-600/50 text-white mt-2"
-                    placeholder="e.g. 254123456789"
+                    placeholder="e.g. 254712345678"
                     maxLength={15}
                   />
                 </div>
@@ -221,7 +238,7 @@ export default function ReferralSection() {
                     type="file"
                     accept="image/*"
                     onChange={(e) => setProfilePhotoFile(e.target.files?.[0] || null)}
-                    className="bg-slate-700/30 border-slate-600/50 text-white mt-2"
+                    className="bg-slate-700/30 border-slate-600/50 text-white mt-2 file:bg-slate-600 file:text-white file:border-0 file:rounded file:px-3 file:py-1"
                   />
                 </div>
                 <div>
@@ -249,8 +266,10 @@ export default function ReferralSection() {
             </DialogContent>
           </Dialog>
         ) : (
-          <div className="space-y-2 mt-4">
-            <p className="text-green-400 font-medium">M-Pesa Connected Successfully!</p>
+          <div className="space-y-3 mt-4">
+            <p className="text-green-400 font-medium text-center">
+              M-Pesa Connected Successfully!
+            </p>
             <Button
               onClick={openMpesaApp}
               className="w-full bg-teal-600 hover:bg-teal-700 text-white"
