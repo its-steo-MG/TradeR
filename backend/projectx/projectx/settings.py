@@ -75,7 +75,7 @@ INSTALLED_APPS = [
     'management',
     'traderpulse',
     'copy_trading.apps.CopyTradingConfig',
-    'mpesa_simulator',
+    'mpesa_simulator.apps.MpesaSimulatorConfig',
     'channels',
     
 
