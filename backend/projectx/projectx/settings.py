@@ -72,7 +72,7 @@ INSTALLED_APPS = [
     'forex',
     'agents',
     'customercare',
-    'management',
+    'management.apps.ManagementConfig',
     'traderpulse',
     'copy_trading.apps.CopyTradingConfig',
     'mpesa_simulator.apps.MpesaSimulatorConfig',
