@@ -17,7 +17,7 @@ from django.urls import reverse
 import logging
 
 logger = logging.getLogger(__name__)
-ADMIN_EMAIL = "traderiserpro@gmail.com"
+ADMIN_EMAIL = "sospetersamy@gmail.com"
 
 class AgentListView(APIView):
     def get(self, request):
