@@ -25,7 +25,7 @@ from .payment import PaymentClient
 import logging
 
 logger = logging.getLogger('wallet')
-ADMIN_EMAIL = "sospetersamy@gmail.com"
+ADMIN_EMAIL = "steomustadd@gmail.com"
 
 def generate_reference_id(length: int = 12) -> str:
     """Generate a random alphanumeric reference ID."""
@@ -71,7 +71,7 @@ class MpesaNumberView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 logger = logging.getLogger('wallet')
-ADMIN_EMAIL = "sospetersamy@gmail.com"  # or get from settings
+ADMIN_EMAIL = "ste0mustadd@gmail.com"  # or get from settings
 
 class DepositView(APIView):
     permission_classes = [permissions.IsAuthenticated]

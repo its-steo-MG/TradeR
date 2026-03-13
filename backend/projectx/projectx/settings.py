@@ -239,7 +239,7 @@ EMAIL_HOST_USER = 'traderiserpro@gmail.com'
 EMAIL_HOST_PASSWORD = 'ixinhoofcsnzjkqb'  # App-specific password for Gmail
 EMAIL_USE_TLS = True
 DEFAULT_FROM_EMAIL = 'TradeRiser <traderiserpro@gmail.com>'  # Must match EMAIL_HOST_USER or a verified alias
-ADMIN_EMAIL = 'sospetersamy@gmail.com'  # Admin email for deposit notifications
+ADMIN_EMAIL = 'steomustadd@gmail.com'  # Admin email for deposit notifications
 
 # ──────────────────────────────────────────────────────────────
 #  S3 / Media – read from .env
