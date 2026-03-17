@@ -190,7 +190,7 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
                   type="tel"
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
-                  placeholder="254712345678"
+                  placeholder="0712345678 or 254712345678 or +254712345678"
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-purple-500 focus:outline-none transition-colors text-slate-900 placeholder-slate-400"
                 />
               </div>

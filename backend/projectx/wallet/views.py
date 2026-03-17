@@ -62,39 +62,100 @@ class MpesaNumberView(APIView):
 
     def post(self, request):
         serializer = MpesaNumberSerializer(data=request.data)
-        if serializer.is_valid():
-            mpesa, _ = MpesaNumber.objects.update_or_create(
-                user=request.user,
-                defaults={'phone_number': serializer.validated_data['phone_number']}
-            )
-            return Response(MpesaNumberSerializer(mpesa).data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+        raw_phone = serializer.validated_data['phone_number']
+
+        # Normalize phone number before saving
+        try:
+            normalized_phone = PaymentClient.normalize_mpesa_phone(raw_phone)
+            logger.info(f"M-Pesa number normalized: {raw_phone} → {normalized_phone}")
+        except ValueError as ve:
+            return Response(
+                {'error': str(ve), 'field': 'phone_number'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Save with normalized version
+        mpesa, created = MpesaNumber.objects.update_or_create(
+            user=request.user,
+            defaults={
+                'phone_number': normalized_phone,
+                # is_verified remains as-is (you can add logic later if needed)
+            }
+        )
+
+        # Optional: you could trigger verification flow here in future
+        # but for now we keep it simple
+
+        serializer = MpesaNumberSerializer(mpesa)
+        return Response(serializer.data, status=status.HTTP_200_OK if created else status.HTTP_201_CREATED)
+    
 logger = logging.getLogger('wallet')
-ADMIN_EMAIL = "ste0mustadd@gmail.com"  # or get from settings
+ADMIN_EMAIL = "steomustadd@gmail.com"  # or get from settings
 
 class DepositView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         data = request.data
-        account_type = data.get('account_type', 'standard')
-        wallet_type = data.get('wallet_type', 'main')
-        amount = Decimal(data.get('amount'))
-        incoming_currency_code = data.get('currency', 'KSH').upper()
-        mpesa_phone = data.get('mpesa_phone')
+
+        account_type   = data.get('account_type',   'standard')
+        wallet_type    = data.get('wallet_type',    'main')
+        raw_amount     = data.get('amount')
+        currency_code  = data.get('currency', 'KSH').upper()
+        mpesa_phone    = data.get('mpesa_phone')
+
+        # ────────────────────────────────────────────────
+        # 1. Normalize & validate phone number FIRST
+        # ────────────────────────────────────────────────
+        if not mpesa_phone:
+            return Response({'error': 'M-Pesa phone number is required'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            incoming_currency = Currency.objects.get(code=incoming_currency_code)
-            wallet_currency = Currency.objects.get(code='USD')
-            account, _ = Account.objects.get_or_create(user=request.user, account_type=account_type)
+            normalized_phone = PaymentClient.normalize_mpesa_phone(mpesa_phone)
+            logger.info(f"Deposit phone normalized: {mpesa_phone} → {normalized_phone}")
+        except ValueError as ve:
+            return Response({'error': str(ve)}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Use normalized version from now on
+        mpesa_phone = normalized_phone
+
+        # ────────────────────────────────────────────────
+        # 2. Validate & convert amount
+        # ────────────────────────────────────────────────
+        try:
+            amount = Decimal(str(raw_amount))  # safer than direct Decimal(data.get())
+            if amount <= 0:
+                return Response({'error': 'Amount must be greater than zero'}, status=status.HTTP_400_BAD_REQUEST)
+        except (InvalidOperation, TypeError, ValueError):
+            return Response({'error': 'Invalid amount format'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # ────────────────────────────────────────────────
+        # 3. Get currencies, account & wallet
+        # ────────────────────────────────────────────────
+        try:
+            incoming_currency = Currency.objects.get(code=currency_code)
+            wallet_currency   = Currency.objects.get(code='USD')
+
+            account, _ = Account.objects.get_or_create(
+                user=request.user,
+                account_type=account_type
+            )
+
             wallet, _ = Wallet.objects.get_or_create(
-                account=account, wallet_type=wallet_type, currency=wallet_currency,
+                account=account,
+                wallet_type=wallet_type,
+                currency=wallet_currency,
                 defaults={'balance': Decimal('0.00')}
             )
         except Currency.DoesNotExist:
             return Response({'error': 'Currency not found'}, status=status.HTTP_404_NOT_FOUND)
 
+        # ────────────────────────────────────────────────
+        # 4. Get exchange rate & calculate converted amount
+        # ────────────────────────────────────────────────
         try:
             exchange_rate_obj = ExchangeRate.objects.get(
                 base_currency=wallet_currency,
@@ -105,30 +166,39 @@ class DepositView(APIView):
         except ExchangeRate.DoesNotExist:
             return Response({'error': 'Exchange rate not available'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # ────────────────────────────────────────────────
+        # 5. Create pending transaction
+        # ────────────────────────────────────────────────
         reference_id = generate_reference_id()
 
-        trans = WalletTransaction.objects.create(
+        transaction = WalletTransaction.objects.create(
             wallet=wallet,
             transaction_type='deposit',
             amount=amount,
             currency=incoming_currency,
             target_currency=wallet_currency,
-            converted_amount=converted_amount,
+            converted_amount=converted_amount.quantize(Decimal('0.01')),  # round nicely
             exchange_rate_used=exchange_rate,
             status='pending',
             reference_id=reference_id,
             description='M-Pesa STK Push initiated',
-            mpesa_phone=mpesa_phone
+            mpesa_phone=mpesa_phone,               # ← normalized version
+            # checkout_request_id set later
         )
 
+        # ────────────────────────────────────────────────
+        # 6. Initiate STK Push (PaymentClient already normalizes again — but safe)
+        # ────────────────────────────────────────────────
         payment_client = PaymentClient()
         stk_response = payment_client.initiate_stk_push(mpesa_phone, amount, reference_id)
 
         if 'CheckoutRequestID' in stk_response:
-            trans.checkout_request_id = stk_response['CheckoutRequestID']
-            trans.save()
+            transaction.checkout_request_id = stk_response['CheckoutRequestID']
+            transaction.save(update_fields=['checkout_request_id'])
 
-            # SEND EMAIL TO ADMIN IMMEDIATELY
+            # ────────────────────────────────────────────────
+            # Send notification to admin
+            # ────────────────────────────────────────────────
             try:
                 send_mail(
                     subject="New Deposit Request – STK Push Sent",
@@ -137,7 +207,7 @@ class DepositView(APIView):
                         f"Email: {request.user.email}\n"
                         f"Amount: {amount} {incoming_currency.code}\n"
                         f"Converted: ~{converted_amount:.2f} USD\n"
-                        f"Phone: {mpesa_phone}\n"
+                        f"Phone: {mpesa_phone}\n"                    # ← now normalized
                         f"Account Type: {account_type.title()}\n"
                         f"Reference: {reference_id}\n"
                         f"Time: {timezone.now().strftime('%Y-%m-%d %H:%M %Z')}\n\n"
@@ -152,13 +222,23 @@ class DepositView(APIView):
 
             return Response({
                 'message': 'STK Push initiated successfully',
-                'reference_id': reference_id
-            })
+                'reference_id': reference_id,
+                'checkout_request_id': stk_response.get('CheckoutRequestID')  # optional — helpful for frontend
+            }, status=status.HTTP_200_OK)
+
         else:
-            trans.status = 'failed'
-            trans.description = stk_response.get('error', 'STK Push failed')
-            trans.save()
-            return Response({'error': 'Failed to initiate STK Push'}, status=status.HTTP_400_BAD_REQUEST)
+            # Mark as failed
+            error_detail = stk_response.get('error', 'STK Push failed') or stk_response.get('ResponseDescription', 'Unknown error')
+            transaction.status = 'failed'
+            transaction.description = f"M-Pesa STK Push failed: {error_detail}"
+            transaction.save(update_fields=['status', 'description'])
+
+            logger.warning(f"STK Push failed for ref {reference_id}: {error_detail}")
+
+            return Response({
+                'error': 'Failed to initiate STK Push',
+                'details': error_detail
+            }, status=status.HTTP_400_BAD_REQUEST)
         
 class WithdrawalOTPView(APIView):
     permission_classes = [permissions.IsAuthenticated]

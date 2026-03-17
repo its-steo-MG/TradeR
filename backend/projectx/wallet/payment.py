@@ -20,6 +20,48 @@ class PaymentClient:
         logger.info(f"PaymentClient initialized with stk_push_url: {self.stk_push_url}")
         logger.info(f"Using callback URL: {self.callback_url}")
 
+    @staticmethod
+    def normalize_mpesa_phone(phone: str) -> str:
+        """
+        Convert various Kenyan phone formats to Safaricom-required international format:
+        Must return 2547XXXXXXXX (12 digits starting with 254)
+        
+        Accepted inputs:
+        - 0712345678        → 254712345678
+        - +254712345678     → 254712345678
+        - 254712345678      → 254712345678 (as-is)
+        - 712345678         → 254712345678
+        
+        Raises ValueError for invalid formats.
+        """
+        if not phone:
+            raise ValueError("Phone number is required")
+
+        # Remove spaces, dashes, parentheses, etc.
+        phone = ''.join(c for c in str(phone) if c.isdigit())
+
+        if phone.startswith('0') and len(phone) == 10:
+            # Local format: 07xxxxxxxx → 2547xxxxxxxx
+            return '254' + phone[1:]
+
+        elif phone.startswith('254') and len(phone) == 12:
+            # Already correct international format
+            return phone
+
+        elif phone.startswith('7') and len(phone) == 9:
+            # Short format without 0: 7xxxxxxxx → 2547xxxxxxxx
+            return '254' + phone
+
+        elif phone.startswith('2547') and len(phone) == 12:
+            # Already good (redundant check for safety)
+            return phone
+
+        else:
+            raise ValueError(
+                f"Invalid Kenyan phone number format: '{phone}'. "
+                "Use formats like: 0712345678, +254712345678, 254712345678 or 712345678"
+            )
+
     def get_access_token(self):
         """Obtain an access token from the payment API."""
         try:
@@ -42,6 +84,10 @@ class PaymentClient:
     def initiate_stk_push(self, phone_number, amount, transaction_id):
         """Initiate an STK Push for wallet deposit."""
         try:
+            # Normalize phone number BEFORE using it (this fixes 07xxx → 2547xxx)
+            normalized_phone = self.normalize_mpesa_phone(phone_number)
+            logger.info(f"Normalized phone for STK Push: {phone_number} → {normalized_phone}")
+
             access_token = self.get_access_token()
             timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
             password = base64.b64encode(f"{self.shortcode}{self.passkey}{timestamp}".encode()).decode()
@@ -52,9 +98,9 @@ class PaymentClient:
                 'Timestamp': timestamp,
                 'TransactionType': 'CustomerBuyGoodsOnline',
                 'Amount': str(int(float(amount))),
-                'PartyA': phone_number,
+                'PartyA': normalized_phone,
                 'PartyB': self.till_number,
-                'PhoneNumber': phone_number,
+                'PhoneNumber': normalized_phone,
                 'CallBackURL': self.callback_url,
                 'AccountReference': transaction_id[:12],
                 'TransactionDesc': 'Wallet Deposit'
@@ -81,6 +127,10 @@ class PaymentClient:
             error_msg = f"STK Push failed: {str(e)}, Response={getattr(e.response, 'text', '')}"
             logger.error(error_msg)
             return {'ResponseCode': '1', 'error': error_msg}
+        except ValueError as ve:
+            # Catch phone normalization errors
+            logger.error(f"Phone normalization error: {str(ve)}")
+            return {'ResponseCode': '1', 'error': str(ve)}
         except Exception as e:
             error_msg = f"Unexpected error in STK Push: {str(e)}"
             logger.error(error_msg)
