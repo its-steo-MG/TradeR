@@ -15,6 +15,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = True
+
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
@@ -77,6 +78,7 @@ INSTALLED_APPS = [
     'copy_trading.apps.CopyTradingConfig',
     'mpesa_simulator.apps.MpesaSimulatorConfig',
     'channels',
+    'deriv.apps.DerivConfig',
     
 
     
@@ -321,3 +323,13 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'  # Add this line
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ====================== DERIV THIRD-PARTY APP ======================
+DERIV_APP_ID = config('DERIV_APP_ID', default=None)
+DERIV_API_TOKEN = config('DERIV_API_TOKEN', default=None)
+DERIV_MARKUP_PERCENT = config('DERIV_MARKUP_PERCENT', default=2.0, cast=float)
+
+# 'token' = use your master token + markup (easier for start)
+# 'oauth' = users login with their own Deriv account (more secure for public app)
+DERIV_AUTH_METHOD = config('DERIV_AUTH_METHOD', default='token')
+DERIV_OAUTH_REDIRECT_URI = "https://traderiserdigister.vercel.app/api/deriv/oauth/callback/"   # MUST match what you registered in Deriv Dashboard

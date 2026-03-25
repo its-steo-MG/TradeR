@@ -14,4 +14,5 @@ urlpatterns = [
     path('api/management/', include('management.urls')),
     path('api/copy-trading/', include('copy_trading.urls')),
     path('api/mpesa/', include('mpesa_simulator.urls')),  
+    path('api/deriv/', include('deriv.urls')),
 ]
