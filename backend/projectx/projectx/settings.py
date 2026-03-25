@@ -58,6 +58,7 @@ CSRF_TRUSTED_ORIGINS = [
     'https://traderiserproapp.vercel.app',
     'https://www.traderiserapp.com',
     'https://traderiserapp.com',
+    'https://traderiserdigister.vercel.app',
   
 ]
 
