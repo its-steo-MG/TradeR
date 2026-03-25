@@ -37,7 +37,7 @@ export function useAuth() {
     try {
       const res = await fetch(`${API_BASE}/oauth/login/`, {
         method: 'GET',
-        credentials: 'include',        // Important for Django session (PKCE)
+        credentials: 'include',
       })
 
       if (!res.ok) {
@@ -49,9 +49,9 @@ export function useAuth() {
 
       if (data.success && data.auth_url) {
         console.log('✅ Redirecting to Deriv Login:', data.auth_url)
-        window.location.href = data.auth_url
+        window.location.href = data.auth_url   // This is correct
       } else {
-        throw new Error(data.message || 'No auth_url received from server')
+        throw new Error(data.message || 'No auth_url received')
       }
     } catch (err: any) {
       console.error('LoginWithDeriv Error:', err)
@@ -65,23 +65,22 @@ export function useAuth() {
     }
   }, [addNotification])
 
-  // ==================== HANDLE OAUTH CALLBACK ====================
+  // ==================== HANDLE OAUTH CALLBACK (FIXED) ====================
   const handleOAuthCallback = useCallback(async (code: string, state: string) => {
-    try {
-      setIsLoading(true)
+    setIsLoading(true)
 
-      const res = await fetch(`${API_BASE}/oauth/callback/`, {
-        method: 'POST',                    // Changed to POST (recommended)
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ code, state }),
+    try {
+      // IMPORTANT: Use GET with query params (matches your Django view)
+      const callbackUrl = `${API_BASE}/oauth/callback/?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`
+
+      const res = await fetch(callbackUrl, {
+        method: 'GET',
+        credentials: 'include',   // Important for session (PKCE verifier)
       })
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || errorData.message || 'Callback failed')
+        throw new Error(errorData.message || errorData.error || 'Callback failed')
       }
 
       const data = await res.json()
@@ -89,12 +88,12 @@ export function useAuth() {
       if (data.success) {
         const authData = {
           isLoggedIn: true,
-          token: data.access_token || data.token,
-          email: data.email || '',           // You can expand this later
+          token: data.access_token,
+          expires_at: data.expires_at,
         }
 
         setAuth(authData)
-        localStorage.setItem('access_token', authData.token)
+        localStorage.setItem('access_token', data.access_token)
         sessionStorage.setItem('deriv_auth', JSON.stringify(authData))
 
         addNotification({
@@ -103,7 +102,7 @@ export function useAuth() {
           message: 'Deriv account connected successfully!',
         })
 
-        // Clean up URL (remove ?code=...&state=... from browser address bar)
+        // Clean URL
         window.history.replaceState({}, '', window.location.pathname)
       } else {
         throw new Error(data.message || 'Authentication failed')
@@ -113,14 +112,14 @@ export function useAuth() {
       addNotification({
         type: 'error',
         title: 'Auth Error',
-        message: err.message || 'Failed to complete authentication',
+        message: err.message || 'Failed to complete Deriv connection',
       })
     } finally {
       setIsLoading(false)
     }
   }, [setAuth, addNotification])
 
-  // Auto handle callback when Deriv redirects back to your app
+  // Auto-detect callback when Deriv redirects back
   useEffect(() => {
     if (typeof window === 'undefined') return
 
@@ -128,7 +127,6 @@ export function useAuth() {
     const code = params.get('code')
     const state = params.get('state')
 
-    // Only run if we have code + state and user is not yet logged in
     if (code && state && !auth.isLoggedIn) {
       handleOAuthCallback(code, state)
     }
