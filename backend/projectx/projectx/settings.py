@@ -23,6 +23,7 @@ ALLOWED_HOSTS = [
     'traderiserproapp.vercel.app',
     'www.traderiserapp.com',
     'traderiserapp.com',
+    'traderiserdigister.vercel.app',
 
    
 ]
@@ -41,6 +42,7 @@ CORS_ALLOWED_ORIGINS = [
     'https://traderiserproapp.vercel.app',
     'https://www.traderiserapp.com',
     'https://traderiserapp.com',
+    'https://traderiserdigister.vercel.app',
    
 ]
 # REQUIRED FOR DJANGO ADMIN POST/DELETE FROM FRONTEND
