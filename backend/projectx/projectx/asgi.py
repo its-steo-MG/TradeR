@@ -6,46 +6,32 @@ ASGI config for projectx (Traderiser)
 
 import os
 
-# ----------------------------------------------------------------------
-# 1. Set the settings module *before* anything else
-# ----------------------------------------------------------------------
+# Set settings first
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'projectx.settings')
 
-# ----------------------------------------------------------------------
-# 2. Import Django ASGI application first
-# ----------------------------------------------------------------------
+# Import Django ASGI once
 from django.core.asgi import get_asgi_application
 django_asgi_app = get_asgi_application()
 
-# ----------------------------------------------------------------------
-# 3. NOW import Channels and all routing (safe after Django is loaded)
-# ----------------------------------------------------------------------
+# Channels imports
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
 
-# Import your existing middlewares and routings
+# Your middlewares and routings
 from customercare.middleware import QueryStringJWTAuthMiddleware
 import customercare.routing
 import traderpulse.routing
+import deriv.routing   # ← your deriv app
 
-# NEW: Import Deriv routing
-import deriv.routing
-
-# ----------------------------------------------------------------------
-# 4. Build the final ASGI application
-# ----------------------------------------------------------------------
 application = ProtocolTypeRouter({
-    # HTTP requests (REST API, admin, static files, etc.)
-    "http": get_asgi_application(),
+    # HTTP - Use the SAME instance we created above
+    "http": django_asgi_app,
 
-    # WebSocket connections with JWT authentication
+    # WebSocket with your JWT middleware
     "websocket": QueryStringJWTAuthMiddleware(
         URLRouter(
-            # Keep all your existing WebSocket routes
             customercare.routing.websocket_urlpatterns +
             traderpulse.routing.websocket_urlpatterns +
-            
-            # NEW: Deriv Ticks WebSocket route
             deriv.routing.websocket_urlpatterns
         )
     ),
