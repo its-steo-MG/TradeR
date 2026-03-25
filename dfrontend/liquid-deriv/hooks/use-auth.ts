@@ -49,9 +49,9 @@ export function useAuth() {
 
       if (data.success && data.auth_url) {
         console.log('✅ Redirecting to Deriv Login:', data.auth_url)
-        window.location.href = data.auth_url   // This is correct
+        window.location.href = data.auth_url
       } else {
-        throw new Error(data.message || 'No auth_url received')
+        throw new Error(data.message || 'No auth_url received from backend')
       }
     } catch (err: any) {
       console.error('LoginWithDeriv Error:', err)
@@ -65,27 +65,27 @@ export function useAuth() {
     }
   }, [addNotification])
 
-  // ==================== HANDLE OAUTH CALLBACK (FIXED) ====================
+  // ==================== HANDLE OAUTH CALLBACK ====================
   const handleOAuthCallback = useCallback(async (code: string, state: string) => {
     setIsLoading(true)
 
     try {
-      // IMPORTANT: Use GET with query params (matches your Django view)
+      // Use the same proxy pattern as login
       const callbackUrl = `${API_BASE}/oauth/callback/?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`
 
       const res = await fetch(callbackUrl, {
         method: 'GET',
-        credentials: 'include',   // Important for session (PKCE verifier)
+        credentials: 'include',
       })
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.message || errorData.error || 'Callback failed')
+        throw new Error(errorData.message || errorData.error || 'Failed to exchange code')
       }
 
       const data = await res.json()
 
-      if (data.success) {
+      if (data.success && data.access_token) {
         const authData = {
           isLoggedIn: true,
           token: data.access_token,
@@ -102,7 +102,7 @@ export function useAuth() {
           message: 'Deriv account connected successfully!',
         })
 
-        // Clean URL
+        // Clean the URL (remove ?code= &state= from address bar)
         window.history.replaceState({}, '', window.location.pathname)
       } else {
         throw new Error(data.message || 'Authentication failed')
@@ -119,7 +119,7 @@ export function useAuth() {
     }
   }, [setAuth, addNotification])
 
-  // Auto-detect callback when Deriv redirects back
+  // Auto handle callback when Deriv redirects back to your frontend
   useEffect(() => {
     if (typeof window === 'undefined') return
 
@@ -127,6 +127,7 @@ export function useAuth() {
     const code = params.get('code')
     const state = params.get('state')
 
+    // Only run if we have code + state and user is not yet authenticated
     if (code && state && !auth.isLoggedIn) {
       handleOAuthCallback(code, state)
     }
