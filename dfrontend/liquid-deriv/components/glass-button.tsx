@@ -4,7 +4,7 @@ import React from 'react'
 import { cn } from '@/lib/utils'
 
 interface GlassButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost'
+  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'accent' | 'success'
   size?: 'sm' | 'md' | 'lg'
   isLoading?: boolean
   glowEffect?: boolean
@@ -24,10 +24,17 @@ export function GlassButton({
 }: GlassButtonProps) {
   const variantClasses = {
     primary: 'bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-glow',
+    
     secondary: 'glass bg-secondary/20 text-foreground hover:bg-secondary/30',
+    
     danger: 'bg-error text-white hover:bg-error/90',
+    
     ghost: 'hover:bg-muted/20 text-foreground',
-  }
+    
+    accent: 'bg-violet-600 text-white hover:bg-violet-700 hover:shadow-violet-500/50',
+    
+    success: 'bg-green-600 text-white hover:bg-green-700 hover:shadow-green-500/50', // ← New
+  } as const
 
   const sizeClasses = {
     sm: 'px-3 py-1.5 text-sm',
@@ -40,7 +47,9 @@ export function GlassButton({
       className={cn(
         'relative inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-all duration-300 ease-out',
         'disabled:opacity-50 disabled:cursor-not-allowed',
-        variantClasses[variant],
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary',
+        
+        variantClasses[variant],           // Safe access
         sizeClasses[size],
         fullWidth && 'w-full',
         glowEffect && 'shadow-glow hover:shadow-glow-lg',

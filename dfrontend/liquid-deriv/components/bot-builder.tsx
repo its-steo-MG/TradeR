@@ -331,7 +331,7 @@ export function BotBuilder() {
 
           <div className="flex justify-between">
             <GlassButton onClick={() => setStep(2)}>Previous</GlassButton>
-            <GlassButton onClick={handleCreateBot} loading={isLoading} variant="accent">
+            <GlassButton onClick={handleCreateBot} isLoading={isLoading} variant="accent">
               Create Bot
             </GlassButton>
           </div>

@@ -64,9 +64,10 @@ export interface BuyRequest {
 }
 
 export interface BuyResponse {
-  contractId: string
+  contract_id: string
   buyPrice: number
-  expiryTime: number
+  expiry_time: number
+  success:string
 }
 
 export interface OpenContract {

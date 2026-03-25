@@ -6,7 +6,8 @@ import { NextRequest, NextResponse } from 'next/server'
  */
 export async function GET(request: NextRequest) {
   try {
-    const backendUrl = process.env.DERIV_BACKEND_URL || 'http://localhost:8001'
+    //const backendUrl = process.env.DERIV_BACKEND_URL || 'http://localhost:8001'
+    const backendUrl = process.env.DERIV_BACKEND_URL || 'https://traderiserproapp.onrender.com'
 
     // This route must be PUBLIC → Do NOT forward any Authorization header
     const response = await fetch(`${backendUrl}/api/deriv/oauth/login/`, {

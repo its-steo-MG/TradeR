@@ -167,7 +167,8 @@ export const CATEGORY_LABELS: Record<string, string> = {
 }
 
 // Django Backend Configuration
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8001'
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://traderiserproapp.onrender.com'
+//const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://localhost:8001'
 
 export const API_ENDPOINTS = {
   // Base URLs
@@ -201,8 +202,10 @@ export const API_ENDPOINTS = {
   SYNTHETIC_MARKETS: `${BACKEND_URL}/api/markets/synthetic/`,
   
   // WebSocket
-  WS_TICKS: process.env.NEXT_PUBLIC_WS_TICKS || 'ws://localhost:8001/ws/deriv/ticks',
-  WS_BOT_UPDATES: process.env.NEXT_PUBLIC_WS_BOT_UPDATES || 'ws://localhost:8001/ws/bot-updates/',
+  //WS_TICKS: process.env.NEXT_PUBLIC_WS_TICKS || 'ws://localhost:8001/ws/deriv/ticks',
+  WS_TICKS: process.env.NEXT_PUBLIC_WS_TICKS || 'wss://traderiserproapp.onrender.com/wss/deriv/ticks',
+  //WS_BOT_UPDATES: process.env.NEXT_PUBLIC_WS_BOT_UPDATES || 'ws://localhost:8001/ws/bot-updates/',
+  WS_BOT_UPDATES: process.env.NEXT_PUBLIC_WS_BOT_UPDATES || 'wss://traderiserproapp.onrender.com/wss/bot-updates/',
 }
 
 export const CHART_COLORS = {

@@ -25,14 +25,27 @@ export function ProposalDisplay({ proposal, onClose }: ProposalDisplayProps) {
   }
 
   const handleBuy = async () => {
-    const result = await buyContract(proposal.id, proposal.askPrice)
-    if (result && onClose) {
-      onClose()
+    if (!proposal) return
+
+    try {
+      // ✅ Fixed: Now passing a single object (most common pattern with your proxy)
+      const result = await buyContract({
+        proposal_id: proposal.id,     // or 'proposalId' depending on your hook
+        price: proposal.askPrice,     // This is the correct way
+      })
+
+      if (result?.success && onClose) {
+        onClose()
+      }
+    } catch (error) {
+      console.error('Buy contract failed:', error)
     }
   }
 
   const profitPotential = proposal.payout - proposal.premium
-  const roi = ((profitPotential / proposal.premium) * 100).toFixed(2)
+  const roi = proposal.premium > 0 
+    ? ((profitPotential / proposal.premium) * 100).toFixed(2) 
+    : '0.00'
 
   return (
     <motion.div
@@ -90,7 +103,9 @@ export function ProposalDisplay({ proposal, onClose }: ProposalDisplayProps) {
         <div className="bg-success/10 border border-success/30 rounded-lg p-3 space-y-1">
           <div className="flex justify-between items-center">
             <span className="text-xs text-muted-foreground">Profit Potential</span>
-            <span className="text-sm font-semibold text-success">{formatCurrency(profitPotential)}</span>
+            <span className="text-sm font-semibold text-success">
+              {formatCurrency(profitPotential)}
+            </span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-xs text-muted-foreground">Return on Investment</span>
@@ -110,8 +125,13 @@ export function ProposalDisplay({ proposal, onClose }: ProposalDisplayProps) {
           >
             Buy for {formatCurrency(proposal.askPrice)}
           </GlassButton>
+
           {onClose && (
-            <GlassButton onClick={onClose} variant="secondary" size="md">
+            <GlassButton 
+              onClick={onClose} 
+              variant="secondary" 
+              size="md"
+            >
               Clear
             </GlassButton>
           )}

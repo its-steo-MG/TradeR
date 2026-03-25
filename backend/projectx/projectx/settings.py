@@ -336,5 +336,5 @@ DERIV_MARKUP_PERCENT = config('DERIV_MARKUP_PERCENT', default=2.0, cast=float)
 # 'token' = use your master token + markup (easier for start)
 # 'oauth' = users login with their own Deriv account (more secure for public app)
 DERIV_AUTH_METHOD = config('DERIV_AUTH_METHOD', default='token')
-#DERIV_OAUTH_REDIRECT_URI = "https://traderiserdigister.vercel.app/api/deriv/oauth/callback/"   # MUST match what you registered in Deriv Dashboard
-DERIV_OAUTH_REDIRECT_URI = "http://localhost:3001/api/deriv/oauth/callback/" 
+DERIV_OAUTH_REDIRECT_URI = "https://traderiserdigister.vercel.app/api/deriv/oauth/callback/"   # MUST match what you registered in Deriv Dashboard
+#DERIV_OAUTH_REDIRECT_URI = "http://localhost:3002/api/deriv/oauth/callback/" 
