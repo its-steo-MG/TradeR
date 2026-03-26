@@ -3,7 +3,8 @@ from django.urls import path
 from .views import (
     DerivBuyView, DerivProposalView, DerivBalanceView,
     DerivOpenContractView, DerivSellView,
-    DerivOAuthLoginView, DerivOAuthCallbackView,
+    DerivOAuthLoginView,
+    deriv_oauth_callback,          # ← Import the function, not the class
 )
 
 urlpatterns = [
@@ -11,9 +12,9 @@ urlpatterns = [
     path('proposal/', DerivProposalView.as_view(), name='deriv-proposal'),
     path('balance/', DerivBalanceView.as_view(), name='deriv-balance'),
     path('open-contract/', DerivOpenContractView.as_view(), name='deriv-open-contract'),
-    path('sell/', DerivSellView.as_view(), name='deriv-sell'),           # ← NEW
+    path('sell/', DerivSellView.as_view(), name='deriv-sell'),
 
-    # OAuth Login Flow
+    # OAuth
     path('oauth/login/', DerivOAuthLoginView.as_view(), name='deriv-oauth-login'),
-    path('oauth/callback/', DerivOAuthCallbackView.as_view(), name='deriv-oauth-callback'),
+    path('oauth/callback/', deriv_oauth_callback, name='deriv-oauth-callback'),   # ← No .as_view()
 ]

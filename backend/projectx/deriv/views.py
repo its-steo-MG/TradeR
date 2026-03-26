@@ -1,10 +1,16 @@
 import logging
 import asyncio
 from django.utils import timezone
+from django.shortcuts import redirect
+from django.http import HttpResponseBadRequest
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.csrf import csrf_exempt
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.authentication import JWTAuthentication
+
 from django.conf import settings
 
 import secrets
@@ -31,8 +37,7 @@ def get_user_access_token(request):
 
 class DerivOAuthLoginView(APIView):
     """This endpoint must be public so users can get the Deriv login URL"""
-    permission_classes = [AllowAny]        # ← Changed to AllowAny
-    # No authentication_classes needed
+    permission_classes = [AllowAny]
 
     def get(self, request):
         code_verifier = secrets.token_urlsafe(64)
@@ -62,61 +67,50 @@ class DerivOAuthLoginView(APIView):
             "message": "Use this URL to login with your Deriv account"
         })
 
-
 # ====================== OAUTH CALLBACK ======================
 
-class DerivOAuthCallbackView(APIView):
-    permission_classes = [IsAuthenticated]
-    authentication_classes = [JWTAuthentication]
+@login_required
+@csrf_exempt
+async def deriv_oauth_callback(request):
+    """Handles browser redirect from Deriv → processes token → redirects to frontend"""
+    code = request.GET.get("code")
+    state = request.GET.get("state")
+    stored_state = request.session.get("deriv_oauth_state")
 
-    async def get(self, request):
-        code = request.GET.get("code")
-        state = request.GET.get("state")
-        stored_state = request.session.get("deriv_oauth_state")
+    if not code or state != stored_state:
+        return redirect(f"{settings.FRONTEND_URL}/deriv-callback?success=false&message=Invalid state or missing code")
 
-        if not code or state != stored_state:
-            return Response({"success": False, "message": "Invalid state or missing code"}, status=400)
+    code_verifier = request.session.pop("deriv_pkce_verifier", None)
+    if not code_verifier:
+        return redirect(f"{settings.FRONTEND_URL}/deriv-callback?success=false&message=Session expired")
 
-        code_verifier = request.session.pop("deriv_pkce_verifier", None)
-        if not code_verifier:
-            return Response({"success": False, "message": "Session expired. Please try again."}, status=400)
+    token_data = await deriv_client.exchange_oauth_code(
+        code=code,
+        code_verifier=code_verifier,
+        redirect_uri=settings.DERIV_OAUTH_REDIRECT_URI
+    )
 
-        token_data = await deriv_client.exchange_oauth_code(
-            code=code,
-            code_verifier=code_verifier,
-            redirect_uri=settings.DERIV_OAUTH_REDIRECT_URI
-        )
+    if "error" in token_data or "access_token" not in token_data:
+        logger.error(f"OAuth failed: {token_data}")
+        return redirect(f"{settings.FRONTEND_URL}/deriv-callback?success=false&message=Failed to get token from Deriv")
 
-        if "error" in token_data or "access_token" not in token_data:
-            logger.error(f"OAuth callback failed: {token_data}")
-            return Response({
-                "success": False,
-                "message": "Failed to get access token from Deriv",
-                "details": token_data
-            }, status=400)
+    expires_in = token_data.get("expires_in", 3600)
+    expires_at = timezone.now() + timezone.timedelta(seconds=expires_in)
 
-        expires_in = token_data.get("expires_in", 3600)
-        expires_at = timezone.now() + timezone.timedelta(seconds=expires_in)
+    DerivUserAccount.objects.update_or_create(
+        user=request.user,
+        defaults={
+            "access_token": token_data["access_token"],
+            "refresh_token": token_data.get("refresh_token"),
+            "expires_at": expires_at,
+        }
+    )
 
-        DerivUserAccount.objects.update_or_create(
-            user=request.user,
-            defaults={
-                "access_token": token_data["access_token"],
-                "refresh_token": token_data.get("refresh_token"),
-                "expires_at": expires_at,
-            }
-        )
+    request.session.pop("deriv_oauth_state", None)
 
-        request.session.pop("deriv_oauth_state", None)
-
-        return Response({
-            "success": True,
-            "message": "Deriv account connected successfully!",
-            "expires_at": expires_at.isoformat(),
-            "expires_in_seconds": expires_in,
-            "access_token": token_data["access_token"]   # Send JWT back to frontend
-        })
-
+    # Redirect to frontend success page
+    frontend_url = f"{settings.FRONTEND_URL}/deriv-callback?success=true&message=Deriv account connected successfully&expires_at={expires_at.isoformat()}"
+    return redirect(frontend_url)
 
 # ====================== PROTECTED TRADING ENDPOINTS ======================
 

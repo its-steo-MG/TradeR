@@ -10,7 +10,7 @@ export function useAuth() {
   const [isLoading, setIsLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
 
-  // Load saved auth from sessionStorage
+  // Load saved auth from sessionStorage on mount
   useEffect(() => {
     if (typeof window === 'undefined') return
 
@@ -19,9 +19,6 @@ export function useAuth() {
       try {
         const data = JSON.parse(stored)
         setAuth(data)
-        if (data.token) {
-          localStorage.setItem('access_token', data.token)
-        }
       } catch (e) {
         console.error('Failed to parse stored auth:', e)
         sessionStorage.removeItem('deriv_auth')
@@ -65,78 +62,56 @@ export function useAuth() {
     }
   }, [addNotification])
 
-  // ==================== HANDLE OAUTH CALLBACK ====================
-  const handleOAuthCallback = useCallback(async (code: string, state: string) => {
-    setIsLoading(true)
-
-    try {
-      // Use the same proxy pattern as login
-      const callbackUrl = `${API_BASE}/oauth/callback/?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`
-
-      const res = await fetch(callbackUrl, {
-        method: 'GET',
-        credentials: 'include',
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.message || errorData.error || 'Failed to exchange code')
-      }
-
-      const data = await res.json()
-
-      if (data.success && data.access_token) {
-        const authData = {
-          isLoggedIn: true,
-          token: data.access_token,
-          expires_at: data.expires_at,
-        }
-
-        setAuth(authData)
-        localStorage.setItem('access_token', data.access_token)
-        sessionStorage.setItem('deriv_auth', JSON.stringify(authData))
-
-        addNotification({
-          type: 'success',
-          title: 'Success',
-          message: 'Deriv account connected successfully!',
-        })
-
-        // Clean the URL (remove ?code= &state= from address bar)
-        window.history.replaceState({}, '', window.location.pathname)
-      } else {
-        throw new Error(data.message || 'Authentication failed')
-      }
-    } catch (err: any) {
-      console.error('Callback Error:', err)
-      addNotification({
-        type: 'error',
-        title: 'Auth Error',
-        message: err.message || 'Failed to complete Deriv connection',
-      })
-    } finally {
-      setIsLoading(false)
+  // ==================== HANDLE CALLBACK FROM DERIV-CALLBACK PAGE ====================
+  const handleDerivCallbackSuccess = useCallback((expires_at?: string) => {
+    const authData = {
+      isLoggedIn: true,
+      token: '', // Token is managed server-side via Django session
+      expires_at: expires_at || new Date(Date.now() + 3600 * 1000).toISOString(),
     }
+
+    setAuth(authData)
+    sessionStorage.setItem('deriv_auth', JSON.stringify(authData))
+
+    addNotification({
+      type: 'success',
+      title: 'Success',
+      message: 'Deriv account connected successfully!',
+    })
+
+    console.log('✅ Deriv account connected via redirect flow')
   }, [setAuth, addNotification])
 
-  // Auto handle callback when Deriv redirects back to your frontend
+  const handleDerivCallbackError = useCallback((message: string) => {
+    addNotification({
+      type: 'error',
+      title: 'Connection Failed',
+      message: message || 'Failed to connect Deriv account. Please try again.',
+    })
+  }, [addNotification])
+
+  // Auto-detect success from redirect flow (runs when user lands on any page after callback)
   useEffect(() => {
     if (typeof window === 'undefined') return
 
     const params = new URLSearchParams(window.location.search)
-    const code = params.get('code')
-    const state = params.get('state')
+    const success = params.get('success')
+    const expiresAt = params.get('expires_at')
 
-    // Only run if we have code + state and user is not yet authenticated
-    if (code && state && !auth.isLoggedIn) {
-      handleOAuthCallback(code, state)
+    if (success === 'true' && !auth.isLoggedIn) {
+      handleDerivCallbackSuccess(expiresAt || undefined)
+
+      // Clean the URL (remove query params)
+      window.history.replaceState({}, '', window.location.pathname)
     }
-  }, [auth.isLoggedIn, handleOAuthCallback])
+  }, [auth.isLoggedIn, handleDerivCallbackSuccess])
 
+  // Logout handler
   const handleLogout = useCallback(() => {
     logout()
     localStorage.removeItem('access_token')
     sessionStorage.removeItem('deriv_auth')
+    
     addNotification({
       type: 'success',
       message: 'Logged out successfully',
@@ -149,5 +124,8 @@ export function useAuth() {
     loginWithDeriv,
     logout: handleLogout,
     isAuthenticated: auth.isLoggedIn && mounted,
+    // Helpers for deriv-callback page
+    handleDerivCallbackSuccess,
+    handleDerivCallbackError,
   }
 }

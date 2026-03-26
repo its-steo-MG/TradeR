@@ -237,7 +237,7 @@ OPENAI_API_KEY = config('OPENAI_API_KEY', default=None)
 OPENAI_MODEL = config('OPENAI_MODEL', default='gpt-3.5-turbo')
 
 # Frontend URL for signals/emails
-FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+FRONTEND_URL = "https://traderiserdigister.vercel.app"
 
 
 # Email configuration
@@ -344,3 +344,4 @@ DERIV_OAUTH_REDIRECT_URI = config('DERIV_OAUTH_REDIRECT_URI')
 # Safety check (optional but recommended)
 if not DERIV_OAUTH_REDIRECT_URI:
     raise ImproperlyConfigured("DERIV_OAUTH_REDIRECT_URI is not set in environment variables")
+
