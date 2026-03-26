@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 def generate_management_id():
     return f"MGMT-{uuid.uuid4().hex[:8].upper()}"
 
+
 class ManagementRequest(models.Model):
     STATUS_CHOICES = [
         ('pending_payment', 'Pending Payment'),
@@ -44,14 +45,14 @@ class ManagementRequest(models.Model):
     # New field for account type
     account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPES, default='standard')
 
-    # M-Pesa payment fields (replaces WalletTransaction)
+    # M-Pesa payment fields
     merchant_request_id = models.CharField(max_length=100, blank=True, null=True, unique=True)
     checkout_request_id = models.CharField(max_length=100, blank=True, null=True, unique=True)
     mpesa_receipt_number = models.CharField(max_length=50, blank=True, null=True)
     payment_date = models.DateTimeField(null=True, blank=True)
 
     account_email = models.EmailField(blank=True, null=True)
-    account_password = models.CharField(max_length=255, blank=True, null=True)  # Consider encryption later
+    account_password = models.CharField(max_length=255, blank=True, null=True)
 
     days = models.PositiveIntegerField(null=True, blank=True)
     daily_stake = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
@@ -81,33 +82,108 @@ class ManagementRequest(models.Model):
 
     def __str__(self):
         return f"{self.management_id} | {self.user.username} | Target ${self.target_profit}"
-    
+
+
 @receiver(post_save, sender=ManagementRequest)
 def notify_user_on_payment_verified(sender, instance, created, **kwargs):
     """
-    Sends email to user when payment is verified (status becomes 'payment_verified')
-    Only triggers if mpesa_receipt_number exists (real payment) and not on creation.
+    Sends a beautiful email to the user when payment is verified.
+    Optimized for Resend (Anymail) with HTML + plain text fallback.
     """
-    if not created and instance.status == 'payment_verified' and instance.mpesa_receipt_number:
-        try:
-            send_mail(
-                "Payment Verified – Submit Your Account Credentials ✅",
-                f"Hi {instance.user.username},\n\n"
-                f"We're happy to confirm that your payment has been successfully received and verified!\n\n"
-                f"Management ID: {instance.management_id}\n"
-                f"Amount Paid: ${instance.payment_amount}\n"
-                f"M-Pesa Receipt: {instance.mpesa_receipt_number}\n"
-                f"Date: {instance.payment_date}\n\n"
-                f"Next Step:\n"
-                f"Please submit your trading account login credentials (email and password) so we can begin managing your account.\n"
-                f"You can do this in the app under the Management section.\n\n"
-                f"Once submitted, our team will start trading toward your ${instance.target_profit} target.\n\n"
-                f"Thank you for trusting TradeRiser!\n\n"
-                f"Best regards,\nTradeRiser Team",
-                settings.DEFAULT_FROM_EMAIL,
-                [instance.user.email],
-                fail_silently=False,
-            )
-            logger.info(f"Payment verified email sent to user: {instance.management_id}")
-        except Exception as e:
-            logger.error(f"Failed to send payment verified email to {instance.user.email}: {e}")
+    if created or instance.status != 'payment_verified' or not instance.mpesa_receipt_number:
+        return
+
+    try:
+        subject = "Payment Verified – Submit Your Account Credentials ✅"
+
+        # Plain text version (fallback)
+        message = f"""Hi {instance.user.username},
+
+We're happy to confirm that your payment has been successfully received and verified!
+
+Management ID: {instance.management_id}
+Amount Paid: ${instance.payment_amount}
+M-Pesa Receipt: {instance.mpesa_receipt_number}
+Date: {instance.payment_date.strftime('%d %b %Y, %H:%M') if instance.payment_date else 'N/A'}
+
+Next Step:
+Please submit your trading account login credentials (email and password) so we can begin managing your account.
+You can do this in the app under the Management section.
+
+Once submitted, our team will start trading toward your ${instance.target_profit} target.
+
+Thank you for trusting TradeRiser!
+
+Best regards,
+TradeRiser Team
+{settings.FRONTEND_URL}
+"""
+
+        # HTML version - Professional & Clean (Best with Resend)
+        html_message = f"""
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff; }}
+                .header {{ color: #0066cc; font-size: 24px; margin-bottom: 20px; }}
+                .highlight {{ 
+                    background-color: #f8f9fa; 
+                    padding: 20px; 
+                    border-left: 5px solid #0066cc; 
+                    border-radius: 4px;
+                    margin: 20px 0;
+                }}
+                .button {{ 
+                    display: inline-block; 
+                    padding: 12px 25px; 
+                    background-color: #0066cc; 
+                    color: white; 
+                    text-decoration: none; 
+                    border-radius: 5px; 
+                    margin: 15px 0;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h2 class="header">Payment Verified Successfully ✅</h2>
+                
+                <p>Hi <strong>{instance.user.username}</strong>,</p>
+                
+                <p>We're happy to confirm that your payment has been successfully received and verified!</p>
+                
+                <div class="highlight">
+                    <strong>Management ID:</strong> {instance.management_id}<br>
+                    <strong>Amount Paid:</strong> ${instance.payment_amount}<br>
+                    <strong>M-Pesa Receipt:</strong> {instance.mpesa_receipt_number}<br>
+                    <strong>Date:</strong> {instance.payment_date.strftime('%d %b %Y, %H:%M') if instance.payment_date else 'N/A'}
+                </div>
+
+                <h3>Next Step</h3>
+                <p>Please submit your <strong>trading account login credentials</strong> (email and password) so we can begin managing your account.</p>
+                <p>You can do this easily in the app under the <strong>Management</strong> section.</p>
+
+                <p>Once submitted, our professional team will start trading toward your <strong>${instance.target_profit}</strong> target.</p>
+
+                <p>Thank you for trusting <strong>TradeRiser</strong>!</p>
+
+                <p>Best regards,<br>
+                <strong>TradeRiser Team</strong></p>
+            </div>
+        </body>
+        </html>
+        """
+
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[instance.user.email],
+            html_message=html_message,
+            fail_silently=True,          # Important: Don't crash signal if email fails
+        )
+        logger.info(f"✅ Payment verified email sent to {instance.user.email} for {instance.management_id}")
+
+    except Exception as e:
+        logger.error(f"Failed to send payment verified email for {instance.management_id}: {e}")

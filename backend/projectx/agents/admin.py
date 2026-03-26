@@ -50,11 +50,7 @@ class AgentDepositAdmin(admin.ModelAdmin):
     amount_usd_display.short_description = "USD"
 
     def method_badge(self, obj):
-        icons = {
-            'mpesa': 'Mobile',
-            'paypal': 'PayPal',
-            'bank_transfer': 'Bank'
-        }
+        icons = {'mpesa': 'Mobile', 'paypal': 'PayPal', 'bank_transfer': 'Bank'}
         return format_html('<b>{}</b>', icons.get(obj.payment_method, ''))
     method_badge.short_description = "Method"
 
@@ -79,61 +75,52 @@ class AgentDepositAdmin(admin.ModelAdmin):
                 try:
                     logger.info(f"[VERIFY] Starting deposit ID {deposit.id} for {deposit.user.username}")
 
-                    # === RECALCULATE amount_usd if missing or invalid ===
+                    # Recalculate amount_usd if needed
                     if not deposit.amount_usd or deposit.amount_usd <= 0:
                         rate = deposit.agent.deposit_rate_kes_to_usd
                         if rate <= 0:
-                            raise ValueError("Agent deposit rate is invalid (≤ 0)")
+                            raise ValueError("Agent deposit rate is invalid")
                         deposit.amount_usd = deposit.amount_kes / rate
                         deposit.amount_usd = deposit.amount_usd.quantize(Decimal('0.01'))
                         deposit.save(update_fields=['amount_usd'])
-                        logger.info(f"[VERIFY] Recalculated amount_usd: {deposit.amount_usd}")
 
-                    # === Update status ===
+                    # Update status
                     deposit.status = 'verified'
                     deposit.verified_by = request.user
                     deposit.verified_at = timezone.now()
                     deposit.save()
 
-                    # === CREDIT WALLET ===
-                    try:
-                        wallet = Wallet.objects.select_for_update().get(
-                            account=deposit.account,
-                            wallet_type='main',
-                            currency__code='USD'
-                        )
-                    except Wallet.DoesNotExist:
-                        raise Wallet.DoesNotExist(f"USD main wallet not found for account {deposit.account.id}")
-
+                    # Credit wallet
+                    wallet = Wallet.objects.select_for_update().get(
+                        account=deposit.account,
+                        wallet_type='main',
+                        currency__code='USD'
+                    )
                     old_balance = wallet.balance
                     wallet.balance += deposit.amount_usd
                     wallet.save(update_fields=['balance'])
 
-                    logger.info(f"[WALLET] Credited: {old_balance} → {wallet.balance} (+{deposit.amount_usd})")
-
-                    # === Log transaction ===
+                    # Log transaction
                     Transaction.objects.create(
                         account=deposit.account,
                         amount=deposit.amount_usd,
                         transaction_type='deposit',
-                        description=(
-                            f"Verified deposit via {deposit.agent.name} "
-                            f"({deposit.amount_kes} KES → {deposit.amount_usd} USD)"
-                        )
+                        description=f"Verified deposit via {deposit.agent.name} ({deposit.amount_kes} KES → ${deposit.amount_usd} USD)"
                     )
 
-                    # === Send email – PASS FORMATTED STRINGS ===
+                    # === SEND EMAIL WITH RESEND (via django-anymail) ===
                     html_content = render_to_string('emails/deposit_verified.html', {
                         'amount_kes': f"{deposit.amount_kes:,.2f}",
                         'amount_usd': f"{deposit.amount_usd:,.2f}",
                         'agent_name': deposit.agent.name,
                         'user_name': deposit.user.get_full_name() or deposit.user.username,
                     })
+
                     email = EmailMultiAlternatives(
-                        "Deposit Verified & Credited!",
-                        "Your deposit has been confirmed and added to your wallet.",
-                        settings.DEFAULT_FROM_EMAIL,
-                        [deposit.user.email]
+                        subject="Deposit Verified & Credited!",
+                        body="Your deposit has been confirmed and added to your wallet.",
+                        from_email=settings.DEFAULT_FROM_EMAIL,   # Now uses Resend + mail.traderiserapp.com
+                        to=[deposit.user.email]
                     )
                     email.attach_alternative(html_content, "text/html")
                     email.send(fail_silently=False)
@@ -142,18 +129,12 @@ class AgentDepositAdmin(admin.ModelAdmin):
                     logger.info(f"[SUCCESS] Deposit {deposit.id} verified and credited.")
 
                 except Exception as e:
-                    raw_error = str(e)
-                    safe_error = raw_error.replace('{', '').replace('}', '').replace('|', ' ').replace(':', ' ')
-                    error_msg = f"Deposit {deposit.id}: {safe_error}"
+                    error_msg = f"Deposit {deposit.id}: {str(e)}"
                     errors.append(error_msg)
-                    logger.error(f"[ERROR] {error_msg}")
+                    logger.error(error_msg)
 
         if updated:
-            self.message_user(
-                request,
-                f"{updated} deposit(s) verified and wallet(s) credited.",
-                messages.SUCCESS
-            )
+            self.message_user(request, f"{updated} deposit(s) verified and credited.", messages.SUCCESS)
         if errors:
             self.message_user(request, "Errors: " + "; ".join(errors), messages.ERROR)
 
@@ -175,23 +156,20 @@ class AgentDepositAdmin(admin.ModelAdmin):
                     'amount_kes': f"{deposit.amount_kes:,.2f}",
                     'agent_name': deposit.agent.name,
                 })
+
                 email = EmailMultiAlternatives(
-                    "Deposit Rejected",
-                    "Your deposit was rejected. Please contact support.",
-                    settings.DEFAULT_FROM_EMAIL,
-                    [deposit.user.email]
+                    subject="Deposit Rejected",
+                    body="Your deposit was rejected. Please contact support.",
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=[deposit.user.email]
                 )
                 email.attach_alternative(html_content, "text/html")
                 email.send(fail_silently=False)
 
                 updated += 1
-                logger.info(f"[REJECT] Deposit {deposit.id} rejected.")
 
             except Exception as e:
-                safe_error = str(e).replace('{', '').replace('}', '').replace('|', ' ')
-                error_msg = f"Deposit {deposit.id}: {safe_error}"
-                errors.append(error_msg)
-                logger.error(f"[ERROR] {error_msg}")
+                errors.append(f"Deposit {deposit.id}: {str(e)}")
 
         if updated:
             self.message_user(request, f"{updated} deposit(s) rejected.", messages.SUCCESS)
@@ -243,11 +221,12 @@ class AgentWithdrawalAdmin(admin.ModelAdmin):
                     'method': w.get_payment_method_display(),
                     'agent_name': w.agent.name,
                 })
+
                 email = EmailMultiAlternatives(
-                    "Withdrawal Completed!",
-                    "Your funds have been sent.",
-                    settings.DEFAULT_FROM_EMAIL,
-                    [w.user.email]
+                    subject="Withdrawal Completed!",
+                    body="Your funds have been sent.",
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=[w.user.email]
                 )
                 email.attach_alternative(html_content, "text/html")
                 email.send(fail_silently=False)
@@ -255,8 +234,7 @@ class AgentWithdrawalAdmin(admin.ModelAdmin):
                 updated += 1
 
             except Exception as e:
-                safe_error = str(e).replace('{', '').replace('}', '').replace('|', ' ')
-                errors.append(f"Withdrawal {w.id}: {safe_error}")
+                errors.append(f"Withdrawal {w.id}: {str(e)}")
 
         if updated:
             self.message_user(request, f"{updated} withdrawal(s) marked as sent.", messages.SUCCESS)
@@ -280,7 +258,6 @@ class AgentWithdrawalAdmin(admin.ModelAdmin):
                         wallet_type='main',
                         currency__code='USD'
                     )
-                    old_balance = wallet.balance
                     wallet.balance += w.amount_usd
                     wallet.save(update_fields=['balance'])
 
@@ -291,11 +268,23 @@ class AgentWithdrawalAdmin(admin.ModelAdmin):
                         description=f"Rejected withdrawal via {w.agent.name}"
                     )
 
+                    html_content = render_to_string('emails/withdrawal_rejected.html', {
+                        'amount_usd': f"{w.amount_usd:,.2f}"
+                    })
+
+                    email = EmailMultiAlternatives(
+                        subject="Withdrawal Rejected & Refunded",
+                        body="Your withdrawal was rejected; funds have been refunded.",
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        to=[w.user.email]
+                    )
+                    email.attach_alternative(html_content, "text/html")
+                    email.send(fail_silently=False)
+
                     updated += 1
 
                 except Exception as e:
-                    safe_error = str(e).replace('{', '').replace('}', '').replace('|', ' ')
-                    errors.append(f"Withdrawal {w.id}: {safe_error}")
+                    errors.append(f"Withdrawal {w.id}: {str(e)}")
 
         if updated:
             self.message_user(request, f"{updated} withdrawal(s) rejected and refunded.", messages.SUCCESS)

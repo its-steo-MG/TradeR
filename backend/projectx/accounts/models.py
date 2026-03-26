@@ -6,6 +6,8 @@ from django.apps import apps
 from django.utils import timezone
 from django.core.mail import send_mail
 import uuid
+from django.conf import settings
+
 
 class User(AbstractUser):
     username_validator = UnicodeUsernameValidator()
@@ -44,7 +46,7 @@ class User(AbstractUser):
     suspension_history = models.JSONField(default=list, blank=True, verbose_name="Suspension History")
 
     class Meta:
-        indexes = [models.Index(fields=['referral_code'])]  # Perf tweak
+        indexes = [models.Index(fields=['referral_code'])]
 
     def generate_referral_code(self):
         code = f"MRK-{uuid.uuid4().hex[:8].upper()}"
@@ -71,7 +73,7 @@ class User(AbstractUser):
             return False
         return True
 
-    # Suspension helpers
+    # ====================== UPDATED SUSPENSION EMAIL METHODS ======================
     def suspend(self, suspension_type: str, reason: str, duration_days: int = None, suspended_by=None):
         """Suspend account – temporary (with duration) or permanent."""
         if self.is_suspended:
@@ -99,15 +101,34 @@ class User(AbstractUser):
             'suspended_at', 'suspended_until', 'suspension_history'
         ])
 
-        # Send email
+        # Send email using Resend (via django-anymail)
         subject = f"TradeRiser Account {'Temporarily' if suspension_type == 'temporary' else 'Permanently'} Suspended"
-        message = (
+
+        html_message = f"""
+        <h2>Account Suspension Notice</h2>
+        <p>Dear {self.username},</p>
+        <p>Your TradeRiser account (<strong>{self.email}</strong>) has been <strong>{suspension_type}ly suspended</strong>.</p>
+        <p><strong>Reason:</strong> {reason}</p>
+        {'<p><strong>Valid Until:</strong> ' + self.suspended_until.strftime('%B %d, %Y at %H:%M') + '</p>' if self.suspended_until else '<p><strong>Duration:</strong> Indefinite</p>'}
+        <p>If you believe this is a mistake, please contact support.</p>
+        <p>Best regards,<br>TradeRiser Team</p>
+        """
+
+        plain_message = (
             f"Your TradeRiser account ({self.email}) has been {suspension_type}ly suspended.\n\n"
             f"Reason: {reason}\n"
             f"{'Until: ' + self.suspended_until.strftime('%Y-%m-%d %H:%M') if self.suspended_until else 'Indefinite – contact support for review.'}\n\n"
             f"Contact support@traderiser.com for questions."
         )
-        send_mail(subject, message, 'no-reply@traderiser.com', [self.email], fail_silently=False)
+
+        send_mail(
+            subject=subject,
+            message=plain_message,
+            from_email=None,                    # Uses DEFAULT_FROM_EMAIL from settings
+            recipient_list=[self.email],
+            html_message=html_message,
+            fail_silently=False,
+        )
 
     def unsuspend(self, unsuspended_by=None):
         if not self.is_suspended:
@@ -129,11 +150,23 @@ class User(AbstractUser):
 
         self.save(update_fields=['is_suspended', 'suspension_type', 'suspension_reason', 'suspended_at', 'suspended_until'])
 
-        # Email
+        # Send reactivation email using Resend
+        subject = "TradeRiser Account Reactivated"
+        html_message = f"""
+        <h2>Welcome Back!</h2>
+        <p>Dear {self.username},</p>
+        <p>Your TradeRiser account (<strong>{self.email}</strong>) has been successfully reactivated.</p>
+        <p>You can now log in and continue trading.</p>
+        <p>Best regards,<br>TradeRiser Team</p>
+        """
+
         send_mail(
-            "TradeRiser Account Reactivated",
-            f"Your TradeRiser account ({self.email}) has been reactivated.",
-            'no-reply@traderiser.com', [self.email], fail_silently=False
+            subject=subject,
+            message=f"Your TradeRiser account ({self.email}) has been reactivated.",
+            from_email=None,
+            recipient_list=[self.email],
+            html_message=html_message,
+            fail_silently=False,
         )
 
     @property
@@ -149,6 +182,7 @@ class User(AbstractUser):
     def clean_up_expired_suspension(self):
         if self.is_temporarily_suspended and self.suspended_until <= timezone.now():
             self.unsuspend()
+
 
 class SuspensionEvidence(models.Model):
     """Evidence for permanent suspensions (e.g., screenshots, logs)"""
@@ -168,6 +202,7 @@ class SuspensionEvidence(models.Model):
     def __str__(self):
         return f"Evidence for {self.user.username} - {self.status}"
 
+
 class Account(models.Model):
     ACCOUNT_TYPES = [
         ('standard', 'TradeRiser Standard'),
@@ -176,7 +211,7 @@ class Account(models.Model):
         ('options', 'TradeRiser Options'),
         ('crypto', 'TradeRiser Crypto'),
         ('demo', 'TradeRiser Demo'),
-        ('pro-fx', 'TradeRiser Pro-FX'),  # New account type
+        ('pro-fx', 'TradeRiser Pro-FX'),
     ]
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='accounts')
     account_type = models.CharField(max_length=50, choices=ACCOUNT_TYPES)
@@ -186,7 +221,6 @@ class Account(models.Model):
 
     @property
     def balance(self):
-        """Property to fetch balance from the main USD wallet."""
         try:
             Wallet = apps.get_model('wallet', 'Wallet')
             Currency = apps.get_model('wallet', 'Currency')
@@ -194,12 +228,10 @@ class Account(models.Model):
             wallet = Wallet.objects.get(account=self, wallet_type='main', currency=usd)
             return wallet.balance
         except (Currency.DoesNotExist, Wallet.DoesNotExist):
-            # Fallback for initial creation
             return Decimal('10000.00') if self.account_type == 'demo' else Decimal('0.00')
 
     @balance.setter
     def balance(self, value):
-        """Setter to update the main USD wallet balance."""
         Wallet = apps.get_model('wallet', 'Wallet')
         Currency = apps.get_model('wallet', 'Currency')
         usd = Currency.objects.get_or_create(code='USD', defaults={'name': 'US Dollar', 'symbol': '$'})[0]
@@ -215,7 +247,6 @@ class Account(models.Model):
         is_new = not self.pk
         super().save(*args, **kwargs)
         if is_new:
-            # Set initial balance via setter
             initial_balance = Decimal('10000.00') if self.account_type == 'demo' else Decimal('0.00')
             self.balance = initial_balance
 

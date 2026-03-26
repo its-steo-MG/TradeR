@@ -37,23 +37,17 @@ async def get_user_access_token(request):
         logger.error(f"Error fetching Deriv account: {e}")
         return None, "Internal error fetching account."
 
-
-# ====================== OAUTH LOGIN (Public + Multi-Frontend Support) ======================
-
 class DerivOAuthLoginView(APIView):
-    """Public endpoint — returns Deriv login / create account URL"""
     permission_classes = [AllowAny]
 
     def get(self, request):
         prompt = request.query_params.get("prompt", "consent")
-
-        # Get frontend origin from query param (sent by Next.js)
         frontend_url = request.query_params.get('frontend_url') or settings.FRONTEND_URL
 
-        # Security: Only allow whitelisted frontends
-        if frontend_url not in getattr(settings, 'ALLOWED_DERIV_FRONTENDS', {settings.FRONTEND_URL}):
-            logger.warning(f"Unauthorized frontend attempted Deriv login: {frontend_url}")
-            frontend_url = settings.FRONTEND_URL  # safe fallback
+        # Security: whitelist frontends
+        allowed_frontends = getattr(settings, 'ALLOWED_DERIV_FRONTENDS', {settings.FRONTEND_URL})
+        if frontend_url not in allowed_frontends:
+            frontend_url = settings.FRONTEND_URL
 
         code_verifier = secrets.token_urlsafe(64)
         code_challenge = (
@@ -68,15 +62,15 @@ class DerivOAuthLoginView(APIView):
 
         state = secrets.token_urlsafe(32)
 
-        # Store in session for callback validation
         request.session['deriv_pkce_verifier'] = code_verifier
         request.session['deriv_oauth_state'] = state
-        request.session['deriv_frontend_origin'] = frontend_url   # ← Key for multi-frontend
+        request.session['deriv_frontend_origin'] = frontend_url
 
+        # === FIXED AUTH URL ===
         auth_url = (
             f"https://auth.deriv.com/oauth2/auth?"
             f"response_type=code"
-            f"&client_id={settings.DERIV_APP_ID}"
+            f"&client_id={settings.DERIV_APP_ID}"          # ← This must NOT be empty
             f"&redirect_uri={settings.DERIV_OAUTH_REDIRECT_URI}"
             f"&scope=trade"
             f"&state={state}"
@@ -85,12 +79,15 @@ class DerivOAuthLoginView(APIView):
             f"&prompt={prompt}"
         )
 
+        # Debug log (very important right now)
+        logger.info(f"Deriv Auth URL generated with app_id: {settings.DERIV_APP_ID}")
+        logger.info(f"Full auth_url: {auth_url}")
+
         return Response({
             "success": True,
             "auth_url": auth_url,
-            "message": "Redirect the user to this URL to connect with Deriv"
+            "message": "Redirect the user to this URL"
         })
-
 
 # ====================== OAUTH CALLBACK (Multi-Frontend Support) ======================
 

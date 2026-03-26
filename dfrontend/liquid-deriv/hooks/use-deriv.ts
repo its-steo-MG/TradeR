@@ -239,8 +239,8 @@ export function useDerivWebSocket(onMessage?: (data: any) => void) {
   const { setTick } = useDerivStore()
 
   const token = getJwtToken()
-  const wsUrl = token ? `wss://traderiserproapp.onrender.com/wss/deriv/ticks/?token=${token}` : null
-  //const wsUrl = token ? `ws://localhost:8001/ws/deriv/ticks/?token=${token}` : null
+  //const wsUrl = token ? `wss://traderiserproapp.onrender.com/wss/deriv/ticks/?token=${token}` : null
+  const wsUrl = token ? `wss://localhost:8001/wss/deriv/ticks/?token=${token}` : null
 
   useEffect(() => {
     if (!wsUrl) {

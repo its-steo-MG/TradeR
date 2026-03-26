@@ -9,9 +9,8 @@ from django.db import transaction
 from django.utils import timezone
 from decimal import Decimal
 from dashboard.models import Transaction
-from django.core.mail import EmailMultiAlternatives
+from django.core.mail import EmailMultiAlternatives, send_mail
 from django.conf import settings
-from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.urls import reverse
 import logging
@@ -19,11 +18,13 @@ import logging
 logger = logging.getLogger(__name__)
 ADMIN_EMAIL = "steomustadd@gmail.com"
 
+
 class AgentListView(APIView):
     def get(self, request):
         agents = Agent.objects.filter(is_active=True)
         serializer = AgentSerializer(agents, many=True, context={'request': request})
         return Response(serializer.data)
+
 
 class AgentDepositView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -33,7 +34,7 @@ class AgentDepositView(APIView):
         if serializer.is_valid():
             deposit = serializer.save(user=request.user)
 
-            # === ADMIN EMAIL NOTIFICATION ===
+            # === ADMIN EMAIL NOTIFICATION (New Deposit Alert) ===
             try:
                 proof_link = ""
                 if deposit.screenshot:
@@ -53,12 +54,12 @@ class AgentDepositView(APIView):
                         f"Time: {timezone.localtime().strftime('%Y-%m-%d %H:%M %Z')}\n\n"
                         f"Go to admin → Agent Deposits to verify/reject."
                     ),
-                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    from_email=settings.DEFAULT_FROM_EMAIL,   # Resend + mail.traderiserapp.com
                     recipient_list=[ADMIN_EMAIL],
                     fail_silently=False,
                 )
             except Exception as e:
-                logger.error(f"Failed to send admin deposit email: {e}")
+                logger.error(f"Failed to send admin deposit notification: {e}")
 
             logger.info(f"Deposit created: {deposit.id} for {request.user.username}")
             return Response({
@@ -67,6 +68,7 @@ class AgentDepositView(APIView):
             }, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class AgentDepositVerifyView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -90,6 +92,7 @@ class AgentDepositVerifyView(APIView):
                 deposit.verified_at = timezone.now()
                 deposit.save()
 
+                # Credit wallet
                 wallet = Wallet.objects.select_for_update().get(
                     account=deposit.account,
                     wallet_type='main',
@@ -98,6 +101,7 @@ class AgentDepositVerifyView(APIView):
                 wallet.balance += deposit.amount_usd
                 wallet.save()
 
+                # Log transaction
                 Transaction.objects.create(
                     account=deposit.account,
                     amount=deposit.amount_usd,
@@ -105,6 +109,7 @@ class AgentDepositVerifyView(APIView):
                     description=f"Agent Deposit [{deposit.get_payment_method_display()}] - {deposit.agent.name}"
                 )
 
+                # Send success email to user
                 html_content = render_to_string('emails/deposit_verified.html', {
                     'method': deposit.get_payment_method_display(),
                     'amount_kes': f"{deposit.amount_kes:,.2f}",
@@ -112,11 +117,12 @@ class AgentDepositVerifyView(APIView):
                     'amount_usd': f"{deposit.amount_usd:,.2f}",
                     'user_name': deposit.user.get_full_name() or deposit.user.username,
                 })
+
                 email = EmailMultiAlternatives(
-                    "Deposit Verified!",
-                    "Your deposit has been confirmed.",
-                    settings.DEFAULT_FROM_EMAIL,
-                    [deposit.user.email]
+                    subject="Deposit Verified & Credited!",
+                    body="Your deposit has been confirmed and added to your wallet.",
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=[deposit.user.email]
                 )
                 email.attach_alternative(html_content, "text/html")
                 email.send(fail_silently=False)
@@ -124,7 +130,7 @@ class AgentDepositVerifyView(APIView):
                 logger.info(f"Deposit {deposit.id} verified for {deposit.user.username}")
                 return Response({"message": "Deposit verified & wallet credited"}, status=200)
 
-            else:
+            else:  # reject
                 deposit.status = 'rejected'
                 deposit.save()
 
@@ -132,17 +138,19 @@ class AgentDepositVerifyView(APIView):
                     'amount_kes': f"{deposit.amount_kes:,.2f}",
                     'agent_name': deposit.agent.name,
                 })
+
                 email = EmailMultiAlternatives(
-                    "Deposit Rejected",
-                    "Your deposit was rejected.",
-                    settings.DEFAULT_FROM_EMAIL,
-                    [deposit.user.email]
+                    subject="Deposit Rejected",
+                    body="Your deposit was rejected. Please contact support.",
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=[deposit.user.email]
                 )
                 email.attach_alternative(html_content, "text/html")
                 email.send(fail_silently=False)
 
                 logger.info(f"Deposit {deposit.id} rejected for {deposit.user.username}")
                 return Response({"message": "Deposit rejected"}, status=200)
+
 
 class AgentWithdrawalRequestView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -154,6 +162,7 @@ class AgentWithdrawalRequestView(APIView):
             logger.info(f"Withdrawal created: {withdrawal.id} for {request.user.username}")
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class AgentWithdrawalVerifyView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -198,7 +207,7 @@ class AgentWithdrawalVerifyView(APIView):
                     description=f"Withdrawal via {withdrawal.agent.name} ({withdrawal.get_payment_method_display()}) – Awaiting payment"
                 )
 
-            # === SEND EMAIL TO USER (Professional, no admin mention) ===
+            # === SEND CONFIRMATION EMAIL TO USER ===
             html_content = render_to_string('emails/withdrawal_locked.html', {
                 'amount_usd': f"{withdrawal.amount_usd:,.2f}",
                 'agent_name': withdrawal.agent.name,
@@ -206,18 +215,18 @@ class AgentWithdrawalVerifyView(APIView):
                 'method': withdrawal.get_payment_method_display(),
                 'user_details': self._get_user_details(withdrawal)
             })
+
             user_email = EmailMultiAlternatives(
-                "Withdrawal in Progress",
-                "Your funds have been reserved and will be sent shortly.",
-                settings.DEFAULT_FROM_EMAIL,
-                [withdrawal.user.email]
+                subject="Withdrawal in Progress",
+                body="Your funds have been reserved and will be sent shortly.",
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[withdrawal.user.email]
             )
             user_email.attach_alternative(html_content, "text/html")
             user_email.send(fail_silently=False)
 
-            # === SEND EMAIL TO ADMIN (Instant Alert) ===
+            # === SEND ALERT TO ADMIN ===
             try:
-                # Build direct admin link
                 admin_url = request.build_absolute_uri(
                     reverse('admin:agents_agentwithdrawal_change', args=[withdrawal.id])
                 )
@@ -269,9 +278,9 @@ class AgentWithdrawalVerifyView(APIView):
                 f"   • SWIFT: {withdrawal.user_bank_swift or 'N/A'}"
             )
         else:  # mpesa
-            phone = getattr(withdrawal.user, 'phone_number', 'Not set')
+            phone = getattr(withdrawal.user, 'phone', 'Not set')   # Fixed: use .phone
             return f"   • M-Pesa Phone: {phone}"
-        
+
 
 class AgentWithdrawalAdminActionView(APIView):
     permission_classes = [permissions.IsAdminUser]
@@ -302,11 +311,12 @@ class AgentWithdrawalAdminActionView(APIView):
                 'agent_name': withdrawal.agent.name,
                 'user_details': self._get_user_details(withdrawal)
             })
+
             email = EmailMultiAlternatives(
-                "Withdrawal Sent!",
-                "Your funds have been transferred.",
-                settings.DEFAULT_FROM_EMAIL,
-                [withdrawal.user.email]
+                subject="Withdrawal Sent Successfully!",
+                body="Your funds have been transferred.",
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[withdrawal.user.email]
             )
             email.attach_alternative(html_content, "text/html")
             email.send(fail_silently=False)
@@ -314,7 +324,7 @@ class AgentWithdrawalAdminActionView(APIView):
             logger.info(f"Withdrawal {withdrawal.id} completed for {withdrawal.user.username}")
             return Response({"message": f"Withdrawal completed – {method} sent"})
 
-        else:
+        else:  # reject
             with transaction.atomic():
                 withdrawal.status = 'rejected'
                 withdrawal.save()
@@ -337,11 +347,12 @@ class AgentWithdrawalAdminActionView(APIView):
                 html_content = render_to_string('emails/withdrawal_rejected.html', {
                     'amount_usd': f"{withdrawal.amount_usd:,.2f}"
                 })
+
                 email = EmailMultiAlternatives(
-                    "Withdrawal Rejected & Refunded",
-                    "Your withdrawal was rejected; funds refunded.",
-                    settings.DEFAULT_FROM_EMAIL,
-                    [withdrawal.user.email]
+                    subject="Withdrawal Rejected & Refunded",
+                    body="Your withdrawal was rejected; funds have been refunded.",
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=[withdrawal.user.email]
                 )
                 email.attach_alternative(html_content, "text/html")
                 email.send(fail_silently=False)

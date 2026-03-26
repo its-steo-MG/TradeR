@@ -18,6 +18,7 @@ export async function POST(request: NextRequest) {
 
     const backendUrl = process.env.DERIV_BACKEND_URL || 'http://localhost:8001'
     
+    
     // Properly extract Authorization header (handles both cases)
     const authHeader = request.headers.get('authorization') || 
                        request.headers.get('Authorization') || '';

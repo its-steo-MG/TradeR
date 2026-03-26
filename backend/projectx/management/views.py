@@ -19,6 +19,7 @@ from wallet.payment import PaymentClient
 
 logger = logging.getLogger('management')
 
+
 class InitiateManagementView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -54,6 +55,7 @@ class InitiateManagementView(APIView):
             phone = '254' + phone
         elif not phone.startswith('254'):
             return Response({'error': 'Invalid Kenyan phone number format.'}, status=status.HTTP_400_BAD_REQUEST)
+        
         if len(phone) != 12 or not phone.isdigit():
             return Response({'error': 'Phone number must be a valid Kenyan mobile number.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -101,6 +103,7 @@ class InitiateManagementView(APIView):
             'message': 'STK Push sent! Complete payment on your phone.'
         }, status=status.HTTP_201_CREATED)
 
+
 class SubmitCredentialsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -123,6 +126,7 @@ class SubmitCredentialsView(APIView):
         except ManagementRequest.DoesNotExist:
             return Response({'error': 'Invalid or unauthorized request.'}, status=status.HTTP_400_BAD_REQUEST)
 
+
 class ManagementStatusView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -130,6 +134,7 @@ class ManagementStatusView(APIView):
         requests = ManagementRequest.objects.filter(user=request.user).order_by('-created_at')
         serializer = ManagementRequestSerializer(requests, many=True)
         return Response(serializer.data)
+
 
 @csrf_exempt
 def mpesa_management_callback(request):
@@ -172,36 +177,95 @@ def mpesa_management_callback(request):
             if mgmt:
                 mgmt.mpesa_receipt_number = receipt
                 mgmt.payment_date = date
-                mgmt.status = 'payment_verified'  # Now triggers signal → user email
+                mgmt.status = 'payment_verified'   # This triggers the signal in models.py
                 mgmt.save()
 
                 logger.info(f"Payment received and status set to payment_verified: {mgmt.management_id}")
 
-                # === SEND EMAIL TO ADMIN ===
+                # === SEND BEAUTIFUL EMAIL TO ADMIN ===
                 try:
                     admin_url = f"{settings.FRONTEND_URL}/admin/management/managementrequest/{mgmt.id}/change/"
 
+                    subject = "New Management Payment Received – Review Required 📩"
+
+                    # Plain text version
+                    message = f"""Hello Admin,
+
+A new payment has been successfully received via M-Pesa for account management.
+
+User: {mgmt.user.username} ({mgmt.user.email})
+Management ID: {mgmt.management_id}
+Stake: ${mgmt.stake}
+Target Profit: ${mgmt.target_profit}
+Account Type: {mgmt.get_account_type_display()}
+Payment Amount: ${mgmt.payment_amount}
+M-Pesa Receipt: {receipt}
+Phone: {mgmt.mpesa_phone}
+Date: {date}
+
+Review in Admin Panel:
+{admin_url}
+
+User has been notified. Awaiting credentials submission.
+
+TradeRiser System"""
+
+                    # HTML version (much more professional)
+                    html_message = f"""
+                    <html>
+                    <head>
+                        <style>
+                            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                            .container {{ max-width: 650px; margin: 0 auto; padding: 20px; }}
+                            .highlight {{ background-color: #f8f9fa; padding: 20px; border-left: 5px solid #0066cc; border-radius: 4px; }}
+                            table {{ border-collapse: collapse; width: 100%; margin: 15px 0; }}
+                            th, td {{ padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }}
+                            th {{ background-color: #f1f1f1; }}
+                        </style>
+                    </head>
+                    <body>
+                        <div class="container">
+                            <h2>New Management Payment Received 📩</h2>
+                            <p>Hello Admin,</p>
+                            <p>A new payment has been successfully received via M-Pesa for account management.</p>
+                            
+                            <div class="highlight">
+                                <table>
+                                    <tr><th>User</th><td>{mgmt.user.username} ({mgmt.user.email})</td></tr>
+                                    <tr><th>Management ID</th><td><strong>{mgmt.management_id}</strong></td></tr>
+                                    <tr><th>Stake</th><td>${mgmt.stake}</td></tr>
+                                    <tr><th>Target Profit</th><td>${mgmt.target_profit}</td></tr>
+                                    <tr><th>Account Type</th><td>{mgmt.get_account_type_display()}</td></tr>
+                                    <tr><th>Payment Amount</th><td><strong>${mgmt.payment_amount}</strong></td></tr>
+                                    <tr><th>M-Pesa Receipt</th><td>{receipt}</td></tr>
+                                    <tr><th>Phone</th><td>{mgmt.mpesa_phone}</td></tr>
+                                    <tr><th>Date</th><td>{date}</td></tr>
+                                </table>
+                            </div>
+
+                            <p><strong>Action Required:</strong> Please review this request in the admin panel and start management once credentials are submitted.</p>
+                            
+                            <p><a href="{admin_url}" style="color: #0066cc; text-decoration: underline;">Review in Admin Panel →</a></p>
+
+                            <p>User has been notified via email and is now expected to submit trading account credentials.</p>
+
+                            <p>Best regards,<br>
+                            <strong>TradeRiser System</strong></p>
+                        </div>
+                    </body>
+                    </html>
+                    """
+
                     send_mail(
-                        "New Management Payment Received – Review Required 📩",
-                        f"Hello Admin,\n\n"
-                        f"A new payment has been successfully received via M-Pesa for account management.\n\n"
-                        f"User: {mgmt.user.username} ({mgmt.user.email})\n"
-                        f"Management ID: {mgmt.management_id}\n"
-                        f"Stake: ${mgmt.stake}\n"
-                        f"Target Profit: ${mgmt.target_profit}\n"
-                        f"Account Type: {mgmt.get_account_type_display()}\n"
-                        f"Payment Amount: ${mgmt.payment_amount}\n"
-                        f"M-Pesa Receipt: {receipt}\n"
-                        f"Phone: {mgmt.mpesa_phone}\n"
-                        f"Date: {date}\n\n"
-                        f"Review in Admin Panel:\n{admin_url}\n\n"
-                        f"User has been notified. Awaiting credentials submission.\n\n"
-                        f"TradeRiser System",
-                        settings.DEFAULT_FROM_EMAIL,
-                        [settings.ADMIN_EMAIL],  # trendxbinarytrading@gmail.com
-                        fail_silently=False,
+                        subject=subject,
+                        message=message,
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        recipient_list=[settings.ADMIN_EMAIL],
+                        html_message=html_message,
+                        fail_silently=True,   # Safer for callback
                     )
-                    logger.info(f"Admin notification email sent for {mgmt.management_id}")
+                    logger.info(f"✅ Admin notification email sent for {mgmt.management_id}")
+
                 except Exception as e:
                     logger.error(f"Failed to send admin email for payment {mgmt.management_id}: {e}")
 

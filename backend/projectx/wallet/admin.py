@@ -10,20 +10,24 @@ import logging
 
 logger = logging.getLogger('wallet')
 
+
 @admin.register(Currency)
 class CurrencyAdmin(admin.ModelAdmin):
     list_display = ('code', 'name', 'symbol', 'is_fiat', 'is_active')
     list_editable = ('is_active',)
+
 
 @admin.register(ExchangeRate)
 class ExchangeRateAdmin(admin.ModelAdmin):
     list_display = ('base_currency', 'target_currency', 'live_rate', 'admin_withdrawal_rate', 'updated_at')
     list_editable = ('live_rate', 'admin_withdrawal_rate')
 
+
 @admin.register(Wallet)
 class WalletAdmin(admin.ModelAdmin):
     list_display = ('account', 'wallet_type', 'currency', 'balance')
     readonly_fields = ('created_at', 'updated_at')
+
 
 @admin.register(WalletTransaction)
 class WalletTransactionAdmin(admin.ModelAdmin):
@@ -33,11 +37,13 @@ class WalletTransactionAdmin(admin.ModelAdmin):
     )
     list_filter = ('transaction_type', 'status', 'created_at')
     search_fields = ('reference_id', 'wallet__account__user__username', 'mpesa_phone')
+    
     readonly_fields = (
         'created_at', 'completed_at', 'reference_id', 'checkout_request_id',
         'amount', 'converted_amount', 'currency', 'target_currency',
         'exchange_rate_used', 'mpesa_phone', 'wallet'
     )
+    
     date_hierarchy = 'created_at'
     list_editable = ('status',)
     actions = ['approve_selected', 'fail_selected']
@@ -45,7 +51,7 @@ class WalletTransactionAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         return False
 
-    # --- Display Helpers ---
+    # ====================== DISPLAY HELPERS ======================
     def ref_link(self, obj):
         url = reverse("admin:wallet_wallettransaction_change", args=[obj.id])
         return format_html('<a href="{}">{}</a>', url, obj.reference_id)
@@ -89,7 +95,11 @@ class WalletTransactionAdmin(admin.ModelAdmin):
             'completed': 'green',
             'failed': 'red'
         }
-        return format_html('<span style="color: {};">{}</span>', colors.get(obj.status, 'black'), obj.status.capitalize())
+        return format_html(
+            '<span style="color: {};">{}</span>', 
+            colors.get(obj.status, 'black'), 
+            obj.status.capitalize()
+        )
     status_colored.short_description = "Status"
 
     def quick_actions(self, obj):
@@ -103,30 +113,30 @@ class WalletTransactionAdmin(admin.ModelAdmin):
         return "-"
     quick_actions.short_description = "Actions"
 
-    # --- Actions ---
+    # ====================== ACTIONS ======================
     def approve_selected(self, request, queryset):
         updated = 0
         for obj in queryset.filter(status='pending'):
             obj.status = 'completed'
             obj.completed_at = timezone.now()
-            obj.save()  # This triggers the signal → balance credited once
+            obj.save()  # This triggers the signal for balance update + emails
             updated += 1
-        messages.success(request, f"{updated} transaction(s) approved. Balances updated automatically.")
-
+        messages.success(request, f"{updated} transaction(s) approved. Balances updated automatically via signal.")
     approve_selected.short_description = "Approve selected transactions"
 
     def fail_selected(self, request, queryset):
         updated = 0
         for obj in queryset.filter(status__in=['pending', 'failed']):
             obj.status = 'failed'
+            if not obj.description:
+                obj.description = ""
             obj.description += " | Manually failed by admin"
             obj.save()
             updated += 1
         messages.success(request, f"{updated} transaction(s) marked as failed.")
-
     fail_selected.short_description = "Fail selected transactions"
 
-    # --- Custom URLs for Quick Actions ---
+    # ====================== CUSTOM URLS FOR QUICK ACTIONS ======================
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
@@ -147,30 +157,56 @@ class WalletTransactionAdmin(admin.ModelAdmin):
         obj = self.get_object(request, transaction_id)
         if obj is None:
             return self._get_obj_does_not_exist_redirect(request, self.model._meta, transaction_id)
+
         if obj.status == 'pending':
             obj.status = 'completed'
             obj.completed_at = timezone.now()
-            obj.save()  # Triggers signal → credit once
+            obj.save()   # Triggers signal → balance + emails
             messages.success(request, f"Transaction {obj.reference_id} approved and balance credited.")
+        
         return HttpResponseRedirect("../..")
 
     def fail_transaction_view(self, request, transaction_id):
         obj = self.get_object(request, transaction_id)
         if obj is None:
             return self._get_obj_does_not_exist_redirect(request, self.model._meta, transaction_id)
+
         obj.status = 'failed'
+        if not obj.description:
+            obj.description = ""
         obj.description += " | Manually failed by admin"
         obj.save()
         messages.success(request, f"Transaction {obj.reference_id} marked as failed.")
         return HttpResponseRedirect("../..")
 
-    # --- Handle Direct Status Changes via List Editable ---
+    # ====================== SAVE MODEL ======================
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
+        
         if change and 'status' in form.changed_data:
             if obj.status == 'completed':
-                messages.success(request, f"Transaction {obj.reference_id} approved → balance credited automatically.")
+                messages.success(
+                    request, 
+                    f"Transaction {obj.reference_id} approved → balance credited automatically via signal."
+                )
             elif obj.status == 'failed':
+                if not obj.description:
+                    obj.description = ""
                 obj.description += " | Manually failed by admin"
                 obj.save()
                 messages.success(request, f"Transaction {obj.reference_id} marked as failed.")
+
+
+@admin.register(MpesaNumber)
+class MpesaNumberAdmin(admin.ModelAdmin):
+    list_display = ('user', 'phone_number', 'is_verified', 'created_at')
+    search_fields = ('user__username', 'phone_number')
+    readonly_fields = ('created_at', 'updated_at')
+
+
+@admin.register(OTPCode)
+class OTPCodeAdmin(admin.ModelAdmin):
+    list_display = ('user', 'code', 'purpose', 'is_used', 'created_at', 'expires_at')
+    list_filter = ('purpose', 'is_used')
+    search_fields = ('user__username', 'code')
+    readonly_fields = ('created_at', 'expires_at')

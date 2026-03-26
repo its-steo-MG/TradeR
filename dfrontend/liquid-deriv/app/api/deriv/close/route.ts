@@ -16,8 +16,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    //const backendUrl = process.env.DERIV_BACKEND_URL || 'http://localhost:8001'
-    const backendUrl = process.env.DERIV_BACKEND_URL || 'https://traderiserproapp.onrender.com'
+    const backendUrl = process.env.DERIV_BACKEND_URL || 'http://localhost:8001'
     
     
     // Properly extract Authorization header

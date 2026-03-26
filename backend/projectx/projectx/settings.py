@@ -5,6 +5,8 @@ from decouple import config
 from datetime import timedelta
 from storages.backends.s3boto3 import S3Boto3Storage
 from decouple import config
+
+from django.conf import settings
 import dj_database_url
 
 
@@ -14,7 +16,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Quick-start development settings - unsuitable for production
 SECRET_KEY = config('SECRET_KEY')
-DEBUG = False
+DEBUG = True
 
 ALLOWED_HOSTS = [
     'localhost',
@@ -86,6 +88,7 @@ INSTALLED_APPS = [
     'mpesa_simulator.apps.MpesaSimulatorConfig',
     'channels',
     'deriv.apps.DerivConfig',
+    'anymail',
     
 
     
@@ -240,15 +243,36 @@ OPENAI_MODEL = config('OPENAI_MODEL', default='gpt-3.5-turbo')
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
 
 
+
+# Use Resend via Anymail 
+
+
+
+EMAIL_BACKEND = "anymail.backends.resend.EmailBackend"
+
+ANYMAIL = {
+    "RESEND_API_KEY": config('RESEND_API_KEY'),   # We'll load from .env
+}
+
+# Default "From" address - MUST use your verified domain
+DEFAULT_FROM_EMAIL = "TraderiserApp <noreply@mail.traderiserapp.com>"  
+
+# Optional but recommended
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+EMAIL_SUBJECT_PREFIX = "[Traderiser] "
+
+# Keep this for admin notifications etc.
+ADMIN_EMAIL = 'steomustadd@gmail.com'
+
 # Email configuration
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_HOST_USER = 'traderiserpro@gmail.com'
-EMAIL_HOST_PASSWORD = 'ixinhoofcsnzjkqb'  # App-specific password for Gmail
-EMAIL_USE_TLS = True
-DEFAULT_FROM_EMAIL = 'TradeRiser <traderiserpro@gmail.com>'  # Must match EMAIL_HOST_USER or a verified alias
-ADMIN_EMAIL = 'steomustadd@gmail.com'  # Admin email for deposit notifications
+#EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+#EMAIL_HOST = 'smtp.gmail.com'
+#EMAIL_PORT = 587
+#EMAIL_HOST_USER = 'grandviewshopafrica@gmail.com'
+#EMAIL_HOST_PASSWORD = 'bxsjwdjriavllfvi'  # App-specific password for Gmail
+#EMAIL_USE_TLS = True
+#DEFAULT_FROM_EMAIL = 'TraderiserApp <grandviewshopafrica@gmail.com>'  # Must match EMAIL_HOST_USER or a verified alias
+#ADMIN_EMAIL = 'steomustadd@gmail.com'  # Admin email for deposit notifications
 
 # ──────────────────────────────────────────────────────────────
 #  S3 / Media – read from .env
@@ -348,3 +372,8 @@ DERIV_OAUTH_REDIRECT_URI = config('DERIV_OAUTH_REDIRECT_URI')
 # Safety check (optional but recommended)
 if not DERIV_OAUTH_REDIRECT_URI:
     raise ImproperlyConfigured("DERIV_OAUTH_REDIRECT_URI is not set in environment variables")
+
+print("=== DERIV CONFIG ===")
+print("DERIV_APP_ID:", repr(settings.DERIV_APP_ID))   # Use repr to see if it's None or empty
+print("DERIV_OAUTH_REDIRECT_URI:", repr(settings.DERIV_OAUTH_REDIRECT_URI))
+print("=====================")
