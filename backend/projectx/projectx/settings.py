@@ -237,7 +237,7 @@ OPENAI_API_KEY = config('OPENAI_API_KEY', default=None)
 OPENAI_MODEL = config('OPENAI_MODEL', default='gpt-3.5-turbo')
 
 # Frontend URL for signals/emails
-FRONTEND_URL = "https://traderiserapp.com"
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
 
 
 # Email configuration
@@ -334,25 +334,17 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ====================== DERIV THIRD-PARTY APP ======================
 DERIV_APP_ID = config('DERIV_APP_ID', default=None)
+DERIV_API_TOKEN = config('DERIV_API_TOKEN', default=None)
 DERIV_MARKUP_PERCENT = config('DERIV_MARKUP_PERCENT', default=2.0, cast=float)
 
-DERIV_FRONTEND_URL  = "https://traderiserdigister.vercel.app"
 
-# Single backend callback (registered in Deriv)
-DERIV_OAUTH_REDIRECT_URI = config(
-    'DERIV_OAUTH_REDIRECT_URI',
-    default='https://traderiserproapp.onrender.com/api/deriv/oauth/callback/'
-)
 
-# Allowed frontends where we can safely redirect after OAuth
-ALLOWED_DERIV_FRONTENDS = {
-    "https://traderiserdigister.vercel.app",         # in case you use www
-    "http://localhost:3002",                   # for local development
-    "http://127.0.0.1:3002",
-}
 
-# Safety check
-if not DERIV_OAUTH_REDIRECT_URI.startswith('https://'):
-    raise ImproperlyConfigured("DERIV_OAUTH_REDIRECT_URI must use HTTPS")
+# 'token' = use your master token + markup (easier for start)
+# 'oauth' = users login with their own Deriv account (more secure for public app)
+# Use environment variable (best practice)
+DERIV_OAUTH_REDIRECT_URI = config('DERIV_OAUTH_REDIRECT_URI')
 
-print(f"✅ Deriv OAuth Redirect URI: {DERIV_OAUTH_REDIRECT_URI}")
+# Safety check (optional but recommended)
+if not DERIV_OAUTH_REDIRECT_URI:
+    raise ImproperlyConfigured("DERIV_OAUTH_REDIRECT_URI is not set in environment variables")
