@@ -2,19 +2,32 @@ import { NextRequest, NextResponse } from 'next/server'
 
 /**
  * GET /api/deriv/oauth/login
- * Returns the Deriv OAuth login URL (public route - no authentication required)
+ * Returns the Deriv OAuth login URL from Django backend
+ * Now passes the current frontend origin so Django knows where to redirect after callback
  */
 export async function GET(request: NextRequest) {
   try {
-    //const backendUrl = process.env.DERIV_BACKEND_URL || 'http://localhost:8001'
-    const backendUrl = process.env.DERIV_BACKEND_URL || 'https://traderiserproapp.onrender.com'
+    const backendUrl = process.env.DERIV_BACKEND_URL 
+      || 'https://traderiserproapp.onrender.com'
 
-    // This route must be PUBLIC → Do NOT forward any Authorization header
-    const response = await fetch(`${backendUrl}/api/deriv/oauth/login/`, {
+    // Get current frontend origin (this is crucial for multi-frontend support)
+    const frontendOrigin = process.env.NEXT_PUBLIC_FRONTEND_URL 
+      || request.headers.get('origin') 
+      || request.nextUrl.origin
+
+    console.log(`[OAuth Login] Request from frontend: ${frontendOrigin}`)
+
+    // Forward the request to Django, passing the frontend origin as query param
+    const djangoLoginUrl = new URL(`${backendUrl}/api/deriv/oauth/login/`)
+    
+    // Pass frontend origin so Django can remember which frontend initiated the flow
+    djangoLoginUrl.searchParams.append('frontend_url', frontendOrigin)
+
+    const response = await fetch(djangoLoginUrl.toString(), {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        // No Authorization header here - Django expects AllowAny
+        // IMPORTANT: No Authorization header - this must remain public (AllowAny)
       },
     })
 
@@ -28,6 +41,8 @@ export async function GET(request: NextRequest) {
         errorMessage = errorText || errorMessage;
       }
 
+      console.error('[OAuth Login] Django error:', errorMessage);
+      
       return NextResponse.json(
         { success: false, error: errorMessage },
         { status: response.status }
@@ -36,7 +51,6 @@ export async function GET(request: NextRequest) {
 
     const data = await response.json();
 
-    // Pass through the auth_url from Django
     return NextResponse.json({
       success: true,
       auth_url: data.auth_url,
@@ -48,7 +62,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       { 
         success: false, 
-        error: error instanceof Error ? error.message : 'Internal server error' 
+        error: error instanceof Error ? error.message : 'Internal server error during login request' 
       },
       { status: 500 }
     );
