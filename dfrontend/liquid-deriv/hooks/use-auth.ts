@@ -1,3 +1,4 @@
+// app/hooks/use-auth.ts
 'use client'
 
 import { useCallback, useState, useEffect } from 'react'
@@ -10,7 +11,7 @@ export function useAuth() {
   const [isLoading, setIsLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
 
-  // Load saved auth from sessionStorage on mount
+  // Load saved auth from sessionStorage
   useEffect(() => {
     if (typeof window === 'undefined') return
 
@@ -27,55 +28,53 @@ export function useAuth() {
     setMounted(true)
   }, [setAuth])
 
-// In use-auth.ts → loginWithDeriv function
-const loginWithDeriv = useCallback(async () => {
-  setIsLoading(true);
+  // ==================== LOGIN WITH DERIV ====================
+  const loginWithDeriv = useCallback(async () => {
+    setIsLoading(true)
 
-  try {
-    const frontendOrigin = typeof window !== 'undefined' 
-      ? window.location.origin 
-      : 'https://traderiserdigister.vercel.app';
+    try {
+      const frontendOrigin = typeof window !== 'undefined' 
+        ? window.location.origin 
+        : 'https://traderiserdigister.vercel.app'
 
-    const res = await fetch(`${API_BASE}/oauth/login/`, {
-      method: 'GET',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      // Pass frontend origin so Django knows where to redirect after callback
-      cache: 'no-store',
-    });
+      console.log(`[Deriv Login] Requesting auth URL from backend. Frontend: ${frontendOrigin}`)
 
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.message || `HTTP ${res.status}`);
+      const res = await fetch(`${API_BASE}/oauth/login/`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.message || `HTTP ${res.status}`)
+      }
+
+      const data = await res.json()
+
+      if (data.success && data.auth_url) {
+        console.log('✅ Redirecting to Deriv Auth:', data.auth_url)
+        window.location.href = data.auth_url   // Full redirect - critical
+      } else {
+        throw new Error(data.message || 'No auth_url received from backend')
+      }
+    } catch (err: any) {
+      console.error('❌ loginWithDeriv Error:', err)
+      addNotification({
+        type: 'error',
+        title: 'Connection Failed',
+        message: err.message || 'Could not start Deriv login. Please try again.',
+      })
+    } finally {
+      setIsLoading(false)
     }
+  }, [addNotification])
 
-    const data = await res.json();
-
-    if (data.success && data.auth_url) {
-      console.log('✅ Redirecting to Deriv:', data.auth_url);
-      window.location.href = data.auth_url;   // Important: use window.location.href
-    } else {
-      throw new Error(data.message || 'No auth_url received');
-    }
-  } catch (err: any) {
-    console.error('LoginWithDeriv Error:', err);
-    addNotification({
-      type: 'error',
-      title: 'Connection Failed',
-      message: err.message || 'Could not start Deriv login. Please try again.',
-    });
-  } finally {
-    setIsLoading(false);
-  }
-}, [addNotification]);
-
-  // ==================== HANDLE CALLBACK FROM DERIV-CALLBACK PAGE ====================
+  // ==================== CALLBACK HANDLERS ====================
   const handleDerivCallbackSuccess = useCallback((expires_at?: string) => {
     const authData = {
       isLoggedIn: true,
-      token: '', // Token is managed server-side via Django session
+      token: '',
       expires_at: expires_at || new Date(Date.now() + 3600 * 1000).toISOString(),
     }
 
@@ -87,35 +86,29 @@ const loginWithDeriv = useCallback(async () => {
       title: 'Success',
       message: 'Deriv account connected successfully!',
     })
-
-    console.log('✅ Deriv account connected via redirect flow')
   }, [setAuth, addNotification])
 
   const handleDerivCallbackError = useCallback((message: string) => {
     addNotification({
       type: 'error',
       title: 'Connection Failed',
-      message: message || 'Failed to connect Deriv account. Please try again.',
+      message: message || 'Failed to connect Deriv account.',
     })
   }, [addNotification])
 
-  // Auto-detect success from redirect flow (runs when user lands on any page after callback)
+  // Cleanup URL params after success
   useEffect(() => {
     if (typeof window === 'undefined') return
 
     const params = new URLSearchParams(window.location.search)
     const success = params.get('success')
-    const expiresAt = params.get('expires_at')
 
     if (success === 'true' && !auth.isLoggedIn) {
-      handleDerivCallbackSuccess(expiresAt || undefined)
-
-      // Clean the URL (remove query params)
+      handleDerivCallbackSuccess(params.get('expires_at') || undefined)
       window.history.replaceState({}, '', window.location.pathname)
     }
   }, [auth.isLoggedIn, handleDerivCallbackSuccess])
 
-  // Logout handler
   const handleLogout = useCallback(() => {
     logout()
     localStorage.removeItem('access_token')
@@ -133,7 +126,6 @@ const loginWithDeriv = useCallback(async () => {
     loginWithDeriv,
     logout: handleLogout,
     isAuthenticated: auth.isLoggedIn && mounted,
-    // Helpers for deriv-callback page
     handleDerivCallbackSuccess,
     handleDerivCallbackError,
   }

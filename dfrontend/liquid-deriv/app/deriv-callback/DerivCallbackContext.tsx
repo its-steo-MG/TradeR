@@ -28,9 +28,10 @@ export default function DerivCallbackContent() {
       handleDerivCallbackSuccess(expiresAt || undefined)
 
       // Redirect to dashboard
-      setTimeout(() => {
-        router.push('/dashboard')
-      }, 1800)
+      // In error block:
+    setTimeout(() => {
+      router.push('/dashboard')   // Changed from /settings
+    }, 2500)
 
     } else {
       setStatus('error')
@@ -40,7 +41,7 @@ export default function DerivCallbackContent() {
 
       // Redirect back to settings
       setTimeout(() => {
-        router.push('/dashboard')
+        router.push('/settings')
       }, 2500)
     }
   }, [searchParams, router, handleDerivCallbackSuccess, handleDerivCallbackError])
