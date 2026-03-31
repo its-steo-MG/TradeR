@@ -27,40 +27,49 @@ export function useAuth() {
     setMounted(true)
   }, [setAuth])
 
-  // ==================== CONNECT TO DERIV ACCOUNT ====================
-  const loginWithDeriv = useCallback(async () => {
-    setIsLoading(true)
+// In use-auth.ts → loginWithDeriv function
+const loginWithDeriv = useCallback(async () => {
+  setIsLoading(true);
 
-    try {
-      const res = await fetch(`${API_BASE}/oauth/login/`, {
-        method: 'GET',
-        credentials: 'include',
-      })
+  try {
+    const frontendOrigin = typeof window !== 'undefined' 
+      ? window.location.origin 
+      : 'https://traderiserdigister.vercel.app';
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || errorData.message || `HTTP ${res.status}`)
-      }
+    const res = await fetch(`${API_BASE}/oauth/login/`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      // Pass frontend origin so Django knows where to redirect after callback
+      cache: 'no-store',
+    });
 
-      const data = await res.json()
-
-      if (data.success && data.auth_url) {
-        console.log('✅ Redirecting to Deriv Login:', data.auth_url)
-        window.location.href = data.auth_url
-      } else {
-        throw new Error(data.message || 'No auth_url received from backend')
-      }
-    } catch (err: any) {
-      console.error('LoginWithDeriv Error:', err)
-      addNotification({
-        type: 'error',
-        title: 'Connection Failed',
-        message: err.message || 'Could not connect to Deriv. Please try again.',
-      })
-    } finally {
-      setIsLoading(false)
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP ${res.status}`);
     }
-  }, [addNotification])
+
+    const data = await res.json();
+
+    if (data.success && data.auth_url) {
+      console.log('✅ Redirecting to Deriv:', data.auth_url);
+      window.location.href = data.auth_url;   // Important: use window.location.href
+    } else {
+      throw new Error(data.message || 'No auth_url received');
+    }
+  } catch (err: any) {
+    console.error('LoginWithDeriv Error:', err);
+    addNotification({
+      type: 'error',
+      title: 'Connection Failed',
+      message: err.message || 'Could not start Deriv login. Please try again.',
+    });
+  } finally {
+    setIsLoading(false);
+  }
+}, [addNotification]);
 
   // ==================== HANDLE CALLBACK FROM DERIV-CALLBACK PAGE ====================
   const handleDerivCallbackSuccess = useCallback((expires_at?: string) => {
