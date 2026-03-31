@@ -40,7 +40,7 @@ export default function DerivCallbackContent() {
 
       // Redirect back to settings
       setTimeout(() => {
-        router.push('/settings')
+        router.push('/dashboard')
       }, 2500)
     }
   }, [searchParams, router, handleDerivCallbackSuccess, handleDerivCallbackError])
