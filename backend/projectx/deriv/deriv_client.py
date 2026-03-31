@@ -7,9 +7,6 @@ import logging
 from typing import Dict, Optional
 from collections import defaultdict
 from channels.layers import get_channel_layer
-import secrets
-import hashlib
-import base64
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -28,14 +25,15 @@ class DerivClient:
         self.channel_layer = get_channel_layer()
         self._http_client = httpx.AsyncClient(timeout=15.0)
 
-    # ====================== PUBLIC TICKS ======================
+    # ====================== PUBLIC TICKS (WebSocket) ======================
 
     async def _ensure_public_ws(self):
         if self.public_ws and not self.public_ws.closed:
             return
 
         try:
-            url = "wss://api.derivws.com/trading/v1/options/ws/public"
+            # Correct Deriv Public WebSocket URL
+            url = f"wss://ws.derivws.com/websockets/v3?app_id={self.app_id}"
             self.public_ws = await websockets.connect(
                 url, ping_interval=20, ping_timeout=30
             )
@@ -54,7 +52,6 @@ class DerivClient:
                 message = await self.public_ws.recv()
                 data = json.loads(message)
 
-                # More robust check (Deriv often uses msg_type)
                 if data.get("msg_type") == "tick" or "tick" in data:
                     tick_data = data.get("tick")
                     symbol = tick_data.get("symbol") if tick_data else None
@@ -84,7 +81,7 @@ class DerivClient:
             logger.info(f"Subscribed to public ticks: {symbol}")
         except Exception as e:
             logger.error(f"Subscribe failed for {symbol}: {e}")
-            self._sub_count[symbol] -= 1  # rollback on failure
+            self._sub_count[symbol] -= 1
 
     async def unsubscribe_ticks(self, symbol: str):
         if symbol in self._sub_count:
@@ -96,10 +93,9 @@ class DerivClient:
                     pass
                 del self._sub_count[symbol]
 
-    # ====================== OAUTH 2.0 LOGIN ======================
+    # ====================== OAUTH 2.0 ======================
 
     async def exchange_oauth_code(self, code: str, code_verifier: str, redirect_uri: str) -> Dict:
-        """Exchange authorization code for access token (PKCE)"""
         payload = {
             "grant_type": "authorization_code",
             "client_id": self.app_id,
@@ -110,7 +106,7 @@ class DerivClient:
         try:
             resp = await self._http_client.post(
                 "https://auth.deriv.com/oauth2/token",
-                data=payload,  # form-encoded
+                data=payload,
                 headers={"Content-Type": "application/x-www-form-urlencoded"}
             )
             resp.raise_for_status()
@@ -121,16 +117,19 @@ class DerivClient:
             logger.error(f"OAuth token exchange failed: {e}")
             return {"error": str(e)}
 
-    # ====================== AUTHENTICATED TRADING (REST + Bearer) ======================
+    # ====================== AUTHENTICATED TRADING (Fixed) ======================
 
-    async def _make_authenticated_request(self, endpoint: str, payload: Dict, access_token: str) -> Dict:
-        """Generic helper for authenticated REST calls"""
+    async def _make_authenticated_request(self, payload: Dict, access_token: str) -> Dict:
+        """Correct Deriv v2 REST API call"""
         headers = {
             "Deriv-App-ID": self.app_id,
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json",
+            "Accept": "application/json",
         }
-        url = f"https://api.derivws.com/trading/v1/options{endpoint}"
+        
+        url = "https://api.deriv.com/v2"   # ← Correct base URL
+
         try:
             resp = await self._http_client.post(url, json=payload, headers=headers)
             resp.raise_for_status()
@@ -143,24 +142,21 @@ class DerivClient:
             return {"error": str(e)}
 
     async def get_proposal(self, contract_params: Dict, access_token: str) -> Dict:
-        """Fully flexible proposal — supports ALL Deriv contract types"""
         payload = {
             "proposal": 1,
-            **contract_params,                     # Pass everything from frontend (amount, barrier, etc.)
+            **contract_params,
         }
 
-        # Ensure correct symbol field name
+        # Fix symbol field name if needed
         if "symbol" in payload and "underlying_symbol" not in payload:
             payload["underlying_symbol"] = payload.pop("symbol")
 
-        return await self._make_authenticated_request("", payload, access_token)
+        return await self._make_authenticated_request(payload, access_token)
 
     async def buy_contract(self, contract_params: Dict, access_token: str) -> Dict:
-        """Buy contract with optional markup"""
         original_amount = float(contract_params.get("amount", 10))
         marked_amount = round(original_amount * (1 + self.markup), 2)
 
-        # Get proposal with marked-up amount
         proposal_resp = await self.get_proposal(
             {**contract_params, "amount": marked_amount}, 
             access_token
@@ -172,28 +168,26 @@ class DerivClient:
         proposal_id = proposal_resp["proposal"]["id"]
 
         buy_payload = {"buy": proposal_id, "price": marked_amount}
-        return await self._make_authenticated_request("", buy_payload, access_token)
+        return await self._make_authenticated_request(buy_payload, access_token)
 
     async def sell_contract(self, contract_params: Dict, access_token: str) -> Dict:
-        """Sell (close) an open contract — price=0 means market sell"""
         payload = {
             "sell": contract_params.get("contract_id"),
-            "price": float(contract_params.get("price", 0)),   # 0 = sell at market
+            "price": float(contract_params.get("price", 0)),
         }
-        return await self._make_authenticated_request("", payload, access_token)
+        return await self._make_authenticated_request(payload, access_token)
 
     async def get_balance(self, access_token: str) -> Dict:
         payload = {"balance": 1}
-        return await self._make_authenticated_request("", payload, access_token)
+        return await self._make_authenticated_request(payload, access_token)
 
     async def get_open_contract(self, contract_id: str, access_token: str, subscribe: bool = True) -> Dict:
-        """Get open contract details (supports subscription for updates)"""
         payload = {
             "proposal_open_contract": 1,
             "contract_id": contract_id,
             "subscribe": 1 if subscribe else 0,
         }
-        return await self._make_authenticated_request("", payload, access_token)
+        return await self._make_authenticated_request(payload, access_token)
 
     # ====================== CLEANUP ======================
 
@@ -206,5 +200,5 @@ class DerivClient:
         logger.info("Deriv Client closed")
 
 
-# Global singleton (mainly for public ticks)
+# Global singleton
 deriv_client = DerivClient()
