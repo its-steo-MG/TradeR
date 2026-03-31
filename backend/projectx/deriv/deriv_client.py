@@ -17,7 +17,7 @@ class DerivClient:
         self.app_id = settings.DERIV_APP_ID
         self.markup = getattr(settings, 'DERIV_MARKUP_PERCENT', 2.0) / 100.0
 
-        # Public WebSocket for market ticks (no auth)
+        # Public WebSocket for market ticks (no auth required)
         self.public_ws: Optional[websockets.WebSocketClientProtocol] = None
         self._listener_task: Optional[asyncio.Task] = None
         self._sub_count = defaultdict(int)   # symbol -> client count
@@ -32,17 +32,21 @@ class DerivClient:
             return
 
         try:
-            # Correct Deriv Public WebSocket URL
-            url = f"wss://ws.derivws.com/websockets/v3?app_id={self.app_id}"
+            # Official public WebSocket URL (no authentication needed)
+            url = "wss://api.derivws.com/trading/v1/options/ws/public"
+            
             self.public_ws = await websockets.connect(
-                url, ping_interval=20, ping_timeout=30
+                url, 
+                ping_interval=20, 
+                ping_timeout=30
             )
-            logger.info("✅ Connected to Deriv Public WebSocket (ticks)")
-
+            logger.info("✅ Successfully connected to Deriv Public WebSocket")
+            
             if not self._listener_task or self._listener_task.done():
                 self._listener_task = asyncio.create_task(self._public_ticks_listener())
+                
         except Exception as e:
-            logger.error(f"Public WS connection failed: {e}")
+            logger.error(f"❌ Public WS connection failed: {e}")
             raise
 
     async def _public_ticks_listener(self):
@@ -55,6 +59,7 @@ class DerivClient:
                 if data.get("msg_type") == "tick" or "tick" in data:
                     tick_data = data.get("tick")
                     symbol = tick_data.get("symbol") if tick_data else None
+                    
                     if symbol:
                         await self.channel_layer.group_send(
                             f"ticks_{symbol}",
@@ -68,8 +73,8 @@ class DerivClient:
                 break
             except Exception as e:
                 logger.error(f"Public ticks listener error: {e}")
-                await asyncio.sleep(2)
-                await self._ensure_public_ws()  # reconnect
+                await asyncio.sleep(3)
+                await self._ensure_public_ws()  # Try reconnect
 
     async def subscribe_ticks(self, symbol: str):
         await self._ensure_public_ws()
@@ -78,7 +83,7 @@ class DerivClient:
         req = {"ticks": symbol, "subscribe": 1}
         try:
             await self.public_ws.send(json.dumps(req))
-            logger.info(f"Subscribed to public ticks: {symbol}")
+            logger.info(f"Subscribed to ticks: {symbol}")
         except Exception as e:
             logger.error(f"Subscribe failed for {symbol}: {e}")
             self._sub_count[symbol] -= 1
@@ -117,10 +122,10 @@ class DerivClient:
             logger.error(f"OAuth token exchange failed: {e}")
             return {"error": str(e)}
 
-    # ====================== AUTHENTICATED TRADING (Fixed) ======================
+    # ====================== AUTHENTICATED TRADING (REST) ======================
 
     async def _make_authenticated_request(self, payload: Dict, access_token: str) -> Dict:
-        """Correct Deriv v2 REST API call"""
+        """Correct REST API call for Deriv"""
         headers = {
             "Deriv-App-ID": self.app_id,
             "Authorization": f"Bearer {access_token}",
@@ -128,7 +133,7 @@ class DerivClient:
             "Accept": "application/json",
         }
         
-        url = "https://api.deriv.com/v2"   # ← Correct base URL
+        url = "https://api.derivws.com"   # Official base URL
 
         try:
             resp = await self._http_client.post(url, json=payload, headers=headers)
@@ -138,7 +143,7 @@ class DerivClient:
             logger.error(f"Deriv API error {e.response.status_code}: {e.response.text}")
             return {"error": e.response.text}
         except Exception as e:
-            logger.error(f"Request failed: {e}")
+            logger.error(f"Authenticated request failed: {e}")
             return {"error": str(e)}
 
     async def get_proposal(self, contract_params: Dict, access_token: str) -> Dict:
@@ -147,7 +152,6 @@ class DerivClient:
             **contract_params,
         }
 
-        # Fix symbol field name if needed
         if "symbol" in payload and "underlying_symbol" not in payload:
             payload["underlying_symbol"] = payload.pop("symbol")
 
