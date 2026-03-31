@@ -364,16 +364,27 @@ DERIV_MARKUP_PERCENT = config('DERIV_MARKUP_PERCENT', default=2.0, cast=float)
 
 
 
-# 'token' = use your master token + markup (easier for start)
-# 'oauth' = users login with their own Deriv account (more secure for public app)
-# Use environment variable (best practice)
-DERIV_OAUTH_REDIRECT_URI = config('DERIV_OAUTH_REDIRECT_URI')
+# ====================== DERIV THIRD-PARTY APP ======================
 
-# Safety check (optional but recommended)
+# Load from environment variables
+DERIV_APP_ID = config('DERIV_APP_ID', default=None)
+DERIV_OAUTH_REDIRECT_URI = config('DERIV_OAUTH_REDIRECT_URI', default=None)
+
+# Safety checks
+if not DERIV_APP_ID:
+    raise ImproperlyConfigured(
+        "DERIV_APP_ID is not set in environment variables. "
+        "Please add DERIV_APP_ID=32O80dLT5kfhQnnNcd2XB on Render.com"
+    )
+
 if not DERIV_OAUTH_REDIRECT_URI:
-    raise ImproperlyConfigured("DERIV_OAUTH_REDIRECT_URI is not set in environment variables")
+    raise ImproperlyConfigured(
+        "DERIV_OAUTH_REDIRECT_URI is not set in environment variables. "
+        "Please set it to: https://traderiserdigister.vercel.app/deriv-callback"
+    )
 
-print("=== DERIV CONFIG ===")
-print("DERIV_APP_ID:", repr(settings.DERIV_APP_ID))   # Use repr to see if it's None or empty
-print("DERIV_OAUTH_REDIRECT_URI:", repr(settings.DERIV_OAUTH_REDIRECT_URI))
-print("=====================")
+# Debug prints (very useful right now)
+print("=== DERIV CONFIG LOADED SUCCESSFULLY ===")
+print("DERIV_APP_ID:", repr(DERIV_APP_ID))
+print("DERIV_OAUTH_REDIRECT_URI:", repr(DERIV_OAUTH_REDIRECT_URI))
+print("========================================")
