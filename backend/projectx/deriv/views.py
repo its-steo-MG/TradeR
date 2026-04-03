@@ -71,7 +71,7 @@ class DerivOAuthLoginView(APIView):
         request.session.save()
 
         # === FIXED & SAFER AUTH URL ===
-        redirect_uri = settings.DERIV_OAUTH_REDIRECT_URI.rstrip('/') + '/'
+        redirect_uri = settings.DERIV_OAUTH_REDIRECT_URI.rstrip('/')
 
         auth_url = (
             f"https://auth.deriv.com/oauth2/auth?"
