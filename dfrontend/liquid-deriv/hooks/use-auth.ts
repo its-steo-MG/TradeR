@@ -27,48 +27,53 @@ export function useAuth() {
     }
     setMounted(true)
   }, [setAuth])
+// ==================== LOGIN WITH DERIV ====================
+const loginWithDeriv = useCallback(async () => {
+  setIsLoading(true);
 
-  // ==================== LOGIN WITH DERIV ====================
-  const loginWithDeriv = useCallback(async () => {
-    setIsLoading(true)
+  try {
+    const frontendOrigin = typeof window !== 'undefined'
+      ? window.location.origin
+      : 'https://traderiserdigister.vercel.app';
 
-    try {
-      const frontendOrigin = typeof window !== 'undefined' 
-        ? window.location.origin 
-        : 'https://traderiserdigister.vercel.app'
+    console.log(`[Deriv Login] Requesting auth URL. Frontend: ${frontendOrigin}`);
 
-      console.log(`[Deriv Login] Requesting auth URL from backend. Frontend: ${frontendOrigin}`)
+    // Pass frontend_url properly
+    const query = new URLSearchParams({
+      frontend_url: frontendOrigin,
+      prompt: 'consent'
+    });
 
-      const res = await fetch(`${API_BASE}/oauth/login/`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-        cache: 'no-store',
-      })
+    const res = await fetch(`${API_BASE}/oauth/login/?${query.toString()}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+    });
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.message || `HTTP ${res.status}`)
-      }
-
-      const data = await res.json()
-
-      if (data.success && data.auth_url) {
-        console.log('✅ Redirecting to Deriv Auth:', data.auth_url)
-        window.location.href = data.auth_url   // Full redirect - critical
-      } else {
-        throw new Error(data.message || 'No auth_url received from backend')
-      }
-    } catch (err: any) {
-      console.error('❌ loginWithDeriv Error:', err)
-      addNotification({
-        type: 'error',
-        title: 'Connection Failed',
-        message: err.message || 'Could not start Deriv login. Please try again.',
-      })
-    } finally {
-      setIsLoading(false)
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP ${res.status}`);
     }
-  }, [addNotification])
+
+    const data = await res.json();
+
+    if (data.success && data.auth_url) {
+      console.log('✅ Redirecting to Deriv Auth:', data.auth_url);
+      window.location.href = data.auth_url;
+    } else {
+      throw new Error(data.message || 'No auth_url received from backend');
+    }
+  } catch (err: any) {
+    console.error('❌ loginWithDeriv Error:', err);
+    addNotification({
+      type: 'error',
+      title: 'Connection Failed',
+      message: err.message || 'Could not start Deriv login. Please try again.',
+    });
+  } finally {
+    setIsLoading(false);
+  }
+}, [addNotification]);
 
   // ==================== CALLBACK HANDLERS ====================
   const handleDerivCallbackSuccess = useCallback((expires_at?: string) => {

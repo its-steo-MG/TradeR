@@ -358,33 +358,27 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ====================== DERIV THIRD-PARTY APP ======================
 DERIV_APP_ID = config('DERIV_APP_ID', default=None)
-DERIV_API_TOKEN = config('DERIV_API_TOKEN', default=None)
-DERIV_MARKUP_PERCENT = config('DERIV_MARKUP_PERCENT', default=2.0, cast=float)
-
-
-
-
-# ====================== DERIV THIRD-PARTY APP ======================
-
-# Load from environment variables
-DERIV_APP_ID = config('DERIV_APP_ID', default=None)
 DERIV_OAUTH_REDIRECT_URI = config('DERIV_OAUTH_REDIRECT_URI', default=None)
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://traderiserdigister.vercel.app')
 
 # Safety checks
 if not DERIV_APP_ID:
-    raise ImproperlyConfigured(
-        "DERIV_APP_ID is not set in environment variables. "
-        "Please add DERIV_APP_ID=32O80dLT5kfhQnnNcd2XB on Render.com"
-    )
+    raise ImproperlyConfigured("DERIV_APP_ID is missing")
 
 if not DERIV_OAUTH_REDIRECT_URI:
     raise ImproperlyConfigured(
-        "DERIV_OAUTH_REDIRECT_URI is not set in environment variables. "
-        "Please set it to: https://traderiserdigister.vercel.app/deriv-callback"
+        "DERIV_OAUTH_REDIRECT_URI is missing. "
+        "It should point to your BACKEND, e.g. https://traderiserproapp.onrender.com/api/deriv/oauth/callback/"
     )
 
-# Debug prints (very useful right now)
-print("=== DERIV CONFIG LOADED SUCCESSFULLY ===")
+# Optional: Allow multiple frontends
+ALLOWED_DERIV_FRONTENDS = {
+    'https://traderiserdigister.vercel.app',
+    'https://traderiserproapp.vercel.app',   # if you have others
+}
+
+print("=== DERIV CONFIG ===")
 print("DERIV_APP_ID:", repr(DERIV_APP_ID))
 print("DERIV_OAUTH_REDIRECT_URI:", repr(DERIV_OAUTH_REDIRECT_URI))
-print("========================================")
+print("FRONTEND_URL:", repr(FRONTEND_URL))
+print("=====================")

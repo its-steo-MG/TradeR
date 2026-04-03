@@ -66,18 +66,23 @@ class DerivOAuthLoginView(APIView):
         request.session['deriv_oauth_state'] = state
         request.session['deriv_frontend_origin'] = frontend_url
 
-        # === FIXED AUTH URL ===
+               # === FIXED & SAFER AUTH URL ===
+        redirect_uri = settings.DERIV_OAUTH_REDIRECT_URI.rstrip('/') + '/'
+
         auth_url = (
             f"https://auth.deriv.com/oauth2/auth?"
             f"response_type=code"
-            f"&client_id={settings.DERIV_APP_ID}"          # ← This must NOT be empty
-            f"&redirect_uri={settings.DERIV_OAUTH_REDIRECT_URI}"
+            f"&client_id={settings.DERIV_APP_ID}"
+            f"&redirect_uri={urllib.parse.quote(redirect_uri)}"   # ← Important: encode it
             f"&scope=trade"
             f"&state={state}"
             f"&code_challenge={code_challenge}"
             f"&code_challenge_method=S256"
             f"&prompt={prompt}"
         )
+
+        logger.info(f"Using redirect_uri: {redirect_uri}")
+        logger.info(f"Full auth_url: {auth_url}")
 
         # Debug log (very important right now)
         logger.info(f"Deriv Auth URL generated with app_id: {settings.DERIV_APP_ID}")

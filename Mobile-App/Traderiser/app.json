@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "Traderiser",
+    "slug": "traderiser",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#0a0a0a"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0a0a0a"
+      }
+    }
+  }
+}
