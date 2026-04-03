@@ -62,18 +62,22 @@ class DerivOAuthLoginView(APIView):
 
         state = secrets.token_urlsafe(32)
 
+        # Store session data
         request.session['deriv_pkce_verifier'] = code_verifier
         request.session['deriv_oauth_state'] = state
         request.session['deriv_frontend_origin'] = frontend_url
 
-               # === FIXED & SAFER AUTH URL ===
+        # 🔥 CRITICAL FIX: Force Django to save the session immediately
+        request.session.save()
+
+        # === FIXED & SAFER AUTH URL ===
         redirect_uri = settings.DERIV_OAUTH_REDIRECT_URI.rstrip('/') + '/'
 
         auth_url = (
             f"https://auth.deriv.com/oauth2/auth?"
             f"response_type=code"
             f"&client_id={settings.DERIV_APP_ID}"
-            f"&redirect_uri={urllib.parse.quote(redirect_uri)}"   # ← Important: encode it
+            f"&redirect_uri={urllib.parse.quote(redirect_uri)}"
             f"&scope=trade"
             f"&state={state}"
             f"&code_challenge={code_challenge}"
@@ -83,42 +87,52 @@ class DerivOAuthLoginView(APIView):
 
         logger.info(f"Using redirect_uri: {redirect_uri}")
         logger.info(f"Full auth_url: {auth_url}")
-
-        # Debug log (very important right now)
         logger.info(f"Deriv Auth URL generated with app_id: {settings.DERIV_APP_ID}")
-        logger.info(f"Full auth_url: {auth_url}")
+        logger.info(f"Session Key: {request.session.session_key}")  # Helpful for debugging
 
         return Response({
             "success": True,
             "auth_url": auth_url,
             "message": "Redirect the user to this URL"
         })
-
+    
 # ====================== OAUTH CALLBACK (Multi-Frontend Support) ======================
+
+# views.py
+from django.http import HttpResponseRedirect
+from django.contrib.sessions.backends.db import SessionStore
 
 @csrf_exempt
 async def deriv_oauth_callback(request):
-    """Handles redirect from Deriv and forwards user to the correct frontend"""
+    """Improved OAuth Callback"""
     code = request.GET.get("code")
     state = request.GET.get("state")
     error = request.GET.get("error")
 
     if error:
-        logger.error(f"Deriv returned OAuth error: {error}")
-        error_msg = urllib.parse.quote(f"Deriv error: {error}")
-        return redirect(f"{settings.FRONTEND_URL}/deriv-callback?success=false&message={error_msg}")
+        logger.error(f"Deriv OAuth error: {error}")
+        return redirect_to_frontend(request, success=False, message=f"Deriv error: {error}")
 
+    if not code:
+        logger.warning("No code received from Deriv")
+        return redirect_to_frontend(request, success=False, message="No authorization code received")
+
+    # === CRITICAL: Get session from state (more reliable) ===
     stored_state = request.session.get("deriv_oauth_state")
-    if not code or state != stored_state:
-        logger.warning("OAuth state mismatch or missing code")
-        return redirect(f"{settings.FRONTEND_URL}/deriv-callback?success=false&message=Invalid+state+or+missing+code")
+    
+    if not stored_state or state != stored_state:
+        logger.warning(f"State mismatch! Got: {state}, Expected: {stored_state}")
+        
+        # Optional: Try to recover from DB if you want (advanced)
+        return redirect_to_frontend(request, success=False, message="Session expired or state mismatch. Please try again.")
 
     code_verifier = request.session.pop("deriv_pkce_verifier", None)
-    if not code_verifier:
-        logger.warning("Missing code_verifier in session")
-        return redirect(f"{settings.FRONTEND_URL}/deriv-callback?success=false&message=Session+expired")
+    frontend_origin = request.session.pop("deriv_frontend_origin", None)
 
-    # Exchange authorization code for tokens
+    if not code_verifier:
+        return redirect_to_frontend(request, success=False, message="Session expired")
+
+    # Exchange code for token
     token_data = await deriv_client.exchange_oauth_code(
         code=code,
         code_verifier=code_verifier,
@@ -127,44 +141,54 @@ async def deriv_oauth_callback(request):
 
     if "error" in token_data or "access_token" not in token_data:
         logger.error(f"Token exchange failed: {token_data}")
-        return redirect(f"{settings.FRONTEND_URL}/deriv-callback?success=false&message=Failed+to+get+token+from+Deriv")
+        return redirect_to_frontend(request, success=False, message="Failed to get access token")
 
-    # Save tokens to database
-    expires_in = token_data.get("expires_in", 3600)
-    expires_at = timezone.now() + timezone.timedelta(seconds=expires_in)
+    # === Save to database ===
+    try:
+        user = request.user if request.user.is_authenticated else None
+        
+        # If user is not authenticated here (rare), we might need to pass user_id via session
+        if not user or not user.is_authenticated:
+            logger.error("User not authenticated in callback")
+            return redirect_to_frontend(request, success=False, message="User session lost")
 
-    DerivUserAccount.objects.update_or_create(
-        user=request.user,
-        defaults={
-            "access_token": token_data["access_token"],
-            "refresh_token": token_data.get("refresh_token"),
-            "expires_at": expires_at,
-        }
-    )
+        expires_in = token_data.get("expires_in", 3600)
+        expires_at = timezone.now() + timezone.timedelta(seconds=expires_in)
 
-    # Clean up session
+        DerivUserAccount.objects.update_or_create(
+            user=user,
+            defaults={
+                "access_token": token_data["access_token"],
+                "refresh_token": token_data.get("refresh_token"),
+                "expires_at": expires_at,
+            }
+        )
+
+        logger.info(f"✅ Deriv account linked for user {user.username}")
+
+    except Exception as e:
+        logger.error(f"Error saving Deriv account: {e}", exc_info=True)
+        return redirect_to_frontend(request, success=False, message="Failed to save account")
+
+    # Clean session
     request.session.pop("deriv_oauth_state", None)
+    request.session.pop("deriv_pkce_verifier", None)
 
-    # === Dynamic Redirect Based on Originating Frontend ===
-    frontend_origin = request.session.pop('deriv_frontend_origin', None)
+    return redirect_to_frontend(request, success=True, message="Deriv account connected successfully")
 
-    # Validate against allowed frontends
-    allowed_frontends = getattr(settings, 'ALLOWED_DERIV_FRONTENDS', {settings.FRONTEND_URL})
-    if not frontend_origin or frontend_origin not in allowed_frontends:
+
+def redirect_to_frontend(request, success=True, message=""):
+    """Helper to redirect to correct frontend"""
+    frontend_origin = request.session.get('deriv_frontend_origin') or settings.FRONTEND_URL
+    
+    allowed = getattr(settings, 'ALLOWED_DERIV_FRONTENDS', {settings.FRONTEND_URL})
+    if frontend_origin not in allowed:
         frontend_origin = settings.FRONTEND_URL
-        logger.info(f"Unknown frontend, falling back to default: {frontend_origin}")
 
-    success_msg = urllib.parse.quote("Deriv account connected successfully")
-
-    final_redirect = (
-        f"{frontend_origin}/deriv-callback?"
-        f"success=true&"
-        f"message={success_msg}&"
-        f"expires_at={expires_at.isoformat()}"
-    )
-
-    logger.info(f"✅ Deriv OAuth successful → Redirecting to {frontend_origin}")
-    return redirect(final_redirect)
+    msg = urllib.parse.quote(message)
+    final_url = f"{frontend_origin}/deriv-callback?success={str(success).lower()}&message={msg}"
+    
+    return HttpResponseRedirect(final_url)
 
 
 # ====================== ASYNC TRADING VIEWS ======================
@@ -252,6 +276,7 @@ class DerivSellView(APIView):
 class DerivBalanceView(APIView):
     permission_classes = [IsAuthenticated]
     authentication_classes = [JWTAuthentication]
+    
 
     async def get(self, request):
         token, error = await get_user_access_token(request)
