@@ -2,11 +2,10 @@
 from rest_framework import serializers
 from .models import MarketType, Market, TradeType, Robot, UserRobot, Trade, Signal
 from django.conf import settings
-
 class RobotSerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()
     effective_price = serializers.SerializerMethodField()
-    original_price = serializers.ReadOnlyField(source='price')  # Useful for showing strike-through on frontend
+    original_price = serializers.ReadOnlyField(source='price')
 
     def get_image(self, obj):
         if obj.image:
@@ -19,11 +18,20 @@ class RobotSerializer(serializers.ModelSerializer):
     class Meta:
         model = Robot
         fields = [
-            'id', 'name', 'description', 'price', 'original_price',
-            'discounted_price', 'effective_price', 'available_for_demo',
-            'image', 'win_rate'
+            'id',
+            'name',
+            'description',
+            'price',
+            'original_price',
+            'discounted_price',
+            'effective_price',
+            'available_for_demo',
+            'image',
+            'win_rate',
+            # Deriv Premium Robot fields
+            'is_deriv_robot',
+            'deriv_access_key',
         ]
-
 class MarketTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = MarketType
@@ -49,11 +57,24 @@ class TradeTypeSerializer(serializers.ModelSerializer):
 
 class UserRobotSerializer(serializers.ModelSerializer):
     robot = RobotSerializer(read_only=True)
+    deriv_access_key = serializers.SerializerMethodField()
+
+    def get_deriv_access_key(self, obj):
+        """Return deriv_access_key only if the robot is a Deriv Premium Robot"""
+        if getattr(obj.robot, 'is_deriv_robot', False) and obj.robot.deriv_access_key:
+            return obj.robot.deriv_access_key
+        return None
 
     class Meta:
         model = UserRobot
-        fields = ['id', 'robot', 'purchased_at', 'purchased_price']
-
+        fields = [
+            'id',
+            'robot',
+            'purchased_at',
+            'purchased_price',
+            'deriv_access_key'
+        ]
+        
 class TradeSerializer(serializers.ModelSerializer):
     market = MarketSerializer(read_only=True)
     trade_type = TradeTypeSerializer(read_only=True)

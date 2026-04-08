@@ -84,3 +84,77 @@ class Message(models.Model):
         if self.is_system and self.sender is None:
             return f"TradeRiser Support: {self.content[:30]}..."
         return f"{self.sender.username if self.sender else 'System'}: {self.content[:30]}..."
+    
+# ====================== AUDIO CALL MODELS ======================
+class CustomerCareSettings(models.Model):
+    """Singleton – Hold music & welcome audio (editable in Django Admin)"""
+    hold_music = models.FileField(
+        upload_to='customercare/hold_music/',
+        null=True, blank=True,
+        help_text="Soft background song played while user waits"
+    )
+    welcome_audio = models.FileField(
+        upload_to='customercare/welcome/',
+        null=True, blank=True,
+        help_text="Voice message: Welcome to TradeRiser..."
+    )
+    welcome_text = models.TextField(
+        default="Welcome to TradeRiser Customercare. You will be served by the next available agent.",
+        help_text="Text shown to user while waiting"
+    )
+
+    class Meta:
+        verbose_name_plural = "Customer Care Settings"
+
+    @classmethod
+    def get_settings(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def __str__(self):
+        return "Customer Care Global Settings"
+
+
+class CallSession(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('ringing', 'Ringing'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('missed', 'Missed'),
+        ('declined', 'Declined'),
+    ]
+
+    VOICE_CHOICES = [
+        ('default', 'Default Voice'),
+        ('lady', 'Lady Voice'),
+        ('child', 'Child Voice'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='initiated_calls')
+    thread = models.ForeignKey(
+        'ChatThread', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='calls'
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    started_at = models.DateTimeField(auto_now_add=True)
+    answered_at = models.DateTimeField(null=True, blank=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+    voice_preset = models.CharField(max_length=20, choices=VOICE_CHOICES, default='default')
+    recording = models.FileField(upload_to='customercare/recordings/', null=True, blank=True)
+    agent = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='answered_calls', limit_choices_to={'is_staff': True}
+    )
+    is_missed = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-started_at']
+
+    def __str__(self):
+        return f"Call #{self.id} – {self.user.username} ({self.status})"
+
+    def mark_as_missed(self):
+        self.status = 'missed'
+        self.is_missed = True
+        self.save()

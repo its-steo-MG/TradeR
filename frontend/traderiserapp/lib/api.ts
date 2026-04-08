@@ -1020,6 +1020,54 @@ export async function resumeSubscription(subscriptionId: number, allocatedAmount
   })
 }
 
+// ====================== AUDIO CALL API FUNCTIONS ======================
+
+export interface InitiateCallResponse {
+  call_id: number
+  status?: string
+  message?: string
+}
+
+export interface AnswerCallResponse {
+  success: boolean
+  message?: string
+  call_id?: number
+  voice_preset?: string
+}
+
+export interface EndCallResponse {
+  success: boolean
+  message?: string
+  call_id?: number
+}
+
+export interface MissedCallsResponse {
+  missed_calls: number
+  has_unread: boolean
+}
+
+// Call Initiation
+export const initiateAudioCall = () =>
+  apiRequest<InitiateCallResponse>("/customercare/call/initiate/", {
+    method: "POST",
+  })
+
+// Answer Call
+export const answerAudioCall = (callId: number, voicePreset: string = "default") =>
+  apiRequest<AnswerCallResponse>(`/customercare/call/answer/${callId}/`, {
+    method: "POST",
+    body: JSON.stringify({ voice_preset: voicePreset }),
+  })
+
+// End Call
+export const endAudioCall = (callId: number) =>
+  apiRequest<EndCallResponse>(`/customercare/call/end/${callId}/`, {
+    method: "POST",
+  })
+
+// Get Missed Calls
+export const getMissedCalls = () =>
+  apiRequest<MissedCallsResponse>("/customercare/call/missed/")
 /* ------------------------------------------------------------------ */
 /*  Account Suspension                                               */
 /* ------------------------------------------------------------------ */
@@ -1049,6 +1097,7 @@ export const api = {
   login,
   adminLogin,
   getAccount,
+  createAdditionalAccount,
   createAccount: createAdditionalAccount,
   switchAccount,
   getMarkets,
@@ -1113,4 +1162,8 @@ export const api = {
   verifyTransfer,
   generateSignal,
   appealSuspension,
+  initiateAudioCall,
+  answerAudioCall,
+  endAudioCall,
+  getMissedCalls,
 }

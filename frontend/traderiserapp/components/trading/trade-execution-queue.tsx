@@ -1,3 +1,4 @@
+// components/trading/trade-execution-queue.tsx
 "use client"
 
 import { useState, useEffect } from "react"
@@ -375,7 +376,6 @@ export function TradeExecutionQueue({
             transition={{ duration: 0.3 }}
             className="fixed inset-0 flex items-center justify-center z-50 p-4"
           >
-            {/* Backdrop with blur effect */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -384,7 +384,6 @@ export function TradeExecutionQueue({
               onClick={(e) => e.preventDefault()}
             />
 
-            {/* Liquid glass card - Apple iOS 16 style */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -398,7 +397,6 @@ export function TradeExecutionQueue({
                 boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1), inset 0 0 20px rgba(255, 255, 255, 0.2)",
               }}
             >
-              {/* Gradient overlay for polish */}
               <div
                 className="absolute inset-0 pointer-events-none"
                 style={{
@@ -408,9 +406,7 @@ export function TradeExecutionQueue({
                 }}
               />
 
-              {/* Content */}
               <div className="relative z-10">
-                {/* Icon */}
                 <div className="flex justify-center mb-6">
                   <div
                     className="p-4 rounded-full"
@@ -427,7 +423,6 @@ export function TradeExecutionQueue({
                   </div>
                 </div>
 
-                {/* Text Content */}
                 <div className="text-center mb-8">
                   <p className="text-base font-semibold leading-relaxed text-white mb-4">{message.text}</p>
                   {message.amount !== undefined && (
@@ -437,7 +432,6 @@ export function TradeExecutionQueue({
                   )}
                 </div>
 
-                {/* Button */}
                 <Button
                   onClick={() => {
                     setMessageAcknowledged(true)
@@ -450,16 +444,6 @@ export function TradeExecutionQueue({
                       : "linear-gradient(135deg, rgba(239, 68, 68, 0.8) 0%, rgba(220, 38, 38, 0.8) 100%)",
                     backdropFilter: "blur(10px)",
                     border: `1px solid ${message.isProfit ? "rgba(34, 197, 94, 0.5)" : "rgba(239, 68, 68, 0.5)"}`,
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = message.isProfit
-                      ? "linear-gradient(135deg, rgba(34, 197, 94, 1) 0%, rgba(22, 163, 74, 1) 100%)"
-                      : "linear-gradient(135deg, rgba(239, 68, 68, 1) 0%, rgba(220, 38, 38, 1) 100%)"
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = message.isProfit
-                      ? "linear-gradient(135deg, rgba(34, 197, 94, 0.8) 0%, rgba(22, 163, 74, 0.8) 100%)"
-                      : "linear-gradient(135deg, rgba(239, 68, 68, 0.8) 0%, rgba(220, 38, 38, 0.8) 100%)"
                   }}
                 >
                   View Trade & Exit

@@ -1,3 +1,4 @@
+// app/trading/page.tsx
 "use client"
 
 import { useEffect, useState, useRef } from "react"
@@ -25,10 +26,8 @@ interface UserRobot {
   robot: {
     id: number
     name: string
-    /** true only for demo-available robots that were *not* purchased */
     available_for_demo?: boolean
   }
-  /** null = demo-access, non-null = real purchase */
   purchased_at: string | null
 }
 
@@ -282,117 +281,128 @@ export default function TradingPageClient() {
   }
 
   return (
-    <div className="bg-gradient-to-br from-black via-black to-black/80 min-h-screen">
-      <div className="flex min-h-screen">
-        <div className="flex-1 overflow-auto ml-0 lg:ml-64">
-          <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto">
-            <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-4 sm:mb-6 md:mb-8">
-              Trading Dashboard
-            </h1>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-              <div className="md:col-span-1 lg:col-span-2 xl:col-span-3 space-y-4 sm:space-y-6">
-                <div className="rounded-lg bg-white/5 backdrop-blur-md border border-white/10 p-3 sm:p-4">
-                  <p className="text-xs text-white/60 mb-1">Account Balance</p>
-                  <p className="text-lg sm:text-xl font-bold text-green-400 truncate">${formatCurrency(balance)}</p>
-                  <p className="text-xs text-white/60 mt-1 flex items-center justify-between">
-                    <span>Session P/L:</span>
-                    <span
-                      className={`font-mono font-semibold px-2 py-1 rounded-full text-xs ${
-                        sessionProfit >= 0 ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
-                      }`}
-                    >
-                      ${sessionProfit.toFixed(2)}
-                    </span>
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-3 sm:gap-4">
+    <div className="relative min-h-screen text-white overflow-hidden">
+      {/* BLACK DOMINANT BACKGROUND - SAME AS DASHBOARD & ROBOTS */}
+      <div className="fixed inset-0 z-0">
+        <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950 to-black" />
+        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-purple-950/30 to-pink-950/20" />
+        <div className="absolute top-1/4 -left-40 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl animate-float" />
+        <div className="absolute bottom-1/4 -right-40 w-96 h-96 bg-pink-600/8 rounded-full blur-3xl animate-float delay-1000" />
+        <div className="absolute top-1/2 left-1/3 w-96 h-96 bg-purple-700/8 rounded-full blur-3xl animate-float delay-500" />
+      </div>
+
+      <div className="relative z-10">
+        <div className="flex min-h-screen">
+          <div className="flex-1 overflow-auto ml-0 lg:ml-64">
+            <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto">
+              <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-4 sm:mb-6 md:mb-8">
+                Trading Dashboard
+              </h1>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+                <div className="md:col-span-1 lg:col-span-2 xl:col-span-3 space-y-4 sm:space-y-6">
                   <div className="rounded-lg bg-white/5 backdrop-blur-md border border-white/10 p-3 sm:p-4">
-                    <p className="text-xs text-white/60 mb-1">Session Profit</p>
-                    <p
-                      className={`text-lg sm:text-xl font-bold ${
-                        sessionProfit >= 0 ? "text-green-400" : "text-red-400"
-                      } truncate`}
-                    >
-                      ${sessionProfit.toFixed(2)}
+                    <p className="text-xs text-white/60 mb-1">Account Balance</p>
+                    <p className="text-lg sm:text-xl font-bold text-green-400 truncate">${formatCurrency(balance)}</p>
+                    <p className="text-xs text-white/60 mt-1 flex items-center justify-between">
+                      <span>Session P/L:</span>
+                      <span
+                        className={`font-mono font-semibold px-2 py-1 rounded-full text-xs ${
+                          sessionProfit >= 0 ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
+                        }`}
+                      >
+                        ${sessionProfit.toFixed(2)}
+                      </span>
                     </p>
                   </div>
-                  <div className="rounded-lg bg-white/5 backdrop-blur-md border border-white/10 p-3 sm:p-4">
-                    <p className="text-xs text-white/60 mb-1">Trading Mode</p>
-                    <p className="text-lg sm:text-xl font-bold text-pink-400 capitalize">{tradingMode}</p>
+                  <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                    <div className="rounded-lg bg-white/5 backdrop-blur-md border border-white/10 p-3 sm:p-4">
+                      <p className="text-xs text-white/60 mb-1">Session Profit</p>
+                      <p
+                        className={`text-lg sm:text-xl font-bold ${
+                          sessionProfit >= 0 ? "text-green-400" : "text-red-400"
+                        } truncate`}
+                      >
+                        ${sessionProfit.toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-white/5 backdrop-blur-md border border-white/10 p-3 sm:p-4">
+                      <p className="text-xs text-white/60 mb-1">Trading Mode</p>
+                      <p className="text-lg sm:text-xl font-bold text-pink-400 capitalize">{tradingMode}</p>
+                    </div>
+                  </div>
+                  <div className="flex justify-end mb-2">
+                    <Select value={chartType} onValueChange={(value: "tradingview" | "analysis") => setChartType(value)}>
+                      <SelectTrigger className="w-[180px] bg-white/5 border-white/10">
+                        <SelectValue placeholder="Select Chart" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-gray-800 border-white/10">
+                        <SelectItem value="tradingview">Trading View</SelectItem>
+                        <SelectItem value="analysis">Technical Analysis</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="w-full">
+                    {chartType === "tradingview" ? (
+                      <TradingViewWidget
+                        symbol={selectedMarket ? mapToTradingViewSymbol(selectedMarket) : "NASDAQ:AAPL"}
+                      />
+                    ) : (
+                      <MarketAnalysis market={selectedMarket} />
+                    )}
+                  </div>
+                  <div className="w-full">
+                    <TradingModeSelector
+                      onModeChange={setTradingMode}
+                      selectedRobot={selectedRobot}
+                      onRobotSelect={setSelectedRobot}
+                      userRobots={userRobots}
+                    />
+                  </div>
+                  <div className="rounded-xl bg-white/5 backdrop-blur-md border border-white/10 p-4 sm:p-6">
+                    <TradingInterface
+                      markets={markets}
+                      selectedMarket={selectedMarket}
+                      onMarketSelect={setSelectedMarket}
+                      balance={balance}
+                      onBalanceChange={setBalance}
+                      onSessionProfitChange={setSessionProfit}
+                      tradingMode={tradingMode}
+                      selectedRobot={selectedRobot}
+                      onStartTrading={handleStartTrading}
+                      accountType={selectedAccount}
+                    />
                   </div>
                 </div>
-                <div className="flex justify-end mb-2">
-                  <Select value={chartType} onValueChange={(value: "tradingview" | "analysis") => setChartType(value)}>
-                    <SelectTrigger className="w-[180px] bg-white/5 border-white/10">
-                      <SelectValue placeholder="Select Chart" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-white/10">
-                      <SelectItem value="tradingview">Trading View</SelectItem>
-                      <SelectItem value="analysis">Technical Analysis</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="w-full">
-                  {chartType === "tradingview" ? (
-                    <TradingViewWidget
-                      symbol={selectedMarket ? mapToTradingViewSymbol(selectedMarket) : "NASDAQ:AAPL"}
+                <div className="md:col-span-1 lg:col-span-1 xl:col-span-1">
+                  <div className="rounded-xl bg-white/5 backdrop-blur-md border border-white/10 p-3 sm:p-4 lg:p-6 sticky top-20 overflow-y-auto">
+                    <h3 className="text-sm sm:text-base font-semibold text-white mb-3 sm:mb-4 uppercase tracking-wider">
+                      Recent Trades
+                    </h3>
+                    <TradeHistory
+                      sessionTrades={executingTrades
+                        .filter((t) => t.status === "completed")
+                        .map((t) => ({
+                          id: t.id,
+                          market: t.market,
+                          direction: t.direction,
+                          amount: t.amount,
+                          status: t.status,
+                          is_win: !!t.isWin,
+                          profit: t.profit ?? 0,
+                          timeLeft: t.timeLeft,
+                          entrySpot: t.entrySpot,
+                          market_id: t.market_id,
+                          trade_type_id: t.trade_type_id,
+                          robot_id: t.robot_id,
+                          use_martingale: t.use_martingale,
+                          martingale_level: t.martingale_level,
+                          targetProfit: t.targetProfit,
+                          stopLoss: t.stopLoss,
+                          profit_multiplier: t.profit_multiplier,
+                          created_at: new Date().toISOString(),
+                        }))}
                     />
-                  ) : (
-                    <MarketAnalysis market={selectedMarket} />
-                  )}
-                </div>
-                <div className="w-full">
-                  <TradingModeSelector
-                    onModeChange={setTradingMode}
-                    selectedRobot={selectedRobot}
-                    onRobotSelect={setSelectedRobot}
-                    userRobots={userRobots}
-                  />
-                </div>
-                <div className="rounded-xl bg-white/5 backdrop-blur-md border border-white/10 p-4 sm:p-6">
-                  <TradingInterface
-                    markets={markets}
-                    selectedMarket={selectedMarket}
-                    onMarketSelect={setSelectedMarket}
-                    balance={balance}
-                    onBalanceChange={setBalance}
-                    onSessionProfitChange={setSessionProfit}
-                    tradingMode={tradingMode}
-                    selectedRobot={selectedRobot}
-                    onStartTrading={handleStartTrading}
-                    accountType={selectedAccount}
-                  />
-                </div>
-              </div>
-              <div className="md:col-span-1 lg:col-span-1 xl:col-span-1">
-                <div className="rounded-xl bg-white/5 backdrop-blur-md border border-white/10 p-3 sm:p-4 lg:p-6 sticky top-20 overflow-y-auto">
-                  <h3 className="text-sm sm:text-base font-semibold text-white mb-3 sm:mb-4 uppercase tracking-wider">
-                    Recent Trades
-                  </h3>
-                  <TradeHistory
-                    sessionTrades={executingTrades
-                      .filter((t) => t.status === "completed")
-                      .map((t) => ({
-                        id: t.id,
-                        market: t.market,
-                        direction: t.direction,
-                        amount: t.amount,
-                        status: t.status,
-                        is_win: !!t.isWin,
-                        profit: t.profit ?? 0,
-                        timeLeft: t.timeLeft,
-                        entrySpot: t.entrySpot,
-                        market_id: t.market_id,
-                        trade_type_id: t.trade_type_id,
-                        robot_id: t.robot_id,
-                        use_martingale: t.use_martingale,
-                        martingale_level: t.martingale_level,
-                        targetProfit: t.targetProfit,
-                        stopLoss: t.stopLoss,
-                        profit_multiplier: t.profit_multiplier,
-                        created_at: new Date().toISOString(),
-                      }))}
-                  />
+                  </div>
                 </div>
               </div>
             </div>

@@ -32,3 +32,19 @@ class MessageAdmin(admin.ModelAdmin):
     list_display = ['thread', 'sender', 'content', 'sent_at', 'is_read']
     list_filter = ['is_system', 'is_read']
     search_fields = ['content', 'sender__username']
+
+from .models import CustomerCareSettings, CallSession
+
+@admin.register(CustomerCareSettings)
+class CustomerCareSettingsAdmin(admin.ModelAdmin):
+    list_display = ['hold_music', 'welcome_audio']
+    fieldsets = [
+        ("Hold Music & Welcome", {'fields': ['hold_music', 'welcome_audio', 'welcome_text']}),
+    ]
+
+
+@admin.register(CallSession)
+class CallSessionAdmin(admin.ModelAdmin):
+    list_display = ['user', 'status', 'started_at', 'agent', 'voice_preset', 'is_missed']
+    list_filter = ['status', 'voice_preset', 'is_missed']
+    search_fields = ['user__username']

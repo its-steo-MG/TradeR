@@ -6,13 +6,7 @@ import { useState, useEffect } from "react"
 import { Sidebar } from "@/components/sidebar"
 import { TopNavbar } from "@/components/top-navbar"
 import { toast } from "sonner"
-
-interface Account {
-  id: number
-  account_type: string
-  balance: number
-  kyc_verified?: boolean
-}
+import type { Account } from "@/types/account"   // ← Import shared type
 
 interface User {
   username: string
@@ -20,7 +14,7 @@ interface User {
   phone: string
   is_sashi: boolean
   is_email_verified: boolean
-  accounts: Account[]
+  accounts: Account[]           // ← Now uses the shared Account
 }
 
 interface RobotsLayoutProps {
@@ -53,11 +47,12 @@ export default function RobotsLayout({ children }: RobotsLayoutProps) {
       }
 
       try {
-        const data: User = JSON.parse(raw)
+        const data = JSON.parse(raw) as User
         if (!data?.accounts?.length) {
           throw new Error("Invalid session data: accounts missing")
         }
 
+        // Normalize balances
         const normalizedUser: User = {
           ...data,
           accounts: data.accounts.map((a) => ({
@@ -71,7 +66,7 @@ export default function RobotsLayout({ children }: RobotsLayoutProps) {
 
         const activeId = localStorage.getItem("active_account_id")
         const account =
-          normalizedUser.accounts.find((a) => a.id === Number(activeId)) ||
+          normalizedUser.accounts.find((a) => String(a.id) === String(activeId)) ||
           normalizedUser.accounts.find((a) => a.account_type === "standard") ||
           normalizedUser.accounts[0]
 
@@ -98,17 +93,19 @@ export default function RobotsLayout({ children }: RobotsLayoutProps) {
   }, [])
 
   const handleSwitchAccount = (account: Account) => {
-    if (!account) return
+    if (!account || !user) return
 
     try {
-      localStorage.setItem("active_account_id", account.id.toString())
+      localStorage.setItem("active_account_id", String(account.id))
       localStorage.setItem("account_type", account.account_type)
       localStorage.setItem("login_type", account.account_type === "demo" ? "demo" : "real")
 
       const updatedUser: User = {
-        ...user!,
-        accounts: user!.accounts.map((a) =>
-          a.id === account.id ? { ...a, balance: Number(account.balance) || 0 } : a,
+        ...user,
+        accounts: user.accounts.map((a) =>
+          String(a.id) === String(account.id)
+            ? { ...a, balance: Number(account.balance) || 0 }
+            : a
         ),
       }
 
@@ -132,8 +129,7 @@ export default function RobotsLayout({ children }: RobotsLayoutProps) {
     window.location.href = "/login"
   }
 
-  // ---- SAME FILTERING LOGIC AS DASHBOARD ----
-  const availableAccounts =
+  const availableAccounts: Account[] =
     loginType === "real"
       ? (user?.accounts || []).filter((a) => a.account_type !== "demo")
       : (user?.accounts || []).filter((a) => a.account_type === "demo")
@@ -159,7 +155,12 @@ export default function RobotsLayout({ children }: RobotsLayoutProps) {
         onLogout={handleLogout}
       />
       <div className="flex flex-1">
-        <Sidebar loginType={loginType} activeAccount={activeAccount} />
+        <Sidebar
+          loginType={loginType}
+          activeAccount={activeAccount}
+          accounts={availableAccounts}
+          // onSwitchAccount={handleSwitchAccount}   // Uncomment after updating Sidebar.tsx
+        />
         <main className="flex-1 w-full overflow-auto md:pl-64">{children}</main>
       </div>
     </div>

@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@agentuity/react": "^2.0.10",
     "@canvasjs/react-charts": "^1.0.2",
     "@geist-ui/react": "^2.2.5",
     "@heroicons/react": "^2.2.0",
@@ -37,6 +38,7 @@
     "lucide-react": "^0.546.0",
     "next": "15.5.9",
     "next-themes": "^0.4.6",
+    "peerjs": "^1.5.5",
     "react": "^19.2.3",
     "react-apexcharts": "^1.8.0",
     "react-confetti": "^6.4.0",
@@ -45,6 +47,7 @@
     "react-responsive": "^10.0.1",
     "react-use": "^17.6.0",
     "recharts": "^3.3.0",
+    "simple-peer": "^9.11.1",
     "sonner": "^2.0.7",
     "swr": "^2.3.6",
     "tailwind-merge": "^3.3.1",

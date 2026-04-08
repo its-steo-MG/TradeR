@@ -50,27 +50,52 @@ class PurchaseRobotView(APIView):
 
     def post(self, request, robot_id):
         account_type = request.data.get('account_type', 'standard')
+
         try:
             robot = Robot.objects.get(id=robot_id)
             account = Account.objects.get(user=request.user, account_type=account_type)
-            effective_price = robot.effective_price  # ← This respects discount
+            effective_price = robot.effective_price  # Respects discount
 
+            # === DEMO ACCOUNT HANDLING ===
             if account.account_type == 'demo':
                 if robot.available_for_demo:
-                    user_robot, created = UserRobot.objects.get_or_create(user=request.user, robot=robot)
+                    user_robot, created = UserRobot.objects.get_or_create(
+                        user=request.user, 
+                        robot=robot
+                    )
                     if created:
                         user_robot.purchased_price = Decimal('0.00')
                         user_robot.save()
-                    return Response({'message': 'Robot assigned for demo use'}, status=status.HTTP_200_OK)
-                return Response({'error': 'This robot is not available for demo accounts'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Real account purchase
+                    response_data = {
+                        'message': 'Robot assigned for demo use',
+                        'robot_id': robot.id,
+                        'robot_name': robot.name,
+                        'is_deriv_robot': robot.is_deriv_robot
+                    }
+
+                    # Return access key for Deriv Premium Robots even in demo
+                    if robot.is_deriv_robot and robot.deriv_access_key:
+                        response_data['deriv_access_key'] = robot.deriv_access_key
+                        response_data['note'] = 'Use this access key on Deriv.com to activate your robot'
+
+                    return Response(response_data, status=status.HTTP_200_OK)
+
+                return Response({
+                    'error': 'This robot is not available for demo accounts'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # === REAL ACCOUNT PURCHASE ===
             if account.balance < effective_price:
-                return Response({'error': 'Insufficient balance'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({
+                    'error': 'Insufficient balance'
+                }, status=status.HTTP_400_BAD_REQUEST)
 
+            # Deduct balance
             account.balance -= effective_price
             account.save()
 
+            # Log transaction
             is_discounted = robot.discounted_price is not None and robot.discounted_price < robot.price
             description = f'Purchased robot: {robot.name}' + (' (discounted)' if is_discounted else '')
 
@@ -81,48 +106,88 @@ class PurchaseRobotView(APIView):
                 description=description
             )
 
-            user_robot = UserRobot.objects.create(user=request.user, robot=robot)
+            # Create user robot ownership
+            user_robot = UserRobot.objects.create(
+                user=request.user, 
+                robot=robot
+            )
             user_robot.purchased_price = effective_price
             user_robot.save()
 
-            return Response({'message': 'Robot purchased successfully'}, status=status.HTTP_201_CREATED)
+            # === Build Response ===
+            response_data = {
+                'message': 'Robot purchased successfully',
+                'robot_id': robot.id,
+                'robot_name': robot.name,
+                'is_deriv_robot': robot.is_deriv_robot,
+                'purchased_price': str(effective_price),
+                'remaining_balance': str(account.balance)
+            }
+
+            # === SPECIAL HANDLING FOR DERIV PREMIUM ROBOTS ===
+            if robot.is_deriv_robot:
+                if robot.deriv_access_key:
+                    response_data['deriv_access_key'] = robot.deriv_access_key
+                    response_data['note'] = 'Purchase successful! Use this access key on Deriv.com to activate your robot.'
+                    response_data['instruction'] = 'Go to Deriv and enter this key in your bot settings.'
+                else:
+                    response_data['warning'] = 'This is a Deriv Premium Robot but no access key was set by admin.'
+
+            return Response(response_data, status=status.HTTP_201_CREATED)
 
         except Robot.DoesNotExist:
             return Response({'error': 'Robot not found'}, status=status.HTTP_404_NOT_FOUND)
         except Account.DoesNotExist:
             return Response({'error': 'Account not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"PurchaseRobotView error: {str(e)}", exc_info=True)
+            return Response({'error': 'An unexpected error occurred'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-# Inside UserRobotListView (only small addition for demo fake entries)
+# trading/views.py
+
 class UserRobotListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
-        is_demo = Account.objects.filter(user=user, account_type='demo').exists()
+        account_type = request.query_params.get('account_type') or 'standard'
+        
+        # Check if user is using demo account
+        is_demo = Account.objects.filter(
+            user=user, 
+            account_type='demo'
+        ).exists()
 
         if is_demo:
+            # Only show robots that user has actually "purchased" (even if fake for demo)
+            real_entries = UserRobot.objects.filter(user=user)
+
+            # For demo: add fake entries ONLY for robots that are available_for_demo AND not already owned
             demo_robots = Robot.objects.filter(available_for_demo=True)
             fake_entries = []
-            fake_id = UserRobot.objects.aggregate(Max('id'))['id__max'] or 0
-            fake_id += 1
+
+            # Get existing robot IDs to avoid duplicates
+            owned_robot_ids = {ur.robot_id for ur in real_entries}
+
+            fake_id = (UserRobot.objects.aggregate(Max('id'))['id__max'] or 0) + 1
 
             for robot in demo_robots:
-                if not UserRobot.objects.filter(user=user, robot=robot).exists():
+                if robot.id not in owned_robot_ids:
                     fake = UserRobot(
                         id=fake_id,
                         user=user,
                         robot=robot,
                         purchased_at=None,
-                        purchased_price=Decimal('0.00')  # ← Added
+                        purchased_price=Decimal('0.00')
                     )
                     fake_entries.append(fake)
                     fake_id += 1
 
-            real_entries = UserRobot.objects.filter(user=user)
             combined = list(real_entries) + fake_entries
             serializer = UserRobotSerializer(combined, many=True)
         else:
+            # Real account: only show actually purchased robots
             owned = UserRobot.objects.filter(user=user)
             serializer = UserRobotSerializer(owned, many=True)
 

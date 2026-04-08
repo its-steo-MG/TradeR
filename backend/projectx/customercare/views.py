@@ -135,3 +135,120 @@ def get_active_threads(request):
     threads = ChatThread.objects.select_related('user').filter(is_active=True).order_by('-created_at')[:20]
     data = [{'id': t.id, 'user': {'id': t.user.id, 'username': t.user.username}, 'last_message': t.messages.last().content if t.messages.exists() else None, 'is_blocked': t.is_blocked()} for t in threads]
     return Response(data)
+
+from .models import CallSession, CustomerCareSettings
+from .serializers import CallSessionSerializer
+
+class InitiateAudioCallView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        # Get or create thread
+        thread, _ = ChatThread.objects.get_or_create(user=request.user)
+        settings_obj = CustomerCareSettings.get_settings()
+
+        call = CallSession.objects.create(
+            user=request.user,
+            thread=thread,
+            status='pending'
+        )
+
+        return Response({
+            "success": True,
+            "call_id": call.id,
+            "status": "pending",
+            "hold_music_url": settings_obj.hold_music.url if settings_obj.hold_music else None,
+            "welcome_audio_url": settings_obj.welcome_audio.url if settings_obj.welcome_audio else None,
+            "welcome_text": settings_obj.welcome_text,
+            "message": "Connecting you to the next available agent..."
+        }, status=status.HTTP_201_CREATED)
+
+
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+
+class AnswerCallView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, call_id):
+        call = get_object_or_404(CallSession, id=call_id, status__in=['pending', 'ringing'])
+
+        # Strict staff check
+        if not request.user.is_staff:
+            logger.warning(f"Non-staff user {request.user.id} tried to answer call")
+            return Response({"error": "Staff access only"}, status=status.HTTP_403_FORBIDDEN)
+
+        voice_preset = request.data.get('voice_preset', 'default')
+        valid_voices = ['default', 'lady', 'child', 'man']
+        if voice_preset not in valid_voices:
+            voice_preset = 'default'
+
+        call.status = 'in_progress'
+        call.answered_at = timezone.now()
+        call.agent = request.user
+        call.voice_preset = voice_preset
+        call.save()
+
+        # Notify the user who initiated the call
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"call_{call.user.id}",
+            {
+                "type": "call_answered",
+                "call_id": call.id,
+                "voice_preset": voice_preset,
+                "agent": request.user.username
+            }
+        )
+
+        logger.info(f"Staff {request.user.username} answered call #{call.id} with voice: {voice_preset}")
+
+        return Response({
+            "success": True,
+            "call_id": call.id,
+            "status": "in_progress",
+            "voice_preset": voice_preset,
+            "agent": request.user.username
+        })
+    
+class EndCallView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, call_id):
+        call = get_object_or_404(CallSession, id=call_id)
+
+        # Only caller or staff can end the call
+        if call.user != request.user and not request.user.is_staff:
+            return Response({"error": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
+
+        call.status = 'completed'
+        call.ended_at = timezone.now()
+        call.save()
+        
+    # Notify both sides that call ended
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"call_session_{call.id}",
+            {
+                "type": "call_ended",
+                "call_id": call.id,
+                "reason": "Call ended by user/agent"
+            }
+        )
+
+        return Response({"success": True, "status": "completed"})
+
+
+class MissedCallsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        missed_count = CallSession.objects.filter(
+            user=request.user, 
+            is_missed=True
+        ).count()
+
+        return Response({
+            "missed_calls": missed_count,
+            "has_unread": missed_count > 0
+        })

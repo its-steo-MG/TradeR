@@ -38,21 +38,29 @@ class Robot(models.Model):
     description = models.TextField()
     price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
     discounted_price = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        null=True,
-        blank=True,
+        max_digits=10, decimal_places=2, null=True, blank=True,
         validators=[MinValueValidator(Decimal('0.00'))]
-    )  # If set, this is the active price
+    )
     available_for_demo = models.BooleanField(default=True)
     win_rate = models.IntegerField(default=50, validators=[MinValueValidator(0), MaxValueValidator(100)])
+
+    # === NEW: Deriv Premium Robot fields ===
+    is_deriv_robot = models.BooleanField(
+        default=False,
+        help_text="Check this if this is a Deriv Premium Robot (provides access key only)"
+    )
+    deriv_access_key = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Secret access key for Deriv bot. Only fill for Deriv Premium Robots."
+    )
 
     def __str__(self):
         return self.name
 
     @property
     def effective_price(self):
-        """Returns discounted_price if set, otherwise original price"""
         return self.discounted_price if self.discounted_price is not None else self.price
 
 

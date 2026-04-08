@@ -15,52 +15,77 @@ interface TransactionHistoryProps {
 
 export function TransactionHistory({ transactions }: TransactionHistoryProps) {
   return (
-    <div className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-2xl p-4 sm:p-6">
-      <h3 className="text-lg sm:text-xl font-bold text-white mb-4 sm:mb-6">Transaction History</h3>
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-slate-700">
-              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 text-slate-400 font-semibold">Type</th>
-              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 text-slate-400 font-semibold">Amount</th>
-              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 text-slate-400 font-semibold">Description</th>
-              <th className="text-left py-2 sm:py-3 px-2 sm:px-4 text-slate-400 font-semibold">Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {transactions.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="text-center py-6 sm:py-8 text-slate-400 text-sm sm:text-base">
-                  No transactions yet
-                </td>
-              </tr>
-            ) : (
-              transactions.map((tx) => (
-                <tr key={tx.id} className="border-b border-slate-700 hover:bg-slate-700/30 transition">
-                  <td className="py-3 sm:py-4 px-2 sm:px-4">
-                    <span
-                      className={`inline-flex items-center gap-2 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-semibold ${
-                        tx.transaction_type === "deposit"
-                          ? "bg-emerald-500/20 text-emerald-400"
-                          : tx.transaction_type === "withdrawal"
-                            ? "bg-red-500/20 text-red-400"
-                            : "bg-blue-500/20 text-blue-400"
-                      }`}
-                    >
-                      {tx.transaction_type === "deposit" ? <ArrowDownLeft size={14} className="sm:w-4 sm:h-4" /> : <ArrowUpRight size={14} className="sm:w-4 sm:h-4" />}
+    <div className="w-full">
+      <div className="bg-gradient-to-br from-slate-800/60 via-slate-900/40 to-slate-950/60 backdrop-blur-lg border border-slate-700/50 rounded-2xl p-6 lg:p-8 shadow-2xl">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-2 h-6 bg-gradient-to-b from-slate-400 to-slate-600 rounded-full" />
+          <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white">Recent Transactions</h3>
+          <span className="ml-auto text-xs sm:text-sm text-slate-400">
+            {transactions.length} {transactions.length === 1 ? "transaction" : "transactions"}
+          </span>
+        </div>
+
+        {transactions.length === 0 ? (
+          <div className="py-12 text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-800/50 mb-4">
+              <ArrowUpRight size={32} className="text-slate-500" />
+            </div>
+            <p className="text-slate-400 text-base">No transactions yet</p>
+            <p className="text-slate-500 text-sm mt-1">Your transactions will appear here</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {transactions.map((tx) => (
+              <div
+                key={tx.id}
+                className="flex items-center justify-between p-4 rounded-xl bg-slate-800/30 hover:bg-slate-800/50 border border-slate-700/30 hover:border-emerald-500/30 transition-all duration-300 group"
+              >
+                {/* Left Side: Icon and Type */}
+                <div className="flex items-center gap-4 flex-1 min-w-0">
+                  <div
+                    className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center font-semibold ${
+                      tx.transaction_type === "deposit"
+                        ? "bg-emerald-500/20 text-emerald-400 group-hover:bg-emerald-500/30"
+                        : tx.transaction_type === "withdrawal"
+                        ? "bg-red-500/20 text-red-400 group-hover:bg-red-500/30"
+                        : "bg-blue-500/20 text-blue-400 group-hover:bg-blue-500/30"
+                    }`}
+                  >
+                    {tx.transaction_type === "deposit" ? (
+                      <ArrowDownLeft size={20} />
+                    ) : (
+                      <ArrowUpRight size={20} />
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-semibold text-sm sm:text-base">
                       {tx.transaction_type.charAt(0).toUpperCase() + tx.transaction_type.slice(1)}
-                    </span>
-                  </td>
-                  <td className="py-3 sm:py-4 px-2 sm:px-4 text-white font-semibold text-sm sm:text-base">
+                    </p>
+                    <p className="text-slate-400 text-xs sm:text-sm truncate">{tx.description}</p>
+                  </div>
+                </div>
+
+                {/* Right Side: Amount and Date */}
+                <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-4">
+                  <p
+                    className={`font-bold text-sm sm:text-base ${
+                      tx.transaction_type === "withdrawal" ? "text-red-400" : "text-emerald-400"
+                    }`}
+                  >
                     {tx.transaction_type === "withdrawal" ? "-" : "+"}${formatCurrency(tx.amount)}
-                  </td>
-                  <td className="py-3 sm:py-4 px-2 sm:px-4 text-slate-300 text-sm sm:text-base">{tx.description}</td>
-                  <td className="py-3 sm:py-4 px-2 sm:px-4 text-slate-400 text-xs sm:text-sm">{new Date(tx.created_at).toLocaleDateString()}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+                  </p>
+                  <p className="text-slate-500 text-xs">
+                    {new Date(tx.created_at).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

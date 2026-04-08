@@ -4,8 +4,11 @@ from django.dispatch import receiver
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.conf import settings
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 from .models import ChatThread, Message
 import logging
+
 
 User = get_user_model()
 logger = logging.getLogger('customercare')
@@ -222,3 +225,46 @@ TradeRiser System"""
 
     except Exception as e:
         logger.error(f"Failed to send customer care notification: {str(e)}", exc_info=True)
+
+@receiver(post_save, sender='customercare.CallSession')
+def notify_staff_on_new_call(sender, instance, created, **kwargs):
+    if not created or instance.status != 'pending':
+        return
+
+    admin_emails = list(User.objects.filter(is_staff=True).exclude(email='').values_list('email', flat=True))
+    if not admin_emails:
+        return
+
+    subject = f"🔴 Incoming Audio Call from {instance.user.username}"
+    html_message = f"""
+    <h2>New Audio Call</h2>
+    <p><strong>User:</strong> {instance.user.username} ({instance.user.email})</p>
+    <p><a href="{settings.FRONTEND_URL}/admin-call/{instance.id}" style="background:#007bff;color:white;padding:12px 20px;text-decoration:none;border-radius:5px;">ANSWER CALL NOW</a></p>
+    """
+
+    send_mail(
+        subject=subject,
+        message=subject,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=admin_emails,
+        html_message=html_message,
+        fail_silently=True,
+    )
+
+    # Inside notify_staff_on_new_call, after the email:
+
+    try:
+        channel_layer = get_channel_layer()
+        call_data = {
+            "type": "new_incoming_call",
+            "call_id": instance.id,
+            "user": {
+                "id": instance.user.id,
+                "username": instance.user.username,
+            },
+            "started_at": instance.started_at.isoformat(),
+        }
+        async_to_sync(channel_layer.group_send)("call_center", call_data)
+        logger.info(f"✅ Broadcast new incoming call #{instance.id} to call_center")
+    except Exception as e:
+        logger.error(f"Failed to broadcast call: {e}")

@@ -20,10 +20,24 @@ class TradeTypeAdmin(admin.ModelAdmin):
 
 @admin.register(Robot)
 class RobotAdmin(admin.ModelAdmin):
-    list_display = ('name', 'price', 'discounted_price', 'effective_price', 'win_rate')
+    list_display = ('name', 'is_deriv_robot', 'price', 'discounted_price', 
+                   'effective_price', 'win_rate', 'available_for_demo')
+    list_filter = ('is_deriv_robot', 'available_for_demo')
     search_fields = ('name',)
-    readonly_fields = ('effective_price',)  # Just to display it nicely
+    readonly_fields = ('effective_price',)
 
+    # Make new fields easy to edit
+    fieldsets = (
+        (None, {
+            'fields': ('name', 'description', 'image', 'price', 'discounted_price',
+                      'available_for_demo', 'win_rate')
+        }),
+        ('Deriv Premium Robot Settings', {
+            'fields': ('is_deriv_robot', 'deriv_access_key'),
+            'classes': ('collapse',),
+            'description': 'Only fill deriv_access_key if is_deriv_robot = True'
+        }),
+    )
 
 @admin.register(UserRobot)
 class UserRobotAdmin(admin.ModelAdmin):
