@@ -2,11 +2,8 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react'
 
-//const API_BASE = 'http://localhost:8000'
-//const WS_BASE = 'ws://localhost:8000'
-
-const API_BASE = 'https://traderiserproapp.onrender.com'
-const WS_BASE = 'wss://traderiserproapp.onrender.com'
+const API_BASE = 'http://localhost:8000'
+const WS_BASE = 'ws://localhost:8000'
 
 export interface CallEvent {
   type: string
@@ -50,20 +47,22 @@ export function useWebSocketCall(token: string | null, onCallEvent?: CallEventCa
     ws.onopen = () => {
       setIsConnected(true)
       setError(null)
-      console.log('[CallWS] ✅ Connected successfully')
+      console.log('[CallWS] ✅ WebSocket Connected successfully')
     }
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data) as CallEvent
-        console.log('[CallWS] Received:', data.type, data)
+        console.log(`[CallWS] Received: ${data.type}`, data)
+
+        // Forward event to main component
         callbackRef.current?.(data)
 
         if (data.type === 'connection_established') {
           setIsStaff(!!data.is_staff)
         }
       } catch (e) {
-        console.error('[CallWS] Parse error:', e)
+        console.error('[CallWS] JSON Parse error:', e)
       }
     }
 
@@ -75,6 +74,7 @@ export function useWebSocketCall(token: string | null, onCallEvent?: CallEventCa
     ws.onclose = (event) => {
       setIsConnected(false)
       console.log(`[CallWS] Disconnected (code: ${event.code})`)
+      // Auto reconnect
       reconnectTimeoutRef.current = setTimeout(connect, 3000)
     }
 
@@ -100,14 +100,14 @@ export function useWebSocketCall(token: string | null, onCallEvent?: CallEventCa
       },
     })
     if (!res.ok) {
-      const text = await res.text()
-      throw new Error(`HTTP ${res.status} - Failed to initiate call: ${text}`)
+      const text = await res.text().catch(() => '')
+      throw new Error(`Failed to initiate call (${res.status}): ${text}`)
     }
     return res.json()
   }, [token])
 
-  const answerCall = useCallback(async (callId: number, voicePreset: string = 'default') => {
-    console.log(`[AnswerCall] Attempting to answer call ${callId} with voice: ${voicePreset}`)
+  const answerCall = useCallback(async (callId: number, voicePreset = 'default') => {
+    console.log(`[CallWS] Answering call ${callId} with voice preset: ${voicePreset}`)
 
     const res = await fetch(`${API_BASE}/api/customercare/call/answer/${callId}/`, {
       method: 'POST',
@@ -119,13 +119,12 @@ export function useWebSocketCall(token: string | null, onCallEvent?: CallEventCa
     })
 
     if (!res.ok) {
-      const errorText = await res.text().catch(() => 'No error message')
-      console.error(`[AnswerCall] Failed - Status: ${res.status}`, errorText)
-      throw new Error(`HTTP ${res.status} - ${errorText || 'Failed to answer call'}`)
+      const errorText = await res.text().catch(() => 'Unknown error')
+      throw new Error(`Failed to answer call (${res.status}): ${errorText}`)
     }
 
     const data = await res.json()
-    console.log('[AnswerCall] Success:', data)
+    console.log('[CallWS] Answer call successful:', data)
     return data
   }, [token])
 
@@ -135,17 +134,20 @@ export function useWebSocketCall(token: string | null, onCallEvent?: CallEventCa
       headers: { Authorization: `Bearer ${token}` },
     })
     if (!res.ok) {
-      const text = await res.text()
-      throw new Error(`HTTP ${res.status} - Failed to end call: ${text}`)
+      const text = await res.text().catch(() => '')
+      throw new Error(`Failed to end call (${res.status}): ${text}`)
     }
     return res.json()
   }, [token])
 
+  // ==================== SIGNALING SENDERS ====================
+
   const send = useCallback((data: any) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      console.warn('[CallWS] Cannot send - WebSocket not open')
+      console.warn('[CallWS] Cannot send - WebSocket is not open')
       return false
     }
+    console.log('[CallWS] Sending:', data.type, data)
     wsRef.current.send(JSON.stringify(data))
     return true
   }, [])
@@ -157,9 +159,18 @@ export function useWebSocketCall(token: string | null, onCallEvent?: CallEventCa
     initiateCall,
     answerCall,
     endCall,
-    sendWebRTCOffer: (callId: number, offer: any) => send({ type: 'webrtc_offer', call_id: callId, offer }),
-    sendWebRTCAnswer: (callId: number, answer: any) => send({ type: 'webrtc_answer', call_id: callId, answer }),
-    sendICECandidate: (callId: number, candidate: any) => send({ type: 'webrtc_ice', call_id: callId, candidate }),
-    joinCallRoom: (callId: number) => send({ type: 'join_call', call_id: callId }),
+
+    // WebRTC Signaling
+    sendWebRTCOffer: (callId: number, offer: any) =>
+      send({ type: 'webrtc_offer', call_id: callId, offer }),
+
+    sendWebRTCAnswer: (callId: number, answer: any) =>
+      send({ type: 'webrtc_answer', call_id: callId, answer }),
+
+    sendICECandidate: (callId: number, candidate: any) =>
+      send({ type: 'webrtc_ice', call_id: callId, candidate }),
+
+    joinCallRoom: (callId: number) =>
+      send({ type: 'join_call', call_id: callId }),
   }
 }

@@ -6,20 +6,15 @@ interface WebRTCCallOptions {
   onConnectionStateChange?: (state: RTCPeerConnectionState) => void
 }
 
-/**
- * WebRTC hook for audio-only peer connections
- * Handles RTCPeerConnection setup, offer/answer exchange, and ICE candidates
- */
-export function useWebRTCCall(
-  options: WebRTCCallOptions = {},
-) {
+export function useWebRTCCall(options: WebRTCCallOptions = {}) {
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null)
   const localStreamRef = useRef<MediaStream | null>(null)
+  const pendingIceCandidates = useRef<RTCIceCandidateInit[]>([])
+
   const [isConnecting, setIsConnecting] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // STUN servers configuration
   const iceServers = [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
@@ -28,220 +23,175 @@ export function useWebRTCCall(
     { urls: 'stun:stun4.l.google.com:19302' },
   ]
 
-  // Initialize WebRTC peer connection
-  const initializePeerConnection = useCallback(async () => {
-    try {
-      setIsConnecting(true)
-      setError(null)
+  const createVoiceProcessedStream = useCallback(async (preset: string = 'default'): Promise<MediaStream> => {
+    const rawStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      video: false,
+    })
 
-      // Create peer connection
-      const peerConnection = new RTCPeerConnection({
-        iceServers,
-      })
+    if (preset === 'default') return rawStream
 
-      // Get local audio stream
-      const localStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-        video: false,
-      })
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const source = audioContext.createMediaStreamSource(rawStream)
+    const destination = audioContext.createMediaStreamDestination()
 
-      localStreamRef.current = localStream
+    const filter = audioContext.createBiquadFilter()
+    filter.type = 'peaking'
+    filter.Q.value = 1.2
 
-      // Add local audio track to peer connection
-      localStream.getTracks().forEach((track) => {
-        peerConnection.addTrack(track, localStream)
-      })
-
-      // Handle ICE candidates
-      peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-          console.log('[WebRTC] ICE candidate:', event.candidate)
-          options.onIceCandidate?.(event.candidate)
-        }
-      }
-
-      // Handle remote stream
-      peerConnection.ontrack = (event) => {
-        console.log('[WebRTC] Remote stream received:', event.streams)
-        options.onRemoteStreamAvailable?.(event.streams[0])
-      }
-
-      // Handle connection state changes
-      peerConnection.onconnectionstatechange = () => {
-        const state = peerConnection.connectionState
-        console.log('[WebRTC] Connection state:', state)
-
-        if (state === 'connected') {
-          setIsConnected(true)
-          setIsConnecting(false)
-        } else if (state === 'failed' || state === 'disconnected' || state === 'closed') {
-          setIsConnected(false)
-          setIsConnecting(false)
-        }
-
-        options.onConnectionStateChange?.(state)
-      }
-
-      // Handle ICE connection state changes
-      peerConnection.oniceconnectionstatechange = () => {
-        console.log('[WebRTC] ICE connection state:', peerConnection.iceConnectionState)
-      }
-
-      // Handle signaling state changes
-      peerConnection.onsignalingstatechange = () => {
-        console.log('[WebRTC] Signaling state:', peerConnection.signalingState)
-      }
-
-      peerConnectionRef.current = peerConnection
-
-      return peerConnection
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to initialize WebRTC'
-      setError(message)
-      setIsConnecting(false)
-      console.error('[WebRTC] Initialization error:', err)
-      throw err
+    if (preset === 'lady' || preset === 'female') {
+      filter.frequency.value = 850; filter.gain.value = 14
+    } else if (preset === 'man' || preset === 'male') {
+      filter.frequency.value = 180; filter.gain.value = -11
+    } else if (preset === 'child') {
+      filter.frequency.value = 1350; filter.gain.value = 19
     }
+
+    source.connect(filter)
+    filter.connect(destination)
+
+    console.log(`[Voice] Applied preset: ${preset}`)
+    return destination.stream
+  }, [])
+
+  const createPeerConnection = useCallback(() => {
+    const pc = new RTCPeerConnection({ iceServers })
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate) options.onIceCandidate?.(event.candidate)
+    }
+
+    pc.ontrack = (event) => {
+      console.log('[WebRTC] Remote stream received')
+      options.onRemoteStreamAvailable?.(event.streams[0])
+    }
+
+    pc.onconnectionstatechange = () => {
+      const state = pc.connectionState
+      console.log(`[WebRTC] Connection state: ${state}`)
+      setIsConnected(state === 'connected')
+      setIsConnecting(false)
+      options.onConnectionStateChange?.(state)
+    }
+
+    peerConnectionRef.current = pc
+    return pc
   }, [options])
 
-  // Create and send offer
+  const addIceCandidate = useCallback(async (candidate: RTCIceCandidateInit) => {
+    const pc = peerConnectionRef.current
+    if (!pc) {
+      pendingIceCandidates.current.push(candidate)
+      return
+    }
+    if (pc.remoteDescription) {
+      await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error)
+    } else {
+      pendingIceCandidates.current.push(candidate)
+    }
+  }, [])
+
+  const processPendingIceCandidates = useCallback(async () => {
+    const pc = peerConnectionRef.current
+    if (!pc || pendingIceCandidates.current.length === 0) return
+
+    for (const cand of pendingIceCandidates.current) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(cand))
+      } catch (e) {
+        console.error('[WebRTC] Queued ICE failed:', e)
+      }
+    }
+    pendingIceCandidates.current = []
+  }, [])
+
+  // Caller: Only create offer, NO microphone yet
   const createAndSendOffer = useCallback(async () => {
     try {
-      if (!peerConnectionRef.current) {
-        await initializePeerConnection()
-      }
+      setIsConnecting(true)
+      if (!peerConnectionRef.current) createPeerConnection()
 
-      const peerConnection = peerConnectionRef.current!
-      const offer = await peerConnection.createOffer({
-        offerToReceiveAudio: true,
-      })
+      const pc = peerConnectionRef.current!
+      const offer = await pc.createOffer({ offerToReceiveAudio: true })
+      await pc.setLocalDescription(offer)
 
-      await peerConnection.setLocalDescription(offer)
-
-      console.log('[WebRTC] Offer created:', offer)
+      console.log('[WebRTC] Offer created (no media yet)')
       return offer
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create offer'
-      setError(message)
-      console.error('[WebRTC] Offer creation error:', err)
+    } catch (err: any) {
+      console.error('[WebRTC] Create offer failed:', err)
       throw err
     }
-  }, [initializePeerConnection])
+  }, [createPeerConnection])
 
-  // Handle incoming offer
-  const handleRemoteOffer = useCallback(
-    async (offer: RTCSessionDescriptionInit) => {
-      try {
-        if (!peerConnectionRef.current) {
-          await initializePeerConnection()
-        }
-
-        const peerConnection = peerConnectionRef.current!
-
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(offer))
-
-        const answer = await peerConnection.createAnswer()
-        await peerConnection.setLocalDescription(answer)
-
-        console.log('[WebRTC] Answer created:', answer)
-        return answer
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to handle offer'
-        setError(message)
-        console.error('[WebRTC] Handle offer error:', err)
-        throw err
-      }
-    },
-    [initializePeerConnection]
-  )
-
-  // Handle incoming answer
-  const handleRemoteAnswer = useCallback(async (answer: RTCSessionDescriptionInit) => {
+  // Staff: Answer → Now get microphone + voice preset
+  const handleRemoteOffer = useCallback(async (offer: RTCSessionDescriptionInit, voicePreset: string = 'default') => {
     try {
-      if (!peerConnectionRef.current) {
-        throw new Error('Peer connection not initialized')
-      }
+      setIsConnecting(true)
+      if (!peerConnectionRef.current) createPeerConnection()
 
-      const peerConnection = peerConnectionRef.current
-      await peerConnection.setRemoteDescription(new RTCSessionDescription(answer))
+      const pc = peerConnectionRef.current!
 
-      console.log('[WebRTC] Answer received and set')
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to handle answer'
-      setError(message)
-      console.error('[WebRTC] Handle answer error:', err)
+      // ←←← MEDIA ONLY STARTS HERE ←←←
+      const localStream = await createVoiceProcessedStream(voicePreset)
+      localStreamRef.current = localStream
+      localStream.getTracks().forEach(track => pc.addTrack(track, localStream))
+
+      await pc.setRemoteDescription(new RTCSessionDescription(offer))
+      const answer = await pc.createAnswer()
+      await pc.setLocalDescription(answer)
+
+      await processPendingIceCandidates()
+
+      console.log(`[WebRTC] Staff answered with voice: ${voicePreset}`)
+      return answer
+    } catch (err: any) {
+      console.error('[WebRTC] Handle offer failed:', err)
       throw err
     }
-  }, [])
+  }, [createPeerConnection, createVoiceProcessedStream, processPendingIceCandidates])
 
-  // Add ICE candidate
-  const addIceCandidate = useCallback(async (candidate: RTCIceCandidateInit) => {
+  // Caller: When staff answers → Now get microphone
+  const handleRemoteAnswer = useCallback(async (answer: RTCSessionDescriptionInit, voicePreset: string = 'default') => {
     try {
-      if (!peerConnectionRef.current) {
-        throw new Error('Peer connection not initialized')
-      }
+      if (!peerConnectionRef.current) throw new Error('No peer connection')
 
-      await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate))
-      console.log('[WebRTC] ICE candidate added')
-    } catch (err) {
-      console.error('[WebRTC] Add ICE candidate error:', err)
-      // Don't throw - ICE candidate errors are often non-critical
+      const pc = peerConnectionRef.current!
+
+      // ←←← MEDIA ONLY STARTS HERE ←←←
+      const localStream = await createVoiceProcessedStream(voicePreset)
+      localStreamRef.current = localStream
+      localStream.getTracks().forEach(track => pc.addTrack(track, localStream))
+
+      await pc.setRemoteDescription(new RTCSessionDescription(answer))
+      await processPendingIceCandidates()
+
+      console.log('[WebRTC] Caller received answer - audio starting')
+    } catch (err: any) {
+      console.error('[WebRTC] Handle answer failed:', err)
+      throw err
     }
-  }, [])
+  }, [createVoiceProcessedStream, processPendingIceCandidates])
 
-  // Close connection and cleanup
   const closeConnection = useCallback(() => {
-    try {
-      // Stop audio tracks
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach((track) => {
-          track.stop()
-        })
-        localStreamRef.current = null
-      }
-
-      // Close peer connection
-      if (peerConnectionRef.current) {
-        peerConnectionRef.current.close()
-        peerConnectionRef.current = null
-      }
-
-      setIsConnected(false)
-      setIsConnecting(false)
-      setError(null)
-
-      console.log('[WebRTC] Connection closed')
-    } catch (err) {
-      console.error('[WebRTC] Close error:', err)
-    }
+    localStreamRef.current?.getTracks().forEach(t => t.stop())
+    peerConnectionRef.current?.close()
+    peerConnectionRef.current = null
+    localStreamRef.current = null
+    pendingIceCandidates.current = []
+    setIsConnected(false)
+    setIsConnecting(false)
   }, [])
 
-  // Get local stream
-  const getLocalStream = useCallback(() => {
-    return localStreamRef.current
-  }, [])
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      closeConnection()
-    }
-  }, [closeConnection])
+  useEffect(() => () => closeConnection(), [closeConnection])
 
   return {
-    isConnecting,
-    isConnected,
-    error,
-    initializePeerConnection,
     createAndSendOffer,
     handleRemoteOffer,
     handleRemoteAnswer,
     addIceCandidate,
     closeConnection,
-    getLocalStream,
+    isConnecting,
+    isConnected,
+    error,
   }
 }

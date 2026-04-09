@@ -188,8 +188,8 @@ export default function LandingPage() {
           <div className="rounded-2xl sm:rounded-3xl p-6 sm:p-8 bg-white/10 backdrop-blur-md border border-white/20 shadow-xl">
             <div className="flex flex-col gap-4 sm:gap-6">
               
-              {/* Real Account */}
-              <Link href="/login?type=real">
+              {/* Real Account - FIXED */}
+              <Link href="/login?type=standard">
                 <div className="group relative rounded-2xl sm:rounded-3xl p-5 sm:p-6 bg-gradient-to-br from-orange-100 to-orange-50 hover:shadow-xl transition-all duration-300 cursor-pointer">
                   <div className="flex items-center gap-4 sm:gap-6">
                     <div className="flex-shrink-0">
