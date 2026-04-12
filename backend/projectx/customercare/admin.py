@@ -102,7 +102,7 @@ class AdminEmailAdmin(admin.ModelAdmin):
         </head>
         <body>
             <div class="container">
-                <h1 class="header">TradeRiser Official Announcement</h1>
+                <h1 class="header">TradeRiser Support</h1>
                 <div class="content">
                     {obj.html_message or obj.message.replace('\n', '<br>')}
                 </div>
