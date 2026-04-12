@@ -298,7 +298,7 @@ class AdminSendEmailView(APIView):
         </head>
         <body>
             <div class="container">
-                <h1 class="header">TradeRiser Official Communication</h1>
+                <h1 class="header">TradeRiser Support</h1>
                 
                 <div class="content">
                     {admin_email_obj.html_message or admin_email_obj.message.replace('\n', '<br>')}
