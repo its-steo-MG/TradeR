@@ -360,7 +360,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # ====================== DERIV THIRD-PARTY APP ======================
 DERIV_APP_ID = config('DERIV_APP_ID', default=None)
 DERIV_OAUTH_REDIRECT_URI = config('DERIV_OAUTH_REDIRECT_URI', default=None)
-FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://traderiserdigister.vercel.app')
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://traderiserapp.com')
 
 # Safety checks
 if not DERIV_APP_ID:
