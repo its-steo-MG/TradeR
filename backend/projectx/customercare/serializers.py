@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ChatThread, Message, CallSession
+from .models import ChatThread, Message, CallSession,AdminEmail
 from accounts.serializers import UserSerializer
 
 
@@ -63,3 +63,21 @@ class CallSessionDetailSerializer(serializers.ModelSerializer):
             'id', 'user', 'thread_id', 'status', 'started_at', 'answered_at',
             'ended_at', 'voice_preset', 'recording', 'agent', 'is_missed'
         ]
+
+# ====================== ADMIN EMAIL SERIALIZER ======================
+class AdminEmailSerializer(serializers.ModelSerializer):
+    sent_by = serializers.ReadOnlyField(source='sent_by.username')
+    target_user = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AdminEmail
+        fields = [
+            'id', 'subject', 'message', 'html_message',
+            'recipient_type', 'target_user', 'sent_by', 'sent_at'
+        ]
+        read_only_fields = ['sent_by', 'sent_at']
+
+    def get_target_user(self, obj):
+        if obj.target_user:
+            return {"id": obj.target_user.id, "username": obj.target_user.username}
+        return None

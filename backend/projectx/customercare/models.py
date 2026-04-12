@@ -158,3 +158,41 @@ class CallSession(models.Model):
         self.status = 'missed'
         self.is_missed = True
         self.save()
+
+# ====================== ADMIN EMAIL / BROADCAST ======================
+class AdminEmail(models.Model):
+    RECIPIENT_CHOICES = [
+        ('single', 'Single User (Private)'),
+        ('all', 'All Users (Broadcast)'),
+    ]
+
+    subject = models.CharField(max_length=200)
+    message = models.TextField(help_text="Plain text message")
+    html_message = models.TextField(blank=True, null=True)
+
+    recipient_type = models.CharField(max_length=10, choices=RECIPIENT_CHOICES, default='single')
+    target_user = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='received_admin_emails'
+    )
+    
+    sent_by = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name='sent_admin_emails',
+        limit_choices_to={'is_staff': True}
+    )
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-sent_at']
+        verbose_name = "Admin Email"
+        verbose_name_plural = "Admin Emails"
+
+    def __str__(self):
+        if self.recipient_type == 'all':
+            return f"Broadcast: {self.subject}"
+        return f"To {self.target_user.username if self.target_user else 'Unknown'}: {self.subject}"
