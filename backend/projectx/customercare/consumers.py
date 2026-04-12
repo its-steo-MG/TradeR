@@ -285,45 +285,142 @@ class CallConsumer(AsyncWebsocketConsumer):
     async def joined_call_room(self, event):
         await self.send(json.dumps(event))
 
-    # Client Actions
+    # ====================== CLIENT ACTIONS ======================
+
     async def handle_webrtc_offer(self, data):
+        """User sends offer → Broadcast to all staff in call_center"""
         call_id = data.get("call_id")
         offer = data.get("offer")
         if not call_id or not offer:
+            logger.warning(f"[CallWS] Invalid offer received from user {getattr(self.user, 'id', 'unknown')}")
             return
+
+        logger.info(f"[CallWS] Offer received from user {self.user.id} for call #{call_id}. Broadcasting to staff.")
+
         await self.channel_layer.group_send(
             "call_center",
-            {"type": "webrtc_offer", "call_id": call_id, "offer": offer, "from_user_id": self.user.id}
+            {
+                "type": "webrtc_offer",
+                "call_id": call_id,
+                "offer": offer,
+                "from_user_id": self.user.id,
+                "from_user": {
+                    "id": self.user.id,
+                    "username": self.user.username
+                }
+            }
         )
 
     async def handle_webrtc_answer(self, data):
+        """Staff sends answer → Send back to the specific user who initiated the call"""
         call_id = data.get("call_id")
         answer = data.get("answer")
         if not call_id or not answer:
+            logger.warning("[CallWS] Invalid answer received")
             return
+
+        # We need to know which user this call belongs to.
+        # For now, we send to the call_session room (both sides should be in it)
         call_room = f"call_session_{call_id}"
-        await self.channel_layer.group_send(call_room, {"type": "webrtc_answer", "call_id": call_id, "answer": answer})
+
+        logger.info(f"[CallWS] Answer received from staff for call #{call_id}. Sending to call room.")
+
+        await self.channel_layer.group_send(
+            call_room,
+            {
+                "type": "webrtc_answer",
+                "call_id": call_id,
+                "answer": answer
+            }
+        )
 
     async def handle_webrtc_ice(self, data):
+        """ICE candidates from either side → Forward to the call room"""
         call_id = data.get("call_id")
         candidate = data.get("candidate")
         if not call_id or not candidate:
             return
+
         call_room = f"call_session_{call_id}"
+
+        logger.info(f"[CallWS] ICE candidate received {'from staff' if self.is_staff else 'from user'} for call #{call_id}")
+
         await self.channel_layer.group_send(
             call_room,
-            {"type": "webrtc_ice", "call_id": call_id, "candidate": candidate, "from_staff": self.is_staff}
+            {
+                "type": "webrtc_ice",
+                "call_id": call_id,
+                "candidate": candidate,
+                "from_staff": self.is_staff
+            }
         )
 
     async def handle_join_call(self, data):
+        """User or Staff joins the specific call session room"""
         call_id = data.get("call_id")
         if not call_id:
             return
+
         call_room = f"call_session_{call_id}"
         await self.channel_layer.group_add(call_room, self.channel_name)
-        await self.send(json.dumps({"type": "joined_call_room", "call_id": call_id}))
 
+        logger.info(f"[CallWS] { 'Staff' if self.is_staff else 'User' } joined call room: {call_room}")
 
+        await self.send(json.dumps({
+            "type": "joined_call_room",
+            "call_id": call_id
+        }))
+
+    # ====================== GROUP HANDLERS (for receiving messages) ======================
+
+    async def webrtc_offer(self, event):
+        """Staff receives offer from user"""
+        await self.send(json.dumps({
+            "type": "webrtc_offer",
+            "call_id": event["call_id"],
+            "offer": event["offer"],
+            "from_user": event.get("from_user")
+        }))
+
+    async def webrtc_answer(self, event):
+        """User receives answer from staff"""
+        await self.send(json.dumps({
+            "type": "webrtc_answer",
+            "call_id": event["call_id"],
+            "answer": event["answer"]
+        }))
+
+    async def webrtc_ice(self, event):
+        """Both sides receive ICE candidates"""
+        await self.send(json.dumps({
+            "type": "webrtc_ice",
+            "call_id": event["call_id"],
+            "candidate": event["candidate"],
+            "from_staff": event.get("from_staff", False)
+        }))
+
+    async def new_incoming_call(self, event):
+        await self.send(json.dumps({
+            "type": "new_incoming_call",
+            "call_id": event["call_id"],
+            "user": event["user"]
+        }))
+
+    async def call_answered(self, event):
+        call_id = event["call_id"]
+        call_room = f"call_session_{call_id}"
+        await self.channel_layer.group_add(call_room, self.channel_name)
+
+        await self.send(json.dumps({
+            "type": "call_answered",
+            "call_id": call_id,
+            "voice_preset": event.get("voice_preset"),
+            "agent": event.get("agent")
+        }))
+
+    async def call_ended(self, event):
+        await self.send(json.dumps(event))
+        
 # ===================================================================
 # ====================== ADMIN CHAT CONSUMER ========================
 # ===================================================================
