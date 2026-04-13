@@ -75,6 +75,8 @@ export interface ForexRobot {
   discounted_price?: number
   effective_price?: number
   original_price?: number
+  max_open_positions?:number
+  is_ea?:boolean
 }
 export interface RobotRaw {
   price?: number
@@ -87,6 +89,8 @@ export interface UserRobot {
   is_running: boolean
   stake_amount: number
   interval_seconds: number
+  is_ea?:boolean
+  max_open_positions?:number
   created_at: string
   updated_at: string
   purchased_at: string
@@ -740,24 +744,58 @@ export const closeAllPositions = () =>
   apiRequest<{ message: string }>("/forex/positions/close-all/", { method: "POST" })
 export const getForexHistory = () => apiRequest<{ trades: ForexTrade[] }>("/forex/history/")
 
-export const getForexRobots = () => apiRequest<{ robots: ForexRobot[] }>("/forex/robots/")
-export const getMyForexRobots = () => apiRequest<{ user_robots: UserRobot[] }>("/forex/my-robots/")
+/* --------------------- FOREX ROBOTS --------------------- */
+
+export const getForexRobots = () => 
+  apiRequest<{ robots: ForexRobot[] }>("/forex/robots/")
+
+export const getMyForexRobots = () => 
+  apiRequest<{ user_robots: UserRobot[] }>("/forex/my-robots/")
+
 export const purchaseForexRobot = (robotId: number) =>
-  apiRequest<{ user_robot: UserRobot }>(`/forex/robots/${robotId}/purchase/`, { method: "POST" })
+  apiRequest<{ 
+    message: string; 
+    user_robot: UserRobot;
+    purchased_price?: number;
+    discounted?: boolean;
+  }>(`/forex/robots/${robotId}/purchase/`, { 
+    method: "POST" 
+  })
 
 export const toggleForexRobot = (
   userRobotId: number,
-  config?: { stake?: number; pair_id?: number; timeframe?: string },
+  config?: { stake?: number; pair_id?: number; timeframe?: string }
 ) =>
-  apiRequest<{ is_running: boolean; message?: string }>(
+  apiRequest<{ 
+    is_running: boolean; 
+    message?: string;
+    is_ea?: boolean;
+    closed_positions?: number;        // from backend when stopping EA
+  }>(
     `/forex/robots/${userRobotId}/toggle/`,
-    config ? { method: "POST", body: JSON.stringify(config) } : { method: "POST" },
+    {
+      method: "POST",
+      body: config ? JSON.stringify(config) : undefined,
+    }
   )
 
-export const getForexBotLogs = () => apiRequest<{ bot_logs: BotLog[] }>("/forex/robot-logs/")
+// ✅ Improved: Close all EA positions for a specific UserRobot
+export const closeEAPositions = (userRobotId: number) =>
+  apiRequest<{ 
+    success: boolean;
+    message: string;
+    closed_count: number;
+  }>(
+    `/forex/positions/close-ea/${userRobotId}/`, 
+    { method: "POST" }
+  )
+
+/* --------------------- BOT LOGS --------------------- */
+export const getForexBotLogs = () => 
+  apiRequest<{ bot_logs: BotLog[] }>("/forex/robot-logs/")
+
 export const getForexBotLogsByRobot = (userRobotId: number) =>
   apiRequest<{ bot_logs: BotLog[] }>(`/forex/robot-logs/?user_robot_id=${userRobotId}`)
-
 /* ------------------------------------------------------------------ */
 /*  AGENTS                                                            */
 /* ------------------------------------------------------------------ */
@@ -1166,4 +1204,5 @@ export const api = {
   answerAudioCall,
   endAudioCall,
   getMissedCalls,
+  closeEAPositions
 }

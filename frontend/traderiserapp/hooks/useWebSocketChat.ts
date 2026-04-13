@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 
-//const WS_BASE = 'ws://localhost:8000'
+const WS_BASE = 'ws://localhost:8000'
 
-const WS_BASE = 'wss://traderiserproapp.onrender.com'    // ← Point directly to Django
+//const WS_BASE = 'wss://traderiserproapp.onrender.com'    // ← Point directly to Django
 
 export interface Message {
   id: number

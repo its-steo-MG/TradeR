@@ -29,8 +29,8 @@ class ForexPair(models.Model):
     base_currency = models.CharField(max_length=3)
     quote_currency = models.CharField(max_length=3)
     pip_value = models.DecimalField(max_digits=10, decimal_places=5, default=Decimal('0.0001'))
-    contract_size = models.IntegerField(default=100000)  # Standard contract size (e.g., 100,000 units)
-    spread = models.DecimalField(max_digits=10, decimal_places=5, default=Decimal('0.0001'))  # Spread in pips
+    contract_size = models.IntegerField(default=100000)
+    spread = models.DecimalField(max_digits=10, decimal_places=5, default=Decimal('0.0001'))
     base_simulation_price = models.DecimalField(max_digits=10, decimal_places=5, default=Decimal('1.1000'))
     default_time_frame = models.CharField(max_length=3, choices=TIME_FRAMES, default='M1')
 
@@ -43,11 +43,10 @@ class ForexPair(models.Model):
             entry_time = timezone.now()
         minutes_passed = (timezone.now() - entry_time).total_seconds() / 60
 
-        # Adjust volatility based on time frame
         time_frame_multiplier = {
             'M1': 1, 'M5': 5, 'M15': 15, 'H1': 60, 'H4': 240, 'D1': 1440,
         }
-        volatility_scale = time_frame_multiplier[time_frame] / 60  # Normalize to minutes
+        volatility_scale = Decimal(str(time_frame_multiplier[time_frame] / 60))
 
         if is_sashi:
             if minutes_passed >= 30 * time_frame_multiplier[time_frame] / 60:
@@ -55,10 +54,12 @@ class ForexPair(models.Model):
             if random.random() < 0.1:
                 return max(self.base_simulation_price - Decimal('0.0005') * volatility_scale, Decimal('0.0001'))
         else:
-            if minutes_passed >= random.uniform(10, 20) * time_frame_multiplier[time_frame] / 60:
+            if minutes_passed >= random.uniform(10, 20) * (time_frame_multiplier[time_frame] / 60):
                 return self.base_simulation_price - Decimal('0.0020') if direction == 'buy' else self.base_simulation_price + Decimal('0.0020')
 
-        volatility = Decimal(str(random.uniform(-0.0005, 0.0005) * volatility_scale))
+        rand_vol = Decimal(str(random.uniform(-0.0005, 0.0005)))
+        volatility = rand_vol * volatility_scale
+
         return max(self.base_simulation_price + volatility, Decimal('0.0001'))
 
 
@@ -75,10 +76,24 @@ class Position(models.Model):
     entry_time = models.DateTimeField(default=timezone.now)
     sl = models.DecimalField(max_digits=10, decimal_places=5, null=True, blank=True)
     tp = models.DecimalField(max_digits=10, decimal_places=5, null=True, blank=True)
+    
+    # New fields for better tracking
+    close_price = models.DecimalField(max_digits=10, decimal_places=5, null=True, blank=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+    
+    # IMPORTANT: Link to the EA that opened this position
+    ea_robot = models.ForeignKey(
+        'UserRobot',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='opened_positions'
+    )
+
     floating_p_l = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     status = models.CharField(max_length=6, choices=STATUSES, default='open')
     leverage = models.IntegerField(default=500)
-    time_frame = models.CharField(max_length=3, choices=TIME_FRAMES, default='M1')  # ← Fixed
+    time_frame = models.CharField(max_length=3, choices=TIME_FRAMES, default='M1')
 
     class Meta:
         ordering = ['-entry_time']
@@ -88,12 +103,13 @@ class Position(models.Model):
 
     def calculate_margin(self):
         """Calculate the initial margin based on volume, entry price, and leverage."""
-        return (self.volume_lots * self.pair.contract_size * self.entry_price) / self.leverage
+        return (self.volume_lots * Decimal(self.pair.contract_size) * self.entry_price) / Decimal(self.leverage)
 
     def update_floating_p_l(self, current_price=None, wallet_balance=None):
         """Update floating P&L based on current price and check conditions."""
         if self.status == 'closed':
             return
+
         if not current_price:
             current_price = self.pair.get_current_price(
                 self.entry_time,
@@ -101,99 +117,132 @@ class Position(models.Model):
                 direction=self.direction,
                 time_frame=self.time_frame
             )
+
+        current_price = Decimal(str(current_price))
+
         pip_value = self.pair.pip_value
-        pip_delta = (Decimal(current_price) - self.entry_price) / pip_value if self.direction == 'buy' else (self.entry_price - Decimal(current_price)) / pip_value
-        # P&L = (pip_delta * volume_lots * contract_size * pip_value) - (spread cost)
-        self.floating_p_l = (pip_delta * self.volume_lots * self.pair.contract_size * pip_value) - \
-                           (self.pair.spread * self.volume_lots * self.pair.contract_size * pip_value)
-        logger.info(f"Updated floating_p_l for position {self.id}: {self.floating_p_l} (pip_delta={pip_delta}, current_price={current_price})")
-        self.save()
+        pip_delta = (current_price - self.entry_price) / pip_value if self.direction == 'buy' else (self.entry_price - current_price) / pip_value
+
+        self.floating_p_l = (pip_delta * self.volume_lots * Decimal(self.pair.contract_size) * pip_value) - \
+                           (self.pair.spread * self.volume_lots * Decimal(self.pair.contract_size) * pip_value)
+
+        logger.info(f"Updated floating_p_l for position {self.id}: {self.floating_p_l} (current_price={current_price})")
+        self.save(update_fields=['floating_p_l'])
 
         # Check SL/TP
-        if self.sl and ((current_price <= self.sl and self.direction == 'buy') or (current_price >= self.sl and self.direction == 'sell')):
+        if self.sl and ((current_price <= self.sl and self.direction == 'buy') or 
+                       (current_price >= self.sl and self.direction == 'sell')):
             self.close_position(current_price, is_auto=True, close_reason='sl')
-        elif self.tp and ((current_price >= self.tp and self.direction == 'buy') or (current_price <= self.tp and self.direction == 'sell')):
+        elif self.tp and ((current_price >= self.tp and self.direction == 'buy') or 
+                         (current_price <= self.tp and self.direction == 'sell')):
             self.close_position(current_price, is_auto=True, close_reason='tp')
 
-        # Check margin call if wallet_balance is provided
+        # Margin call check
         if wallet_balance is not None and not self.user.is_sashi:
             if self.check_margin_call(wallet_balance):
                 self.close_position(current_price, is_auto=True, close_reason='margin')
 
     def close_position(self, current_price, is_auto=False, close_reason='manual'):
-        """Close the position and update wallet balance with margin and realized P&L."""
+        """Safely close the position. Handles broken transactions gracefully."""
         if self.status == 'closed':
-            return
+            logger.info(f"Position {self.id} is already closed. Skipping.")
+            return None
 
-        # Update floating P&L with current price
-        self.update_floating_p_l(current_price)
-        realized_p_l = self.floating_p_l
-        logger.info(f"Closing position {self.id}: Entry {self.entry_price}, Close {current_price}, Realized P&L {realized_p_l}")
+        current_price = Decimal(str(current_price))
+        realized_p_l = Decimal('0.00')
 
-        # Sashi adjustment for losses
-        if self.user.is_sashi and realized_p_l < 0:
-            adjusted_loss = abs(realized_p_l) * Decimal('0.9')
-            realized_p_l = -adjusted_loss
-            logger.info(f"Sashi adjustment: P&L adjusted to {realized_p_l}")
-            Transaction.objects.create(
-                account=self.account,
-                amount=adjusted_loss,
-                transaction_type='sashi_adjustment',
-                description=f'Sashi win adjustment for {self.pair.name}'
-            )
+        try:
+            # Final P&L calculation
+            self.update_floating_p_l(current_price)
+            realized_p_l = self.floating_p_l
 
-        # Get wallet and initial margin
-        usd = Currency.objects.get(code='USD')
-        wallet = Wallet.objects.get(account=self.account, wallet_type='main', currency=usd)
-        initial_margin = self.calculate_margin()
-        logger.info(f"Wallet balance before close: {wallet.balance}, Initial Margin: {initial_margin}")
+            logger.info(f"Closing position {self.id}: Entry={self.entry_price}, Close={current_price}, P&L={realized_p_l}")
 
-        # Cap loss to available balance if necessary
-        if realized_p_l < 0 and -realized_p_l > wallet.balance:
-            realized_p_l = -wallet.balance
-            logger.info(f"Loss capped to balance: P&L set to {realized_p_l}")
+            # Sashi adjustment
+            if self.user.is_sashi and realized_p_l < 0:
+                adjusted_loss = abs(realized_p_l) * Decimal('0.9')
+                realized_p_l = -adjusted_loss
+                logger.info(f"Sashi adjustment: P&L adjusted to {realized_p_l}")
+                Transaction.objects.create(
+                    account=self.account,
+                    amount=adjusted_loss,
+                    transaction_type='sashi_adjustment',
+                    description=f'Sashi win adjustment for {self.pair.name}'
+                )
 
-        # Update balance: Return initial margin + add realized P&L
-        with transaction.atomic():
-            wallet.balance += initial_margin + realized_p_l  # Return margin + profit/loss
-            wallet.save()
-            logger.info(f"Wallet balance after close: {wallet.balance}")
+            # Wallet & margin
+            usd = Currency.objects.get(code='USD')
+            wallet = Wallet.objects.get(account=self.account, wallet_type='main', currency=usd)
+            initial_margin = self.calculate_margin()
 
-            trans_type = 'profit' if realized_p_l > 0 else 'loss'
-            Transaction.objects.create(
-                account=self.account,
-                amount=realized_p_l,
-                transaction_type=trans_type,
-                description=f'Forex close: {self.pair.name}'
-            )
+            # Cap big losses
+            if realized_p_l < 0 and -realized_p_l > wallet.balance:
+                realized_p_l = -wallet.balance
+                logger.info(f"Loss capped to wallet balance: {realized_p_l}")
 
-        # Record trade
-        trade = ForexTrade.objects.create(
-            position=self,
-            close_price=current_price,
-            realized_p_l=realized_p_l,
-            close_time=timezone.now(),
-            close_reason=close_reason
-        )
+            # Atomic wallet + transaction update
+            with transaction.atomic():
+                wallet.balance += initial_margin + realized_p_l
+                wallet.save()
 
-        self.status = 'closed'
-        self.floating_p_l = Decimal('0.00')
-        self.save()
-        return trade
+                trans_type = 'profit' if realized_p_l > 0 else 'loss'
+                Transaction.objects.create(
+                    account=self.account,
+                    amount=realized_p_l,
+                    transaction_type=trans_type,
+                    description=f'Forex close: {self.pair.name} ({close_reason})'
+                )
+
+                # Create trade record safely
+                try:
+                    ForexTrade.objects.create(
+                        position=self,
+                        close_price=current_price,
+                        realized_p_l=realized_p_l,
+                        close_time=timezone.now(),
+                        close_reason=close_reason
+                    )
+                except Exception as trade_err:
+                    logger.warning(f"ForexTrade creation skipped for position {self.id}: {trade_err}")
+
+            # Mark position as closed OUTSIDE atomic block
+            self.status = 'closed'
+            self.floating_p_l = Decimal('0.00')
+            self.close_price = current_price
+            self.closed_at = timezone.now()
+            self.save(update_fields=['status', 'floating_p_l', 'close_price', 'closed_at'])
+
+            logger.info(f"Position {self.id} successfully closed. Reason: {close_reason}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error closing position {self.id}: {e}", exc_info=True)
+
+            # Force close even if error occurred
+            try:
+                self.status = 'closed'
+                self.floating_p_l = Decimal('0.00')
+                self.close_price = current_price
+                self.closed_at = timezone.now()
+                self.save(update_fields=['status', 'floating_p_l', 'close_price', 'closed_at'])
+            except Exception as save_err:
+                logger.error(f"Failed to force-close position {self.id}: {save_err}")
+
+            raise
 
     def check_margin_call(self, wallet_balance):
-        """Check if a margin call is triggered without recursive update."""
+        """Check if a margin call is triggered."""
         if self.user.is_sashi or self.status == 'closed':
             return False
         return self.floating_p_l <= 0 and abs(self.floating_p_l) >= wallet_balance
 
 
 class ForexTrade(models.Model):
-    position = models.OneToOneField(Position, on_delete=models.CASCADE)
+    position = models.OneToOneField(Position, on_delete=models.CASCADE, related_name='trade')
     close_price = models.DecimalField(max_digits=10, decimal_places=5)
     realized_p_l = models.DecimalField(max_digits=12, decimal_places=2)
     close_time = models.DateTimeField(default=timezone.now)
-    close_reason = models.CharField(max_length=10)
+    close_reason = models.CharField(max_length=20)
 
     def __str__(self):
         return f"Closed: {self.position}"
@@ -219,33 +268,24 @@ class ForexRobot(models.Model):
         null=True
     )
     description = models.TextField()
-    price = models.DecimalField(max_digits=10, decimal_places=2)  # Original full price
+    price = models.DecimalField(max_digits=10, decimal_places=2)
     discounted_price = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        validators=[MinValueValidator(Decimal('0.00'))],
-        help_text="If set, this discounted price will be used instead of the original price."
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal('0.00'))]
     )
     best_markets = models.CharField(max_length=20, choices=ROBOT_MARKETS)
     win_rate_sashi = models.IntegerField(default=90, validators=[MinValueValidator(0), MaxValueValidator(100)])
     win_rate_normal = models.IntegerField(default=10, validators=[MinValueValidator(0), MaxValueValidator(100)])
-    stake_per_trade = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=Decimal('10.00'),
-        help_text="Default stake per trade (can be overridden by user)"
-    )
+    stake_per_trade = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('10.00'))
     
-    # Profit multiplier
     profit_multiplier = models.DecimalField(
-        max_digits=5,
-        decimal_places=2,
-        default=Decimal('1.00'),
-        help_text="Profit = stake × multiplier on win (e.g., 2.00 = 2:1 RR)"
+        max_digits=5, decimal_places=2, default=Decimal('1.00')
     )
     
+    # EA Features
+    is_ea = models.BooleanField(default=False)
+    max_open_positions = models.IntegerField(default=2, validators=[MinValueValidator(1), MaxValueValidator(10)])
+
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -254,18 +294,12 @@ class ForexRobot(models.Model):
 
     @property
     def image_url(self):
-        if self.image:
-            return self.image.url
-        return None
+        return self.image.url if self.image else None
 
     @property
     def effective_price(self):
-        """
-        Returns the active price for purchase:
-        - discounted_price if set and not None
-        - otherwise the original price
-        """
         return self.discounted_price if self.discounted_price is not None else self.price
+
 
 class UserRobot(models.Model):
     user = models.ForeignKey('accounts.User', on_delete=models.CASCADE, related_name='robots')
@@ -274,19 +308,16 @@ class UserRobot(models.Model):
     is_running = models.BooleanField(default=False)
     last_trade_time = models.DateTimeField(null=True, blank=True)
 
-    # User-configurable settings
-    stake_per_trade = models.DecimalField(
-        max_digits=10, decimal_places=2, default=Decimal('10.00'),
-        help_text="Stake amount per trade (overrides robot default)"
-    )
+    stake_per_trade = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('10.00'))
     selected_pair = models.ForeignKey(
-        ForexPair, null=True, blank=True, on_delete=models.SET_NULL,
-        help_text="Pair to trade (optional)"
+        ForexPair, null=True, blank=True, on_delete=models.SET_NULL
     )
-    timeframe = models.CharField(
-        max_length=3, choices=TIME_FRAMES, default='M1',  # ← Fixed
-        help_text="Chart timeframe for simulation"
-    )
+    timeframe = models.CharField(max_length=3, choices=TIME_FRAMES, default='M1')
+
+    # EA fields copied at purchase
+    is_ea = models.BooleanField(default=False)
+    max_open_positions = models.IntegerField(default=2)
+    target_profit = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 
     class Meta:
         unique_together = ('user', 'robot')
@@ -294,11 +325,73 @@ class UserRobot(models.Model):
     def __str__(self):
         return f"{self.user.username} - {self.robot.name}"
 
+   # In forex/models.py → inside the UserRobot class
 
+    def close_all_positions(self):
+        """Aggressively close all open positions opened by this EA robot."""
+        if not self.is_ea:
+            return 0
+
+        open_positions = Position.objects.filter(
+            ea_robot=self,
+            status='open'
+        ).select_related('pair', 'user', 'account')
+
+        closed_count = 0
+
+        for position in open_positions.iterator():
+            try:
+                current_price = position.pair.get_current_price(
+                    entry_time=position.entry_time,
+                    is_sashi=position.user.is_sashi,
+                    direction=position.direction,
+                    time_frame=position.time_frame
+                )
+
+                position.close_position(current_price, is_auto=False, close_reason='ea_stopped')
+                closed_count += 1
+
+            except Exception as e:
+                logger.error(f"Normal close failed for position {position.id}: {e}")
+
+                # Force close fallback
+                try:
+                    with transaction.atomic():
+                        usd = Currency.objects.get(code='USD')
+                        wallet = Wallet.objects.get(
+                            account=position.account, 
+                            wallet_type='main', 
+                            currency=usd
+                        )
+                        initial_margin = position.calculate_margin()
+
+                        wallet.balance += initial_margin + position.floating_p_l
+                        wallet.save()
+
+                        Transaction.objects.create(
+                            account=position.account,
+                            amount=position.floating_p_l,
+                            transaction_type='loss' if position.floating_p_l < 0 else 'profit',
+                            description=f'Force EA stop close: {position.pair.name}'
+                        )
+
+                    position.status = 'closed'
+                    position.floating_p_l = Decimal('0.00')
+                    position.close_price = current_price if 'current_price' in locals() else position.entry_price
+                    position.closed_at = timezone.now()
+                    position.save(update_fields=['status', 'floating_p_l', 'close_price', 'closed_at'])
+                    closed_count += 1
+                except Exception as force_e:
+                    logger.error(f"Force close failed for position {position.id}: {force_e}")
+
+        logger.info(f"EA Robot {self.id} - Closed {closed_count} positions")
+        return closed_count
+    
+    
 class BotLog(models.Model):
     user_robot = models.ForeignKey(UserRobot, on_delete=models.CASCADE, related_name='logs')
     message = models.TextField()
-    trade_result = models.CharField(max_length=10, null=True, blank=True)  # 'win', 'loss', null
+    trade_result = models.CharField(max_length=10, null=True, blank=True)
     profit_loss = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
 

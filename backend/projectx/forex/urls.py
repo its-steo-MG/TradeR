@@ -19,7 +19,14 @@ urlpatterns = [
     path('robots/<int:robot_id>/purchase/', views.PurchaseRobotView.as_view(), name='purchase_robot'),
     path('robots/<int:user_robot_id>/toggle/', views.ToggleRobotView.as_view(), name='toggle_robot'),
 
+    # ── New: Close all positions for a specific EA when stopping it ──
+    path('positions/close-ea/<int:user_robot_id>/', 
+         views.CloseEAPositionsView.as_view(), 
+         name='close_ea_positions'),
+
     # ── Bot logs ──
     path('robot-logs/', views.BotLogListView.as_view(), name='bot_logs'),
-    path('robot-logs/user-robot/<int:user_robot_id>/', views.BotLogListView.as_view(), name='bot_logs_by_user_robot'),
+    path('robot-logs/user-robot/<int:user_robot_id>/', 
+         views.BotLogListView.as_view(), 
+         name='bot_logs_by_user_robot'),
 ]
