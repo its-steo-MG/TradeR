@@ -1,6 +1,6 @@
 // lib/api.ts (updated with suspension typing)
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"
-//const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://traderiserproapp.onrender.com/api"
+//const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://traderiserproapp.onrender.com/api"
 
 interface ApiResponse<T> {
   data?: T
