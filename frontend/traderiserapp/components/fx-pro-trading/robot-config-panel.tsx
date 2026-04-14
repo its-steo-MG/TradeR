@@ -256,7 +256,7 @@ export default function RobotConfigPanel({
             "Starting Robot..."
           ) : isEA ? (
             <>
-              🚀 <span className="ml-2">Activate EA Simulation</span>
+              🚀 <span className="ml-2">Activate EA Bot</span>
             </>
           ) : (
             <>
