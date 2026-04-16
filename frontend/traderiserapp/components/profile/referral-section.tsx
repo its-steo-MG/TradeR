@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Copy, Share2, Gift, User } from "lucide-react";
+import { Copy, Share2, Gift, User, X } from "lucide-react";
 import { toast } from "sonner";
 import { getAccountData } from "@/lib/api-helpers";
 import {
@@ -34,16 +34,6 @@ interface MpesaProfile {
   profile_photo: string | null;
 }
 
-// Proper error type for axios errors
-interface ApiError {
-  response?: {
-    data?: {
-      error?: string;
-    };
-  };
-  message?: string;
-}
-
 export default function ReferralSection() {
   const [referralLink, setReferralLink] = useState<string>("");
   const [isMarketo, setIsMarketo] = useState<boolean>(false);
@@ -53,14 +43,13 @@ export default function ReferralSection() {
   const [loading, setLoading] = useState(true);
   const [connectLoading, setConnectLoading] = useState(false);
 
-  // Form states
   const [realName, setRealName] = useState<string>("");
   const [phoneNumber, setPhoneNumber] = useState<string>("");
   const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
+  const [profilePhotoPreview, setProfilePhotoPreview] = useState<string | null>(null);
   const [pin, setPin] = useState<string>("");
   const [showModal, setShowModal] = useState<boolean>(false);
 
-  // Fetch basic account data + M-Pesa profile if connected
   const fetchUserData = async () => {
     try {
       const data: AccountData = await getAccountData();
@@ -78,21 +67,22 @@ export default function ReferralSection() {
     }
   };
 
-  // Fetch full M-Pesa profile (includes S3 photo URL)
   const fetchMpesaProfile = async () => {
     try {
-      const token = localStorage.getItem("access_token");
+      const token = localStorage.getItem("mpesa_access_token") || localStorage.getItem("access_token");
       if (!token) return;
 
       const res = await axios.get<MpesaProfile>(
         `${process.env.NEXT_PUBLIC_API_URL}/mpesa/profile/`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      if (res.data.profile_photo) {
-        setProfilePhotoUrl(res.data.profile_photo);
+      const photoUrl = res.data.profile_photo;
+      if (photoUrl) {
+        // Add cache buster for testing
+        const urlWithCacheBuster = `${photoUrl}?t=${Date.now()}`;
+        setProfilePhotoUrl(urlWithCacheBuster);
+        console.log("Profile photo URL loaded:", urlWithCacheBuster);
       }
     } catch (err) {
       console.error("Failed to fetch M-Pesa profile photo", err);
@@ -103,41 +93,36 @@ export default function ReferralSection() {
     fetchUserData();
   }, []);
 
-  const copyLink = async () => {
-    if (!referralLink) return;
-    try {
-      await navigator.clipboard.writeText(referralLink);
-      toast.success("Referral link copied!");
-    } catch {
-      toast.error("Failed to copy link");
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("Image size should be less than 5MB");
+        return;
+      }
+      setProfilePhotoFile(file);
+      const reader = new FileReader();
+      reader.onload = (event) => setProfilePhotoPreview(event.target?.result as string);
+      reader.readAsDataURL(file);
     }
   };
 
-  const shareLink = () => {
-    if (navigator.share) {
-      navigator.share({
-        title: "Join TradeRiser with my referral",
-        text: "Check out TradeRiser - a great trading platform!",
-        url: referralLink,
-      }).catch(() => {
-        window.open(`https://wa.me/?text=${encodeURIComponent("Join me on TradeRiser: " + referralLink)}`);
-      });
-    } else {
-      window.open(`https://wa.me/?text=${encodeURIComponent("Join me on TradeRiser: " + referralLink)}`);
-    }
+  const clearPhotoPreview = () => {
+    setProfilePhotoFile(null);
+    setProfilePhotoPreview(null);
   };
 
   const handleConnect = async () => {
-    if (!realName.trim() || !phoneNumber.trim() || !profilePhotoFile || pin.length !== 4 || !/^\d{4}$/.test(pin)) {
-      toast.error("Please fill all fields correctly");
+    if (!realName.trim() || !phoneNumber.trim() || !profilePhotoFile || pin.length !== 4) {
+      toast.error("Please fill all fields correctly (4-digit PIN required)");
       return;
     }
 
     setConnectLoading(true);
 
     try {
-      const token = localStorage.getItem("access_token");
-      if (!token) throw new Error("No token found");
+      const token = localStorage.getItem("mpesa_access_token") || localStorage.getItem("access_token");
+      if (!token) throw new Error("No authentication token found");
 
       const formData = new FormData();
       formData.append("real_name", realName.trim());
@@ -157,28 +142,22 @@ export default function ReferralSection() {
       );
 
       if (response.status === 200) {
-        toast.success("M-Pesa connected successfully!");
+        toast.success("M-Pesa connected successfully! Photo uploaded.");
+
+        // Force refresh profile
+        await fetchMpesaProfile();
+
         setIsConnected(true);
         setShowModal(false);
 
-        // Clear form
         setRealName("");
         setPhoneNumber("");
         setProfilePhotoFile(null);
+        setProfilePhotoPreview(null);
         setPin("");
-
-        // Immediately fetch the new profile photo from S3
-        await fetchMpesaProfile();
       }
-    } catch (err: unknown) {
-      console.error(err);
-      
-      const apiError = err as ApiError;
-      const errorMsg = 
-        apiError.response?.data?.error || 
-        apiError.message || 
-        "Failed to connect M-Pesa";
-
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || err.message || "Failed to connect M-Pesa";
       toast.error(errorMsg);
     } finally {
       setConnectLoading(false);
@@ -186,12 +165,28 @@ export default function ReferralSection() {
   };
 
   const openMpesaApp = () => {
-    // Change this to your production URL when deploying
     const url = process.env.NODE_ENV === "production"
       ? "https://mpesa-orpin-gamma.vercel.app/login"
-      : "http://localhost:3000/login";
-    
+      : "http://localhost:3001/login";
     window.open(url, "_blank");
+  };
+
+  const copyLink = async () => {
+    if (!referralLink) return;
+    await navigator.clipboard.writeText(referralLink);
+    toast.success("Referral link copied!");
+  };
+
+  const shareLink = () => {
+    if (navigator.share) {
+      navigator.share({
+        title: "Join TradeRiser with my referral",
+        text: "Check out TradeRiser!",
+        url: referralLink,
+      });
+    } else {
+      window.open(`https://wa.me/?text=${encodeURIComponent("Join me on TradeRiser: " + referralLink)}`);
+    }
   };
 
   if (loading || !isMarketo || !referralLink) return null;
@@ -207,22 +202,12 @@ export default function ReferralSection() {
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Referral Link */}
         <div className="flex gap-2">
-          <Input 
-            readOnly 
-            value={referralLink} 
-            className="bg-slate-700/30 border-slate-600/50 text-white font-mono text-sm" 
-          />
-          <Button onClick={copyLink} size="icon" variant="outline">
-            <Copy className="w-4 h-4" />
-          </Button>
-          <Button onClick={shareLink} size="icon" variant="outline">
-            <Share2 className="w-4 h-4" />
-          </Button>
+          <Input readOnly value={referralLink} className="bg-slate-700/30 border-slate-600/50 text-white font-mono text-sm" />
+          <Button onClick={copyLink} size="icon" variant="outline"><Copy className="w-4 h-4" /></Button>
+          <Button onClick={shareLink} size="icon" variant="outline"><Share2 className="w-4 h-4" /></Button>
         </div>
 
-        {/* M-Pesa Connect Section */}
         {!isConnected ? (
           <Dialog open={showModal} onOpenChange={setShowModal}>
             <DialogTrigger asChild>
@@ -234,64 +219,49 @@ export default function ReferralSection() {
             <DialogContent className="sm:max-w-md bg-slate-800 border-slate-700 text-white">
               <DialogHeader>
                 <DialogTitle>Connect to M-Pesa</DialogTitle>
-                <DialogDescription className="text-slate-400">
-                  Enter your details to connect your M-Pesa account.
-                </DialogDescription>
+                <DialogDescription>Enter your details</DialogDescription>
               </DialogHeader>
 
-              <div className="space-y-4">
+              <div className="space-y-5">
                 <div>
-                  <Label htmlFor="realName">Real Name (as in M-Pesa)</Label>
-                  <Input 
-                    id="realName" 
-                    value={realName} 
-                    onChange={(e) => setRealName(e.target.value)} 
-                    className="mt-2" 
-                    placeholder="Enter your full name" 
-                  />
+                  <Label>Profile Photo</Label>
+                  <div className="mt-2 flex flex-col items-center">
+                    {profilePhotoPreview ? (
+                      <div className="relative">
+                        <img src={profilePhotoPreview} alt="Preview" className="w-28 h-28 rounded-full object-cover border-2 border-green-500" />
+                        <button onClick={clearPhotoPreview} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1">
+                          <X size={16} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="w-28 h-28 rounded-full bg-slate-700 flex items-center justify-center border border-dashed border-slate-500">
+                        <User className="w-12 h-12 text-slate-400" />
+                      </div>
+                    )}
+                    <Input type="file" accept="image/*" onChange={handlePhotoChange} className="mt-3 hidden" id="profilePhoto" />
+                    <label htmlFor="profilePhoto" className="cursor-pointer text-green-400 hover:text-green-500 text-sm mt-2 underline">
+                      {profilePhotoPreview ? "Change Photo" : "Upload Profile Photo"}
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="realName">Real Name</Label>
+                  <Input id="realName" value={realName} onChange={(e) => setRealName(e.target.value)} className="mt-2" placeholder="Enter your full name" />
                 </div>
 
                 <div>
                   <Label htmlFor="phoneNumber">M-Pesa Phone Number</Label>
-                  <Input 
-                    id="phoneNumber" 
-                    value={phoneNumber} 
-                    onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ""))} 
-                    className="mt-2" 
-                    placeholder="2547xxxxxxxx" 
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="profilePhoto">Profile Photo</Label>
-                  <Input 
-                    id="profilePhoto" 
-                    type="file" 
-                    accept="image/*" 
-                    onChange={(e) => setProfilePhotoFile(e.target.files?.[0] || null)} 
-                    className="mt-2" 
-                  />
+                  <Input id="phoneNumber" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ""))} className="mt-2" placeholder="2547xxxxxxxx" />
                 </div>
 
                 <div>
                   <Label htmlFor="pin">4-Digit PIN</Label>
-                  <Input 
-                    id="pin" 
-                    type="password" 
-                    maxLength={4} 
-                    value={pin} 
-                    onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} 
-                    className="mt-2 text-center tracking-widest" 
-                    placeholder="••••" 
-                  />
+                  <Input id="pin" type="password" maxLength={4} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} className="mt-2 text-center tracking-widest text-lg" placeholder="••••" />
                 </div>
 
-                <Button 
-                  onClick={handleConnect} 
-                  disabled={connectLoading} 
-                  className="w-full bg-green-600 hover:bg-green-700"
-                >
-                  {connectLoading ? "Connecting..." : "Connect"}
+                <Button onClick={handleConnect} disabled={connectLoading || !profilePhotoFile} className="w-full bg-green-600 hover:bg-green-700">
+                  {connectLoading ? "Connecting..." : "Connect to M-Pesa"}
                 </Button>
               </div>
             </DialogContent>
@@ -299,28 +269,21 @@ export default function ReferralSection() {
         ) : (
           <div className="mt-6 space-y-4">
             <div className="flex flex-col items-center gap-3">
-              {/* Profile Photo from S3 */}
               {profilePhotoUrl ? (
                 <img 
                   src={profilePhotoUrl} 
                   alt="M-Pesa Profile" 
-                  className="w-20 h-20 rounded-full object-cover border-2 border-green-500" 
+                  className="w-24 h-24 rounded-full object-cover border-4 border-green-500 shadow-lg" 
                 />
               ) : (
-                <div className="w-20 h-20 rounded-full bg-slate-700 flex items-center justify-center">
-                  <User className="w-10 h-10 text-slate-400" />
+                <div className="w-24 h-24 rounded-full bg-slate-700 flex items-center justify-center border-2 border-green-500">
+                  <User className="w-12 h-12 text-slate-400" />
                 </div>
               )}
-
-              <p className="text-green-400 font-medium text-center">
-                M-Pesa Connected Successfully!
-              </p>
+              <p className="text-green-400 font-medium">M-Pesa Connected Successfully!</p>
             </div>
 
-            <Button 
-              onClick={openMpesaApp} 
-              className="w-full bg-teal-600 hover:bg-teal-700 text-white"
-            >
+            <Button onClick={openMpesaApp} className="w-full bg-teal-600 hover:bg-teal-700 text-white">
               Open M-Pesa App
             </Button>
           </div>

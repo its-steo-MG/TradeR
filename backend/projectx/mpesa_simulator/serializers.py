@@ -7,8 +7,8 @@ class MpesaUserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MpesaUser
-        fields = ['real_name', 'phone_number', 'balance', 'profile_photo', 'fuliza']
-        read_only_fields = ['phone_number', 'balance', 'profile_photo', 'fuliza']
+        fields = ['real_name', 'phone_number', 'balance', 'fuliza', 'profile_photo']
+        read_only_fields = ['phone_number', 'balance', 'fuliza', 'profile_photo']
 
     def get_profile_photo(self, obj):
         if obj.profile_photo:
