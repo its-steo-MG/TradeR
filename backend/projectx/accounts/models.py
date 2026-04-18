@@ -31,7 +31,8 @@ class User(AbstractUser):
         blank=True,
         related_name='referred_users'
     )
-    # New suspension fields
+    
+    # Suspension fields
     is_suspended = models.BooleanField(default=False, verbose_name="Account Suspended")
     suspension_type = models.CharField(
         max_length=20,
@@ -73,7 +74,7 @@ class User(AbstractUser):
             return False
         return True
 
-    # ====================== UPDATED SUSPENSION EMAIL METHODS ======================
+    # ====================== SUSPENSION METHODS ======================
     def suspend(self, suspension_type: str, reason: str, duration_days: int = None, suspended_by=None):
         """Suspend account – temporary (with duration) or permanent."""
         if self.is_suspended:
@@ -101,7 +102,7 @@ class User(AbstractUser):
             'suspended_at', 'suspended_until', 'suspension_history'
         ])
 
-        # Send email using Resend (via django-anymail)
+        # Send suspension email
         subject = f"TradeRiser Account {'Temporarily' if suspension_type == 'temporary' else 'Permanently'} Suspended"
 
         html_message = f"""
@@ -124,7 +125,7 @@ class User(AbstractUser):
         send_mail(
             subject=subject,
             message=plain_message,
-            from_email=None,                    # Uses DEFAULT_FROM_EMAIL from settings
+            from_email=None,
             recipient_list=[self.email],
             html_message=html_message,
             fail_silently=False,
@@ -146,11 +147,13 @@ class User(AbstractUser):
                 "type": "unsuspended",
                 "by": unsuspended_by.username
             })
-            self.save(update_fields=['suspension_history'])
 
-        self.save(update_fields=['is_suspended', 'suspension_type', 'suspension_reason', 'suspended_at', 'suspended_until'])
+        self.save(update_fields=[
+            'is_suspended', 'suspension_type', 'suspension_reason',
+            'suspended_at', 'suspended_until', 'suspension_history'
+        ])
 
-        # Send reactivation email using Resend
+        # Send reactivation email
         subject = "TradeRiser Account Reactivated"
         html_message = f"""
         <h2>Welcome Back!</h2>
@@ -213,11 +216,22 @@ class Account(models.Model):
         ('demo', 'TradeRiser Demo'),
         ('pro-fx', 'TradeRiser Pro-FX'),
     ]
+    
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='accounts')
     account_type = models.CharField(max_length=50, choices=ACCOUNT_TYPES)
+    
+    # ====================== NEW: WALLET VERIFIER FIELD ======================
+    is_wallet_verified = models.BooleanField(
+        default=True,
+        verbose_name="Wallet Verified",
+        help_text="Uncheck this to block withdrawals and internal transfers for this account. "
+                  "New accounts are automatically verified."
+    )
 
     class Meta:
         unique_together = ('user', 'account_type')
+        verbose_name = "Account"
+        verbose_name_plural = "Accounts"
 
     @property
     def balance(self):

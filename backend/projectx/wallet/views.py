@@ -221,6 +221,17 @@ class WithdrawalOTPView(APIView):
         wallet_type = data['wallet_type']
         account_type = data['account_type']
 
+        # ====================== WALLET VERIFIER CHECK ======================
+        try:
+            account = Account.objects.get(user=request.user, account_type=account_type)
+            if not account.is_wallet_verified:
+                return Response({
+                    'error': 'Withdrawal failed please contact support'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        except Account.DoesNotExist:
+            return Response({'error': 'Account not found'}, status=status.HTTP_400_BAD_REQUEST)
+        # ==================================================================
+
         MIN_WITHDRAWAL_USD = Decimal('2.00')
         MAX_WITHDRAWAL_USD = Decimal('2000.00')
 
@@ -230,7 +241,6 @@ class WithdrawalOTPView(APIView):
             return Response({'error': f'Maximum withdrawal is ${MAX_WITHDRAWAL_USD}'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            account, _ = Account.objects.get_or_create(user=request.user, account_type=account_type)
             currency = Currency.objects.get(code='USD')
             target_currency = Currency.objects.get(code='KSH')
             wallet, _ = Wallet.objects.get_or_create(
@@ -309,7 +319,6 @@ class WithdrawalOTPView(APIView):
             'amount_ksh': str(converted_amount),
             'transaction_id': trans.id
         }, status=status.HTTP_200_OK)
-
 
 class VerifyWithdrawalOTPView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -570,8 +579,25 @@ class InitiateTransferView(APIView):
         except User.DoesNotExist:
             return Response({'error': 'Recipient user not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        sender_account, _ = Account.objects.get_or_create(user=request.user, account_type=sender_account_type)
-        recipient_account, _ = Account.objects.get_or_create(user=recipient_user, account_type=recipient_account_type)
+        # ====================== WALLET VERIFIER CHECK ======================
+        try:
+            sender_account = Account.objects.get(
+                user=request.user, 
+                account_type=sender_account_type
+            )
+            if not sender_account.is_wallet_verified:
+                return Response({
+                    'error': 'Transfer failed please contact support'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        except Account.DoesNotExist:
+            return Response({'error': 'Account not found'}, status=status.HTTP_400_BAD_REQUEST)
+        # ==================================================================
+
+        # Get or create recipient account (no verifier check needed for recipient)
+        recipient_account, _ = Account.objects.get_or_create(
+            user=recipient_user, 
+            account_type=recipient_account_type
+        )
 
         reference_id = generate_transfer_reference()
 
