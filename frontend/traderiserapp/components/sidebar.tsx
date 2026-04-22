@@ -16,6 +16,7 @@ import {
   Headset,
   Briefcase,
   Copy,
+  Hash,
 } from "lucide-react"
 import { useState, useEffect } from "react"
 import type { Account } from "@/types/account"
@@ -151,6 +152,7 @@ export function Sidebar({
         : [
             { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
             { href: "/trading", label: "Trading", icon: TrendingUp },
+            { href: "/digits-trading", label: "Digits Trading", icon: Hash },
             { href: "/robots", label: "Robots", icon: Bot },
             { href: "/wallet", label: "Wallet", icon: WalletIcon },
             { href: "/profile", label: "Profile", icon: User },
@@ -165,6 +167,7 @@ export function Sidebar({
           //...(hasProFxAccount && loginType === "real"
           //  ? [{ href: "/fx-pro-trading", label: "Pro-FX Trading", icon: Zap }]
           //  : []),
+          { href: "/digits-trading", label: "Digits Trading", icon: Hash },
           { href: "/robots", label: "Robots", icon: Bot },
           { href: "/wallet", label: "Wallet", icon: WalletIcon },
           { href: "/profile", label: "Profile", icon: User },

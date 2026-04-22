@@ -2,6 +2,8 @@
 from rest_framework import serializers
 from .models import MarketType, Market, TradeType, Robot, UserRobot, Trade, Signal
 from django.conf import settings
+
+
 class RobotSerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()
     effective_price = serializers.SerializerMethodField()
@@ -31,11 +33,17 @@ class RobotSerializer(serializers.ModelSerializer):
             # Deriv Premium Robot fields
             'is_deriv_robot',
             'deriv_access_key',
+            # ==================== NEW: S-Digit Robot Fields ====================
+            'is_s_digit_robot',
+            'default_digit_contract_type',
         ]
+
+
 class MarketTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = MarketType
         fields = '__all__'
+
 
 class MarketSerializer(serializers.ModelSerializer):
     market_type = MarketTypeSerializer(read_only=True)
@@ -50,10 +58,12 @@ class MarketSerializer(serializers.ModelSerializer):
         model = Market
         fields = ['id', 'name', 'market_type', 'profit_multiplier']
 
+
 class TradeTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = TradeType
         fields = '__all__'
+
 
 class UserRobotSerializer(serializers.ModelSerializer):
     robot = RobotSerializer(read_only=True)
@@ -74,16 +84,34 @@ class UserRobotSerializer(serializers.ModelSerializer):
             'purchased_price',
             'deriv_access_key'
         ]
-        
+
+
 class TradeSerializer(serializers.ModelSerializer):
     market = MarketSerializer(read_only=True)
     trade_type = TradeTypeSerializer(read_only=True)
     used_robot = RobotSerializer(read_only=True)
 
+    # ==================== NEW: Digit Trading Fields ====================
+    is_digit_trade = serializers.BooleanField(read_only=True)
+    digit_contract_type = serializers.CharField(read_only=True)
+    digit_barrier = serializers.IntegerField(read_only=True)
+    last_digit_outcome = serializers.IntegerField(read_only=True)
+
     class Meta:
         model = Trade
         fields = '__all__'
-        read_only_fields = ['user', 'is_win', 'profit', 'timestamp', 'session_profit_before']
+        read_only_fields = [
+            'user', 
+            'is_win', 
+            'profit', 
+            'timestamp', 
+            'session_profit_before',
+            'is_digit_trade',
+            'digit_contract_type',
+            'digit_barrier',
+            'last_digit_outcome'
+        ]
+
 
 class SignalSerializer(serializers.ModelSerializer):
     market = MarketSerializer(read_only=True)
@@ -95,7 +123,14 @@ class SignalSerializer(serializers.ModelSerializer):
     class Meta:
         model = Signal
         fields = [
-            'id', 'market', 'direction', 'probability',
-            'take_profit', 'stop_loss', 'generated_at', 'timeframe',
-            'strength', 'current_price'  # Added
+            'id', 
+            'market', 
+            'direction', 
+            'probability',
+            'take_profit', 
+            'stop_loss', 
+            'generated_at', 
+            'timeframe',
+            'strength', 
+            'current_price'
         ]

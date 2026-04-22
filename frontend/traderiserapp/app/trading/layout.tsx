@@ -1,4 +1,3 @@
-// app/trading/layout.tsx
 "use client";
 
 import type React from "react";
@@ -7,7 +6,7 @@ import { Sidebar } from "@/components/sidebar";
 import { TopNavbar } from "@/components/top-navbar";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-import type { Account } from "@/types/account";   // ← Import shared type
+import type { Account } from "@/types/account";
 
 interface User {
   username: string;
@@ -15,7 +14,7 @@ interface User {
   phone: string;
   is_sashi: boolean;
   is_email_verified: boolean;
-  accounts: Account[];           // ← Now uses shared Account
+  accounts: Account[];
 }
 
 interface TradingLayoutProps {
@@ -135,7 +134,6 @@ export default function TradingLayout({ children }: TradingLayoutProps) {
     }
 
     try {
-      // Convert to number for the API
       const accountId = Number(account.id);
       if (isNaN(accountId)) {
         toast.error("Invalid account ID");
@@ -244,7 +242,6 @@ export default function TradingLayout({ children }: TradingLayoutProps) {
         loginType={loginType}
         activeAccount={activeAccount}
         accounts={availableAccounts}
-        // onSwitchAccount={handleSwitchAccount}   // Uncomment after updating Sidebar
       />
       <main className="flex-1 w-full overflow-auto">{children}</main>
     </div>

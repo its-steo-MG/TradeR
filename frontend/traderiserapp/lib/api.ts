@@ -2,6 +2,8 @@
 //const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://traderiserproapp.onrender.com/api"
 
+
+
 interface ApiResponse<T> {
   data?: T
   error?: string
@@ -11,10 +13,14 @@ interface Number {
   replace?: number
 }
 
+export { updateBalanceAfterTrade } from "./balance-utils";
+
+
 export interface Currency {
   code: string
   name: string
 }
+
 
 export interface Wallet {
   id: number
@@ -1127,6 +1133,37 @@ export async function appealSuspension(formData: FormData) {
     {} // no extra options needed
   );
 }
+
+export const placeDigitTrade = (data: {
+  market_id: number;
+  digit_contract_type: 'over' | 'under' | 'matches' | 'differs' | 'even' | 'odd';
+  digit_barrier?: number;
+  amount: number;
+  account_type?: 'standard' | 'demo';
+  robot_id?: number;
+  use_martingale?: boolean;
+  martingale_level?: number;
+}) => 
+  apiRequest("/trading/trades/place-digit/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
+// ====================== S-DIGIT ROBOT TRADING ======================
+export const placeSRobotTrade = (data: {
+  robot_id: number;
+  market_id: number;
+  digit_contract_type: 'over' | 'under' | 'matches' | 'differs' | 'even' | 'odd';
+  digit_barrier?: number;
+  amount: number;
+  use_martingale?: boolean;
+  martingale_level?: number;
+  account_type?: 'standard' | 'demo';
+}) => 
+  apiRequest("/trading/trades/place-srobot/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 /* ------------------------------------------------------------------ */
 /*  EXPORT API OBJECT                                                 */
 /* ------------------------------------------------------------------ */
@@ -1142,6 +1179,8 @@ export const api = {
   getTradeTypes,
   getAssets,
   placeTrade,
+  placeDigitTrade,
+  placeSRobotTrade,
   getTradeHistory,
   cancelTrade,
   getPriceHistory,

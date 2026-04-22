@@ -34,6 +34,12 @@ interface MpesaProfile {
   profile_photo: string | null;
 }
 
+interface ApiError {
+  error?: string;
+  message?: string;
+  // Add other possible error fields from your backend if needed
+}
+
 export default function ReferralSection() {
   const [referralLink, setReferralLink] = useState<string>("");
   const [isMarketo, setIsMarketo] = useState<boolean>(false);
@@ -79,7 +85,6 @@ export default function ReferralSection() {
 
       const photoUrl = res.data.profile_photo;
       if (photoUrl) {
-        // Add cache buster for testing
         const urlWithCacheBuster = `${photoUrl}?t=${Date.now()}`;
         setProfilePhotoUrl(urlWithCacheBuster);
         console.log("Profile photo URL loaded:", urlWithCacheBuster);
@@ -144,20 +149,28 @@ export default function ReferralSection() {
       if (response.status === 200) {
         toast.success("M-Pesa connected successfully! Photo uploaded.");
 
-        // Force refresh profile
         await fetchMpesaProfile();
 
         setIsConnected(true);
         setShowModal(false);
 
+        // Reset form
         setRealName("");
         setPhoneNumber("");
         setProfilePhotoFile(null);
         setProfilePhotoPreview(null);
         setPin("");
       }
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.error || err.message || "Failed to connect M-Pesa";
+    } catch (err: unknown) {
+      let errorMsg = "Failed to connect M-Pesa";
+
+      if (axios.isAxiosError(err)) {
+        const data = err.response?.data as ApiError | undefined;
+        errorMsg = data?.error || data?.message || err.message || errorMsg;
+      } else if (err instanceof Error) {
+        errorMsg = err.message;
+      }
+
       toast.error(errorMsg);
     } finally {
       setConnectLoading(false);
@@ -203,9 +216,17 @@ export default function ReferralSection() {
 
       <CardContent className="space-y-4">
         <div className="flex gap-2">
-          <Input readOnly value={referralLink} className="bg-slate-700/30 border-slate-600/50 text-white font-mono text-sm" />
-          <Button onClick={copyLink} size="icon" variant="outline"><Copy className="w-4 h-4" /></Button>
-          <Button onClick={shareLink} size="icon" variant="outline"><Share2 className="w-4 h-4" /></Button>
+          <Input 
+            readOnly 
+            value={referralLink} 
+            className="bg-slate-700/30 border-slate-600/50 text-white font-mono text-sm" 
+          />
+          <Button onClick={copyLink} size="icon" variant="outline">
+            <Copy className="w-4 h-4" />
+          </Button>
+          <Button onClick={shareLink} size="icon" variant="outline">
+            <Share2 className="w-4 h-4" />
+          </Button>
         </div>
 
         {!isConnected ? (
@@ -228,8 +249,15 @@ export default function ReferralSection() {
                   <div className="mt-2 flex flex-col items-center">
                     {profilePhotoPreview ? (
                       <div className="relative">
-                        <img src={profilePhotoPreview} alt="Preview" className="w-28 h-28 rounded-full object-cover border-2 border-green-500" />
-                        <button onClick={clearPhotoPreview} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1">
+                        <img 
+                          src={profilePhotoPreview} 
+                          alt="Preview" 
+                          className="w-28 h-28 rounded-full object-cover border-2 border-green-500" 
+                        />
+                        <button 
+                          onClick={clearPhotoPreview} 
+                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"
+                        >
                           <X size={16} />
                         </button>
                       </div>
@@ -238,8 +266,17 @@ export default function ReferralSection() {
                         <User className="w-12 h-12 text-slate-400" />
                       </div>
                     )}
-                    <Input type="file" accept="image/*" onChange={handlePhotoChange} className="mt-3 hidden" id="profilePhoto" />
-                    <label htmlFor="profilePhoto" className="cursor-pointer text-green-400 hover:text-green-500 text-sm mt-2 underline">
+                    <Input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handlePhotoChange} 
+                      className="mt-3 hidden" 
+                      id="profilePhoto" 
+                    />
+                    <label 
+                      htmlFor="profilePhoto" 
+                      className="cursor-pointer text-green-400 hover:text-green-500 text-sm mt-2 underline"
+                    >
                       {profilePhotoPreview ? "Change Photo" : "Upload Profile Photo"}
                     </label>
                   </div>
@@ -247,20 +284,44 @@ export default function ReferralSection() {
 
                 <div>
                   <Label htmlFor="realName">Real Name</Label>
-                  <Input id="realName" value={realName} onChange={(e) => setRealName(e.target.value)} className="mt-2" placeholder="Enter your full name" />
+                  <Input 
+                    id="realName" 
+                    value={realName} 
+                    onChange={(e) => setRealName(e.target.value)} 
+                    className="mt-2" 
+                    placeholder="Enter your full name" 
+                  />
                 </div>
 
                 <div>
                   <Label htmlFor="phoneNumber">M-Pesa Phone Number</Label>
-                  <Input id="phoneNumber" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ""))} className="mt-2" placeholder="2547xxxxxxxx" />
+                  <Input 
+                    id="phoneNumber" 
+                    value={phoneNumber} 
+                    onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ""))} 
+                    className="mt-2" 
+                    placeholder="2547xxxxxxxx" 
+                  />
                 </div>
 
                 <div>
                   <Label htmlFor="pin">4-Digit PIN</Label>
-                  <Input id="pin" type="password" maxLength={4} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} className="mt-2 text-center tracking-widest text-lg" placeholder="••••" />
+                  <Input 
+                    id="pin" 
+                    type="password" 
+                    maxLength={4} 
+                    value={pin} 
+                    onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} 
+                    className="mt-2 text-center tracking-widest text-lg" 
+                    placeholder="••••" 
+                  />
                 </div>
 
-                <Button onClick={handleConnect} disabled={connectLoading || !profilePhotoFile} className="w-full bg-green-600 hover:bg-green-700">
+                <Button 
+                  onClick={handleConnect} 
+                  disabled={connectLoading || !profilePhotoFile} 
+                  className="w-full bg-green-600 hover:bg-green-700"
+                >
                   {connectLoading ? "Connecting..." : "Connect to M-Pesa"}
                 </Button>
               </div>

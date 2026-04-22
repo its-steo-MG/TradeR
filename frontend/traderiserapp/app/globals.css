@@ -3,7 +3,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Theme variables */
+/* ==================== YOUR ORIGINAL THEME ==================== */
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -39,7 +39,7 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 
-  /* Glass effect variables */
+  /* Glass effect */
   --glass-bg: rgba(15, 15, 20, 0.65);
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-blur: 16px;
@@ -47,7 +47,7 @@
 }
 
 .dark {
-  --background: transparent; /* Let glass + gradient show through */
+  --background: transparent;
   --foreground: oklch(0.985 0 0);
   --card: rgba(20, 20, 30, 0.5);
   --card-foreground: oklch(0.985 0 0);
@@ -81,6 +81,25 @@
   --sidebar-ring: rgba(255, 255, 255, 0.2);
 }
 
+/* ==================== TRADING + CONTRACT COLORS ==================== */
+:root, .dark {
+  --profit: #00ff9d;     /* Bright green - Deriv style */
+  --loss: #ff3b5c;       /* Bright red   - Deriv style */
+
+  /* Per-contract identity colors (Deriv-style) */
+  --contract-even:    oklch(0.72 0.16 240);   /* blue   */
+  --contract-odd:     oklch(0.72 0.18 30);    /* orange */
+  --contract-over:    oklch(0.74 0.17 150);   /* green  */
+  --contract-under:   oklch(0.68 0.21 25);    /* red    */
+  --contract-matches: oklch(0.72 0.16 290);   /* purple */
+  --contract-differs: oklch(0.78 0.16 80);    /* amber  */
+
+  /* Trade lifecycle */
+  --trade-win:     oklch(0.74 0.17 150);
+  --trade-loss:    oklch(0.68 0.21 25);
+  --trade-pending: oklch(0.78 0.16 80);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -101,15 +120,8 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --color-profit: var(--profit);
+  --color-loss: var(--loss);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -118,21 +130,57 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Contract + trade tokens (so Tailwind generates bg-contract-even etc.) */
+  --color-contract-even:    var(--contract-even);
+  --color-contract-odd:     var(--contract-odd);
+  --color-contract-over:    var(--contract-over);
+  --color-contract-under:   var(--contract-under);
+  --color-contract-matches: var(--contract-matches);
+  --color-contract-differs: var(--contract-differs);
+  --color-trade-win:     var(--trade-win);
+  --color-trade-loss:    var(--trade-loss);
+  --color-trade-pending: var(--trade-pending);
+
+  /* Custom animations used by RunPanel rows */
+  --animate-trade-enter:  trade-enter 0.35s ease-out;
+  --animate-trade-settle: trade-settle 0.6s ease-out;
+  --animate-flash-win:    flash-win 0.7s ease-out;
+  --animate-flash-loss:   flash-loss 0.7s ease-out;
 }
 
+/* ==================== TRADE ROW KEYFRAMES ==================== */
+@keyframes trade-enter {
+  0%   { opacity: 0; transform: translateY(-6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes trade-settle {
+  0%   { opacity: 0; transform: translateX(8px); }
+  60%  { opacity: 1; }
+  100% { opacity: 1; transform: translateX(0); }
+}
+@keyframes flash-win {
+  0%   { background-color: color-mix(in oklab, var(--trade-win) 25%, transparent); }
+  100% { background-color: transparent; }
+}
+@keyframes flash-loss {
+  0%   { background-color: color-mix(in oklab, var(--trade-loss) 25%, transparent); }
+  100% { background-color: transparent; }
+}
+
+/* ==================== BASE STYLES ==================== */
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
 
-  /* GLASSY DARK BODY */
   body {
     @apply text-foreground min-h-screen;
     background: transparent;
     position: relative;
   }
 
-  /* Pseudo-element for animated gradient background */
+  /* Animated gradient background */
   body::before {
     content: "";
     position: fixed;
@@ -155,66 +203,58 @@
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow);
   }
-
-  /* Optional: Apply glass to cards/popovers */
-  .glass-card {
-    background: var(--card);
-    border: 1px solid var(--glass-border);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-  }
 }
 
-/* Animated gradient (now behind glass) */
-@keyframes rotate-gradient {
-  0%, 100% {
-    background: radial-gradient(circle at 50% 50%, #000000 0%, #ff1493 95%);
-  }
-  25% {
-    background: radial-gradient(circle at 50% 50%, #000000 0%, #ff1493 97%);
-  }
-  50% {
-    background: radial-gradient(circle at 50% 50%, #000000 0%, #ff1493 95%);
-  }
-  75% {
-    background: radial-gradient(circle at 50% 50%, #000000 0%, #ff1493 97%);
-  }
-}
-
-/* Keep gradient-bg class for specific pages (now enhanced with glass) */
-.gradient-bg {
-  position: relative;
-  overflow: hidden;
-}
-
-.gradient-bg::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -2;
-  background: radial-gradient(circle at 50% 50%, #000000 0%, #ff1493 95%);
-  animation: rotate-gradient 120s linear infinite;
-}
-
-.gradient-bg::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: var(--glass-bg);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+/* Glass cards for trading UI */
+.glass-card {
+  background: var(--card);
   border: 1px solid var(--glass-border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
-/* TradingView Widget Fix */
+/* Trading specific colors */
+.text-profit { color: var(--profit); }
+.text-loss { color: var(--loss); }
+.bg-profit { background-color: var(--profit); }
+.bg-loss { background-color: var(--loss); }
+
+/* Animated gradient */
+@keyframes rotate-gradient {
+  0%, 100% { background: radial-gradient(circle at 50% 50%, #000000 0%, #ff1493 95%); }
+  50%      { background: radial-gradient(circle at 50% 50%, #000000 0%, #ff1493 97%); }
+}
+
+/* TradingView fix */
 .tradingview-widget-container,
 .tradingview-widget-container__widget {
   display: block !important;
   visibility: visible !important;
   height: 500px !important;
   width: 100% !important;
-  min-height: 500px !important;
-  max-height: 500px !important;
+}
+
+/* Fix for shadcn Select dropdowns appearing behind cards/modals */
+select,
+[data-radix-popper-content-wrapper],
+[role="listbox"],
+[role="dialog"] > div {
+  z-index: 9999 !important;
+}
+
+/* Ensure SelectContent pops on top of everything */
+.SelectContent,
+[data-radix-select-content] {
+  z-index: 10000 !important;
+  position: fixed !important;
+}
+
+/* Extra safety for glass cards that might clip dropdowns */
+.glass-card,
+.rounded-3xl,
+.border {
+  overflow: visible !important;
+  position: relative;
+  z-index: 10;
 }
