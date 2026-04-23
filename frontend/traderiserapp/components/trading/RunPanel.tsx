@@ -177,11 +177,6 @@ export function RunPanel({ open, onClose }: { open: boolean; onClose: () => void
             <TabsTrigger value="journal">Journal</TabsTrigger>
           </TabsList>
 
-          {/* Summary Tab */}
-          <TabsContent value="summary" className="pt-6 pb-8 flex-1">
-            <SummaryView totals={totals} />
-          </TabsContent>
-
           {/* Transactions Tab */}
           <TabsContent value="transactions" className="pt-4 pb-6 flex-1">
             <div className="flex gap-3 mb-4">
@@ -195,10 +190,11 @@ export function RunPanel({ open, onClose }: { open: boolean; onClose: () => void
               </Button>
             </div>
 
-            <div className="grid grid-cols-3 gap-x-4 px-4 pb-3 text-[11px] uppercase tracking-wide font-medium text-slate-500">
+            {/* Header */}
+            <div className="grid grid-cols-[auto_1fr_auto] gap-x-2 px-4 pb-3 text-[11px] uppercase tracking-wide font-medium text-slate-500">
               <span className="pl-1">Type</span>
-              <span className="pl-2">Entry / Exit</span>
-              <span className="text-right pr-3">Stake &amp; P/L</span>
+              <span className="pl-1">Entry / Exit</span>
+              <span className="text-right pr-1">Stake &amp; P/L</span>
             </div>
 
             <div className="max-h-[42vh] overflow-y-auto divide-y divide-slate-800/70">
@@ -210,6 +206,11 @@ export function RunPanel({ open, onClose }: { open: boolean; onClose: () => void
                 ))
               )}
             </div>
+          </TabsContent>
+
+          {/* Summary Tab */}
+          <TabsContent value="summary" className="pt-6 pb-8 flex-1">
+            <SummaryView totals={totals} />
           </TabsContent>
 
           {/* Journal Tab */}
@@ -276,7 +277,7 @@ export function RunPanel({ open, onClose }: { open: boolean; onClose: () => void
 }
 
 /* =========================================================================
- * Transaction Row
+ * Transaction Row - Final Tight Version
  * ========================================================================= */
 function TransactionRow({
   transaction: t,
@@ -291,7 +292,8 @@ function TransactionRow({
     <button
       onClick={onClick}
       className={cn(
-        "w-full grid grid-cols-3 gap-x-4 items-center py-3.5 px-4 text-left transition-all hover:bg-slate-900/70",
+        "w-full grid items-center py-3.5 px-4 text-left transition-all hover:bg-slate-900/70",
+        "grid-cols-[auto_1fr_auto] gap-x-2",
         isOpen
           ? "bg-amber-500/[0.04] border-l-2 border-amber-400/70"
           : "border-l-2 border-transparent",
@@ -299,29 +301,39 @@ function TransactionRow({
         "animate-trade-enter",
       )}
     >
-      <div className="justify-self-start pl-1">
-        <ContractBadge kind={t.contractKind} barrier={t.barrier} pulse={isOpen} />
+      {/* 1. Contract Badge */}
+      <div className="justify-self-start pl-1 flex-shrink-0">
+        <ContractBadge 
+          kind={t.contractKind} 
+          barrier={t.barrier} 
+          pulse={isOpen} 
+          size="sm" 
+        />
       </div>
 
-      <div className="text-sm leading-tight pl-1">
+      {/* 2. Entry / Exit - Tighter spacing */}
+      <div className="text-sm leading-tight pl-1 pr-1 min-w-0">
+        {/* Entry Line */}
         <div className="flex items-center gap-1.5 text-slate-200">
-          <span className="text-emerald-400 text-xs">↑</span>
-          <span className="font-mono">{fmt(t.entrySpot)}</span>
-          <span className="text-[10px] uppercase tracking-wide text-slate-500 ml-1">entry</span>
+          <span className="text-emerald-400 text-xs flex-shrink-0">↑</span>
+          <span className="font-mono whitespace-nowrap">{fmt(t.entrySpot)}</span>
+          <span className="text-[10px] uppercase tracking-wide text-slate-500 ml-2">entry</span>
         </div>
 
+        {/* Exit Line */}
         {isOpen ? (
           <div className="flex items-center gap-1.5 text-amber-400 text-xs mt-1">
-            <Loader2 className="h-3 w-3 animate-spin" />
-            <span>Waiting for exit tick…</span>
+            <Loader2 className="h-3 w-3 animate-spin flex-shrink-0" />
+            <span className="truncate">Waiting for exit tick…</span>
           </div>
         ) : (
-          <div className="flex items-center gap-1.5 text-slate-300 text-sm mt-1 animate-trade-settle">
-            <span className="text-rose-400 text-xs">↓</span>
-            <span className="font-mono">{fmt(t.exitSpot)}</span>
-            <span className="text-[10px] uppercase tracking-wide text-slate-500 ml-1">exit</span>
+          <div className="flex items-center gap-1.5 text-slate-300 text-sm mt-1">
+            <span className="text-rose-400 text-xs flex-shrink-0">↓</span>
+            <span className="font-mono whitespace-nowrap">{fmt(t.exitSpot)}</span>
+            <span className="text-[10px] uppercase tracking-wide text-slate-500 ml-2">exit</span>
+            
             {typeof t.exitDigit === "number" && (
-              <span className="ml-1 inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-md bg-slate-800 text-[11px] font-mono text-slate-300">
+              <span className="ml-1.5 inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-md bg-slate-800 text-[11px] font-mono text-slate-300 flex-shrink-0">
                 {t.exitDigit}
               </span>
             )}
@@ -329,8 +341,10 @@ function TransactionRow({
         )}
       </div>
 
-      <div className="text-right tabular-nums justify-self-end pr-2">
+      {/* 3. Stake & P/L */}
+      <div className="text-right tabular-nums justify-self-end pr-1 flex-shrink-0">
         <div className="font-medium text-slate-300 text-sm">${fmt(t.buyPrice)}</div>
+        
         {isOpen ? (
           <div className="text-amber-400 text-xs font-semibold mt-1 flex items-center justify-end gap-1">
             <span className="relative flex h-2 w-2">
@@ -340,10 +354,12 @@ function TransactionRow({
             LIVE
           </div>
         ) : (
-          <div className={cn(
-            "text-sm font-semibold mt-1 animate-trade-settle",
-            t.pnl >= 0 ? "text-emerald-400" : "text-rose-400",
-          )}>
+          <div
+            className={cn(
+              "text-sm font-semibold mt-1 animate-trade-settle",
+              t.pnl >= 0 ? "text-emerald-400" : "text-rose-400",
+            )}
+          >
             {t.pnl >= 0 ? "+" : ""}${fmt(t.pnl)}
           </div>
         )}

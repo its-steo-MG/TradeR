@@ -21,27 +21,22 @@ export function ContractBadge({
   size?: "sm" | "md";
   pulse?: boolean;
 }) {
-  const dim = size === "sm" ? "h-8 w-8 text-xs" : "h-10 w-10 text-sm";
+  // Make it smaller on mobile / tight spaces
+  const dim = size === "sm" 
+    ? "h-7 w-7 text-[10px]" 
+    : "h-9 w-9 text-xs";   // ← was h-10 w-10 text-sm
 
   const config = (() => {
     switch (kind) {
       case "even":
-        return {
-          label: "E",
-          bg: "bg-contract-even/15 text-contract-even ring-contract-even/40",
-          title: "Even",
-        };
+        return { label: "E", bg: "bg-contract-even/15 text-contract-even ring-contract-even/40", title: "Even" };
       case "odd":
-        return {
-          label: "O",
-          bg: "bg-contract-odd/15 text-contract-odd ring-contract-odd/40",
-          title: "Odd",
-        };
+        return { label: "O", bg: "bg-contract-odd/15 text-contract-odd ring-contract-odd/40", title: "Odd" };
       case "over":
         return {
           label: (
             <span className="flex items-center gap-0.5 leading-none">
-              <span className="text-[0.7em]">▲</span>
+              <span className="text-[0.65em]">▲</span>
               <span className="font-mono">{barrier ?? 0}</span>
             </span>
           ),
@@ -52,7 +47,7 @@ export function ContractBadge({
         return {
           label: (
             <span className="flex items-center gap-0.5 leading-none">
-              <span className="text-[0.7em]">▼</span>
+              <span className="text-[0.65em]">▼</span>
               <span className="font-mono">{barrier ?? 0}</span>
             </span>
           ),
@@ -63,7 +58,7 @@ export function ContractBadge({
         return {
           label: (
             <span className="flex items-center gap-0.5 leading-none">
-              <span>=</span>
+              <span className="text-xs">=</span>
               <span className="font-mono">{barrier ?? 0}</span>
             </span>
           ),
@@ -74,7 +69,7 @@ export function ContractBadge({
         return {
           label: (
             <span className="flex items-center gap-0.5 leading-none">
-              <span>≠</span>
+              <span className="text-xs">≠</span>
               <span className="font-mono">{barrier ?? 0}</span>
             </span>
           ),
@@ -82,11 +77,7 @@ export function ContractBadge({
           title: `Differs ${barrier ?? 0}`,
         };
       default:
-        return {
-          label: "?",
-          bg: "bg-muted text-muted-foreground ring-border",
-          title: String(kind),
-        };
+        return { label: "?", bg: "bg-muted text-muted-foreground ring-border", title: String(kind) };
     }
   })();
 
