@@ -137,12 +137,14 @@ export function RunPanel({ open, onClose }: { open: boolean; onClose: () => void
           </div>
         </div>
 
-        {/* Status Banner */}
+        {/* Status Banner - Updated with Insufficient Balance */}
         {showBanner && finishedReason && (
           <div
             className={`mx-5 mt-4 px-5 py-4 rounded-2xl flex items-start gap-4 border ${
               finishedReason === "target"
                 ? "bg-emerald-500/10 border-emerald-500/50 text-emerald-400"
+                : finishedReason === "insufficient"
+                ? "bg-amber-500/10 border-amber-500/50 text-amber-400"
                 : "bg-rose-500/10 border-rose-500/50 text-rose-400"
             }`}
           >
@@ -155,11 +157,15 @@ export function RunPanel({ open, onClose }: { open: boolean; onClose: () => void
               <p className="font-semibold text-lg">
                 {finishedReason === "target"
                   ? `🎉 ${marketName} reached Target Profit!`
+                  : finishedReason === "insufficient"
+                  ? "Insufficient Balance"
                   : "Maximum Stop Loss Reached"}
               </p>
               <p className="text-sm mt-1 opacity-90">
                 {finishedReason === "target"
                   ? `Final Profit: +$${totals.pnl.toFixed(2)}`
+                  : finishedReason === "insufficient"
+                  ? "Please recharge your account to continue auto-trading."
                   : `Loss: -$${Math.abs(totals.pnl).toFixed(2)}`}
               </p>
             </div>

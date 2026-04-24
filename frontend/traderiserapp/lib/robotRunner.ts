@@ -9,13 +9,41 @@ import { recordBuy, recordSettlement } from "@/lib/positionsStore";
 import { sfx } from "@/lib/sound";
 import { toast } from "sonner";
 import { isWinningDigit } from "@/lib/contracts";
-import type { DigitContractKind } from "@/lib/types/positions";
 
 // Safe local helpers
 const getAccountType = (): "standard" | "demo" => {
   if (typeof window === "undefined") return "standard";
   const saved = localStorage.getItem("account_type");
   return saved === "demo" ? "demo" : "standard";
+};
+
+const getCurrentBalance = (): number => {
+  if (typeof window === "undefined") return 0;
+  const raw = localStorage.getItem("user_session");
+  if (!raw) return 0;
+
+  try {
+    const userData = JSON.parse(raw) as { accounts?: Array<Record<string, unknown>> };
+    const activeId = localStorage.getItem("active_account_id");
+    const accountType = getAccountType();
+
+    let currentAcc = userData.accounts?.find((acc) => {
+      const accData = acc as Record<string, unknown>;
+      const accId = String(accData.id ?? "");
+      const accType = String(accData.account_type ?? "");
+      return accId === String(activeId) || accType === accountType;
+    });
+
+    if (!currentAcc && userData.accounts?.length) {
+      currentAcc = userData.accounts[0];
+    }
+
+    const balance = (currentAcc as Record<string, unknown>)?.balance;
+    return Number(balance) || 0;
+  } catch (err) {
+    console.error("Failed to get current balance in robotRunner:", err);
+    return 0;
+  }
 };
 
 const newId = () =>
@@ -33,7 +61,7 @@ type State = {
   martingaleLevel: number;
   sessionPnl: number;
   runs: number;
-  finishedReason?: "target" | "stoploss" | "maxruns" | "manual";
+  finishedReason?: "target" | "stoploss" | "maxruns" | "manual" | "insufficient";
 };
 
 const listeners = new Set<() => void>();
@@ -108,12 +136,25 @@ async function placeOne() {
 
   const cfg = state.config;
   const stake = state.currentStake;
+
+  // ====================== BALANCE CHECK ======================
+  const currentBalance = getCurrentBalance();
+  if (currentBalance < stake) {
+    toast.error("Insufficient Balance", {
+      description: `Required: $${stake.toFixed(2)} | Available: $${currentBalance.toFixed(2)}\n\nPlease recharge your account to continue.`,
+      duration: 15000,
+    });
+    setState({ finishedReason: "insufficient" });
+    stop();
+    return;
+  }
+  // ===========================================================
+
   const openId = newId();
   const txId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const account_type = getAccountType();
 
   try {
-    // Base payload with correct literal types
     const basePayload = {
       market_id: cfg.marketId,
       digit_contract_type: cfg.contractKind as "over" | "under" | "matches" | "differs" | "even" | "odd",
@@ -163,13 +204,13 @@ async function placeOne() {
     const realDigit = Number(
       (result && typeof result === "object" && "last_digit" in result)
         ? (result as Record<string, unknown>).last_digit
-        : trade.last_digit_outcome ??
-          trade.last_digit ??
-          0,
+        : (trade as Record<string, unknown>).last_digit_outcome ??
+          (trade as Record<string, unknown>).last_digit ??
+          0
     );
 
-    let isWin = trade.is_win === true;
-    if (trade.is_win === undefined || trade.is_win === null) {
+    let isWin = (trade as Record<string, unknown>).is_win === true;
+    if ((trade as Record<string, unknown>).is_win === undefined || (trade as Record<string, unknown>).is_win === null) {
       isWin = isWinningDigit(
         cfg.contractKind,
         ["over", "under", "matches", "differs"].includes(cfg.contractKind)
@@ -182,9 +223,9 @@ async function placeOne() {
     const profitFromResult = Number(
       (result && typeof result === "object" && "total_profit" in result)
         ? (result as Record<string, unknown>).total_profit
-        : trade.total_profit ??
-          trade.profit ??
-          0,
+        : (trade as Record<string, unknown>).total_profit ??
+          (trade as Record<string, unknown>).profit ??
+          0
     );
 
     const profit = isWin ? Math.abs(profitFromResult) : -Number(stake);
@@ -286,18 +327,14 @@ async function placeOne() {
     if (cfg.targetProfit > 0 && nextPnl >= cfg.targetProfit) {
       setState({ finishedReason: "target" });
       stop();
-      toast.success(`🎉 ${cfg.market} reached Target Profit! +$${nextPnl.toFixed(2)}`, {
-        duration: 15000,
-      });
+      toast.success(`🎉 ${cfg.market} reached Target Profit! +$${nextPnl.toFixed(2)}`, { duration: 15000 });
       return;
     }
 
     if (cfg.stopLoss > 0 && nextPnl <= -Math.abs(cfg.stopLoss)) {
       setState({ finishedReason: "stoploss" });
       stop();
-      toast.error(`Maximum Stop Loss Reached: -$${Math.abs(nextPnl).toFixed(2)}`, {
-        duration: 12000,
-      });
+      toast.error(`Maximum Stop Loss Reached: -$${Math.abs(nextPnl).toFixed(2)}`, { duration: 12000 });
       return;
     }
 

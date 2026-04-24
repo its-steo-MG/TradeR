@@ -76,6 +76,32 @@ type Market = {
   market_type?: { name: string };
 };
 
+// ==================== BALANCE CHECK HELPER ====================
+const getCurrentBalance = (): number => {
+  if (typeof window === "undefined") return 0;
+  const raw = localStorage.getItem("user_session");
+  if (!raw) return 0;
+
+  try {
+    const userData = JSON.parse(raw) as { accounts?: Account[] };
+    const activeId = localStorage.getItem("active_account_id");
+    const accountType = getAccountType();
+
+    let currentAcc = userData.accounts?.find((acc) => 
+      String(acc.id) === String(activeId) || acc.account_type === accountType
+    );
+
+    if (!currentAcc && userData.accounts?.length) {
+      currentAcc = userData.accounts[0];
+    }
+
+    return Number(currentAcc?.balance) || 0;
+  } catch (err) {
+    console.error("Failed to get current balance:", err);
+    return 0;
+  }
+};
+
 // ==================== COMPONENT ====================
 
 export default function TradingPage() {
@@ -130,7 +156,7 @@ export default function TradingPage() {
     }
   }, [selectedMarketId]);
 
-  // Fetch Markets - Completely clean (no `any`)
+  // Fetch Markets
   useEffect(() => {
     const fetchMarkets = async () => {
       const token = getToken();
@@ -294,13 +320,22 @@ export default function TradingPage() {
       });
     });
 
-  // ====================== MANUAL TRADE ======================
+  // ====================== MANUAL TRADE WITH BALANCE CHECK ======================
   const handlePlaceTrade = useCallback(
     async (kind: DigitContractKind) => {
       if (!marketsLoaded || !selectedMarketId) {
         alert("Please wait for markets to load and select a market.");
         return;
       }
+
+      // ==================== NEW BALANCE CHECK ====================
+      const currentBalance = getCurrentBalance();
+      if (currentBalance < stake) {
+        alert(`Insufficient Balance!\n\nRequired: $${stake}\nAvailable: $${currentBalance.toFixed(2)}\n\nPlease recharge your account to trade.`);
+        return;
+      }
+      // ===========================================================
+
       if (stake < 0.5) {
         alert("Minimum stake is $0.5");
         return;
@@ -345,7 +380,6 @@ export default function TradingPage() {
 
         const responseData = (apiResponse as TradeResponse)?.data ?? apiResponse;
 
-        // Safe trade extraction
         let trade: DigitTradeData | undefined;
 
         if (responseData && typeof responseData === "object" && responseData !== null) {
@@ -363,7 +397,6 @@ export default function TradingPage() {
           throw new Error("Invalid trade response from server");
         }
 
-        // Safe root-level property access
         const rootData = responseData && typeof responseData === "object" && responseData !== null
           ? (responseData as Record<string, unknown>)
           : {};
