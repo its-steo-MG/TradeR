@@ -9,19 +9,14 @@ from .models import User, Account, SuspensionEvidence
 from dashboard.models import Transaction
 
 
-# ====================== Inlines ======================
-class SuspensionEvidenceInline(admin.TabularInline):
-    model = SuspensionEvidence
-    extra = 0
-    fields = ('evidence_file', 'description', 'status', 'reviewed_by', 'reviewed_at')
-    fk_name = 'user'
-    readonly_fields = ('status', 'reviewed_by', 'reviewed_at')
-    can_delete = True
-    show_change_link = True
-
-
+# ====================== Forms ======================
 class AccountForm(forms.ModelForm):
-    balance = forms.DecimalField(max_digits=12, decimal_places=2, required=False)
+    balance = forms.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        required=False,
+        help_text="Edit this to update the main USD wallet balance"
+    )
 
     class Meta:
         model = Account
@@ -33,26 +28,63 @@ class AccountForm(forms.ModelForm):
             self.fields['balance'].initial = self.instance.balance
 
 
+# ====================== Inline for User Admin ======================
 class AccountInline(admin.TabularInline):
     model = Account
     extra = 0
     form = AccountForm
     fields = ('account_type', 'balance', 'is_wallet_verified')
 
+    def save_formset(self, request, form, formset, change):
+        """Important: Handle balance updates in inline forms"""
+        instances = formset.save(commit=False)
+        for form_obj in formset.forms:
+            if form_obj.has_changed() and 'balance' in form_obj.changed_data:
+                new_balance = form_obj.cleaned_data.get('balance')
+                if new_balance is not None:
+                    instance = form_obj.instance
+                    instance.balance = new_balance  # Trigger setter
+        formset.save_m2m()
+
+
+# ====================== Suspension Evidence Inline ======================
+class SuspensionEvidenceInline(admin.TabularInline):
+    model = SuspensionEvidence
+    extra = 0
+    fields = ('evidence_file', 'description', 'status', 'reviewed_by', 'reviewed_at')
+    fk_name = 'user'
+    readonly_fields = ('status', 'reviewed_by', 'reviewed_at')
+    can_delete = True
+    show_change_link = True
+
+
+# ====================== Account Admin (Standalone) ======================
+class AccountAdmin(admin.ModelAdmin):
+    form = AccountForm
+    
+    list_display = ('user_username', 'account_type', 'balance', 'is_wallet_verified', 'id')
+    list_filter = ('account_type', 'is_wallet_verified')
+    list_editable = ('is_wallet_verified',)
+    
+    search_fields = ('user__username', 'user__email', 'user__phone')
+    autocomplete_fields = ['user']
+
+    def user_username(self, obj):
+        if obj.user:
+            url = reverse('admin:accounts_user_change', args=[obj.user.pk])
+            return format_html('<a href="{}">{}</a>', url, obj.user.username)
+        return "—"
+    
+    user_username.short_description = 'Username'
+    user_username.admin_order_field = 'user__username'
 
     def save_model(self, request, obj, form, change):
+        """Handle balance update on standalone Account page"""
         if change and 'balance' in form.changed_data:
-            old_balance = obj.balance
-            new_balance = form.cleaned_data['balance']
-            diff = new_balance - old_balance
-            if diff != 0:
-                obj.balance = new_balance
-                Transaction.objects.create(
-                    account=obj,
-                    amount=diff,
-                    transaction_type='deposit' if diff > 0 else 'withdrawal',
-                    description=f"Admin balance update: Account {obj.id}"
-                )
+            new_balance = form.cleaned_data.get('balance')
+            if new_balance is not None:
+                obj.balance = new_balance   # This calls the property setter
+
         super().save_model(request, obj, form, change)
 
 
@@ -126,52 +158,6 @@ class CustomUserAdmin(UserAdmin):
         if obj.is_marketo and not obj.referral_code:
             obj.referral_code = obj.generate_referral_code()
             self.message_user(request, f"Generated referral code {obj.referral_code} for {obj.username}")
-        super().save_model(request, obj, form, change)
-
-
-# ====================== Account Admin with Quick Username Search ======================
-class AccountAdmin(admin.ModelAdmin):
-    form = AccountForm
-    
-    list_display = ('user_username', 'account_type', 'balance', 'is_wallet_verified', 'id')
-    list_filter = ('account_type', 'is_wallet_verified')
-    
-    # Only is_wallet_verified is safely editable on the list page
-    list_editable = ('is_wallet_verified',)
-    
-    # Quick search by username
-    search_fields = ('user__username', 'user__email', 'user__phone')
-    
-    # Searchable user dropdown
-    autocomplete_fields = ['user']
-
-    def user_username(self, obj):
-        if obj.user:
-            url = reverse(
-                'admin:{}_{}_change'.format(
-                    obj.user._meta.app_label,
-                    obj.user._meta.model_name
-                ),
-                args=[obj.user.pk]
-            )
-            return format_html('<a href="{}">{}</a>', url, obj.user.username)
-        return "—"
-    
-    user_username.short_description = 'Username'
-    user_username.admin_order_field = 'user__username'
-
-    def save_model(self, request, obj, form, change):
-        if change and 'balance' in form.changed_data:
-            old_balance = obj.balance
-            new_balance = form.cleaned_data['balance']
-            diff = new_balance - old_balance
-            if diff != 0:
-                Transaction.objects.create(
-                    account=obj,
-                    amount=diff,
-                    transaction_type='deposit' if diff > 0 else 'withdrawal',
-                    description=f"Admin balance update: Account {obj.id}"
-                )
         super().save_model(request, obj, form, change)
 
 

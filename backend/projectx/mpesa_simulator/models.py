@@ -2,18 +2,19 @@
 from django.db import models
 from django.contrib.auth.hashers import make_password, check_password
 from decimal import Decimal
-from accounts.models import User  # Link to TradeRiser User
-from wallet.models import MpesaNumber  # For phone if available
+from accounts.models import User
+from wallet.models import MpesaNumber
 from django.utils import timezone
 import random
 import string
+
 
 class MpesaUser(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='mpesa_user')
     real_name = models.CharField(max_length=100)
     pin = models.CharField(max_length=128)  # Hashed 4-digit PIN
-    phone_number = models.CharField(max_length=15)  # Synced from wallet or user
-    balance = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))  # KSH
+    phone_number = models.CharField(max_length=15)
+    balance = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
     profile_photo = models.ImageField(
         upload_to='mpesa_avatars/%Y/%m/%d/',
         blank=True,
@@ -51,12 +52,13 @@ class MpesaTransaction(models.Model):
         ('business', 'Business'),
         ('other', 'Other'),
     ]
+
     mpesa_user = models.ForeignKey(MpesaUser, on_delete=models.CASCADE, related_name='transactions')
     transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPES)
     amount = models.DecimalField(max_digits=14, decimal_places=2)
     description = models.TextField(blank=True)
-    reference = models.CharField(max_length=50, blank=True, null=True)  # Removed unique=True to allow same reference for all synced txns
-    mpesa_id = models.CharField(max_length=50, blank=True, null=True, unique=True)  # Unique M-Pesa style ID
+    reference = models.CharField(max_length=50, blank=True, null=True)
+    mpesa_id = models.CharField(max_length=50, blank=True, null=True, unique=True)
     recipient_name = models.CharField(max_length=100, blank=True)
     recipient_phone = models.CharField(max_length=15, blank=True)
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, blank=True)
@@ -65,6 +67,42 @@ class MpesaTransaction(models.Model):
     class Meta:
         ordering = ['-created_at']
 
+    def generate_mpesa_id(self, reference_id: str = None):
+        """Generate deterministic M-Pesa ID matching exactly with frontend"""
+        createdDate = self.created_at or timezone.now()
+
+        # Year letter: A=2006, B=2007, ..., U=2026, ...
+        yearOffset = createdDate.year - 2005
+        yearChar = chr(64 + yearOffset) if 1 <= yearOffset <= 26 else "Z"
+
+        # Month letter: A=Jan, B=Feb, ..., L=Dec
+        monthChar = chr(64 + createdDate.month)
+
+        # Day character
+        dayNum = createdDate.day
+        if 1 <= dayNum <= 9:
+            dayChar = str(dayNum)
+        elif 10 <= dayNum <= 31:
+            dayChar = chr(64 + dayNum - 9)
+        else:
+            dayChar = "A"
+
+        datePrefix = yearChar + monthChar + dayChar
+
+        # Deterministic suffix based on reference_id (same logic as frontend)
+        seed = reference_id or self.reference or str(self.pk) or "default"
+        hash_val = 0
+        for char in seed:
+            hash_val = (hash_val * 31 + ord(char)) & 0xFFFFFFFF
+
+        chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        suffix = ""
+        for i in range(7):
+            hash_val = (hash_val * 31 + i) & 0xFFFFFFFF
+            suffix += chars[hash_val % len(chars)]
+
+        return datePrefix + suffix
+
     def save(self, *args, **kwargs):
         if not self.reference:
             prefix = random.choice(string.ascii_uppercase)
@@ -72,41 +110,9 @@ class MpesaTransaction(models.Model):
             self.reference = prefix + suffix
 
         if not self.mpesa_id:
-            now = timezone.now()  # Use transaction creation time (timezone-aware)
-
-            # Year encoding: A=2006, B=2007, ..., Z=2031
-            year_offset = now.year - 2005
-            if 1 <= year_offset <= 26:
-                year_char = chr(ord('A') + year_offset - 1)
-            else:
-                year_char = 'Z'  # fallback for far future years
-
-            # Month: A=Jan (1), B=Feb (2), ..., L=Dec (12)
-            month_char = chr(ord('A') + now.month - 1)
-
-            # Day: 1-9 → '1'-'9', 10-31 → 'A' to 'V'
-            day_num = now.day
-            if 1 <= day_num <= 9:
-                day_char = str(day_num)
-            elif 10 <= day_num <= 31:
-                day_char = chr(ord('A') + day_num - 10)
-            else:
-                day_char = 'A'  # fallback (should never happen)
-
-            date_prefix = year_char + month_char + day_char
-
-            # Generate 7-char random alphanumeric suffix (uppercase)
-            suffix_chars = string.ascii_uppercase + string.digits
-            suffix = ''.join(random.choices(suffix_chars, k=7))
-
-            candidate = date_prefix + suffix
-
-            # Ensure uniqueness (extremely rare collision, but safe)
-            while MpesaTransaction.objects.filter(mpesa_id=candidate).exists():
-                suffix = ''.join(random.choices(suffix_chars, k=7))
-                candidate = date_prefix + suffix
-
-            self.mpesa_id = candidate
+            # Use WalletTransaction reference_id if passed via signal
+            ref_for_id = getattr(self, '_wallet_reference_id', self.reference)
+            self.mpesa_id = self.generate_mpesa_id(reference_id=ref_for_id)
 
         super().save(*args, **kwargs)
 
