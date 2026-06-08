@@ -255,6 +255,7 @@ export interface Trader {
   bio: string
   risk_level: "low" | "medium" | "high"
   min_allocation: number
+  max_allocation: number
   performance_fee_percent: number
   is_active: boolean
   win_rate: number
@@ -289,6 +290,7 @@ export interface BecomeTraderPayload {
   bio: string
   risk_level: "low" | "medium" | "high"
   min_allocation: number
+  max_allocation: number
   performance_fee_percent: number
 }
 
@@ -812,7 +814,8 @@ export const createAgentDeposit = async (data: {
   agent_id: number
   account: number
   amount_kes: number
-  transaction_code: string
+  transaction_code?: string      // ← Made optional
+  binance_tx_hash?: string
   screenshot?: File
   method: string
 }) => {
@@ -823,16 +826,27 @@ export const createAgentDeposit = async (data: {
 
   const method = data.method.toLowerCase()
 
-  if (method === "mpesa") {
-    fd.append("transaction_code", data.transaction_code)
+  if (method === "binance") {
+    if (data.binance_tx_hash) {
+      fd.append("binance_tx_hash", data.binance_tx_hash)
+    }
+    if (data.screenshot) fd.append("screenshot", data.screenshot)
+  } 
+  else if (method === "mpesa") {
+    if (data.transaction_code) fd.append("transaction_code", data.transaction_code)
     if (!data.screenshot) return { error: "Screenshot required for M-Pesa" } as ApiResponse<AgentDeposit>
     fd.append("screenshot", data.screenshot)
-  } else if (method === "paypal") {
-    fd.append("paypal_transaction_id", data.transaction_code)
-  } else if (method === "bank_transfer") {
-    fd.append("bank_reference", data.transaction_code)
+  } 
+  else if (method === "paypal") {
+    if (data.transaction_code) fd.append("paypal_transaction_id", data.transaction_code)
+  } 
+  else if (method === "bank_transfer") {
+    if (data.transaction_code) fd.append("bank_reference", data.transaction_code)
     if (!data.screenshot) return { error: "Screenshot required for Bank Transfer" } as ApiResponse<AgentDeposit>
     fd.append("screenshot", data.screenshot)
+  } 
+  else {
+    if (data.transaction_code) fd.append("transaction_code", data.transaction_code)
   }
 
   return apiRequestWithFile<AgentDeposit>("/agents/deposit/", fd)

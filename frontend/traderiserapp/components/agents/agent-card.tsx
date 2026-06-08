@@ -6,7 +6,7 @@ import Image from "next/image"
 import { useState } from "react"
 import DepositModal from "./deposit-modal"
 import WithdrawalModal from "./withdrawal-modal"
-import PaymentInfoDisplay from "./payment-info-display"  // NEW: Import to show full payment info
+import PaymentInfoDisplay from "./payment-info-display"
 
 interface AgentCardProps {
   agent: {
@@ -31,6 +31,7 @@ interface AgentCardProps {
     bank_account_number?: string
     bank_swift?: string
     mpesa_phone?: string
+    binance_address?: string          // ← NEW: Added for Binance
   }
 }
 
@@ -51,10 +52,15 @@ export default function AgentCard({ agent }: AgentCardProps) {
         color: "text-emerald-700",
         bgColor: "bg-emerald-50",
       },
+      binance: { 
+        label: "Binance", 
+        color: "text-amber-700", 
+        bgColor: "bg-amber-50" 
+      },   // ← NEW
     }
     return (
       badges[method.toLowerCase()] || {
-        label: method,
+        label: method.charAt(0).toUpperCase() + method.slice(1),
         color: "text-slate-700",
         bgColor: "bg-slate-50",
       }
@@ -65,7 +71,7 @@ export default function AgentCard({ agent }: AgentCardProps) {
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden hover:shadow-lg hover:border-purple-300 transition-all duration-300 flex flex-col h-full">
-      {/* NEW: Full-width Banner Image Covering Upper Part */}
+      {/* Banner Image */}
       <div className="relative w-full h-32 sm:h-40">
         <Image
           src={agent.image || "/placeholder-agent.jpg"}
@@ -76,11 +82,10 @@ export default function AgentCard({ agent }: AgentCardProps) {
         />
       </div>
 
-      {/* Header with Agent Info (below banner) */}
+      {/* Header */}
       <div className="p-4 sm:p-6 border-b border-slate-200">
         <div className="flex items-start justify-between gap-3 sm:gap-4">
           <div className="flex-1 min-w-0 space-y-1">
-            {/* Agent Name */}
             <h3 className="text-base sm:text-lg font-bold text-slate-900 truncate">{agent.name}</h3>
 
             {/* Method Badge */}
@@ -145,14 +150,14 @@ export default function AgentCard({ agent }: AgentCardProps) {
         </div>
       )}
 
-      {/* Agent Instructions (Full Description - No Clamping) */}
+      {/* Instructions */}
       {agent.instructions && (
         <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200 bg-blue-50 max-h-40 overflow-y-auto">
-          <p className="text-xs text-blue-700">{agent.instructions}</p>  {/* UPDATED: Removed line-clamp-2 */}
+          <p className="text-xs text-blue-700">{agent.instructions}</p>
         </div>
       )}
 
-      {/* NEW: Full Payment Info Display */}
+      {/* Payment Info Display - Now includes Binance */}
       <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200">
         <p className="text-xs text-slate-600 mb-2 font-semibold">Payment Details</p>
         <PaymentInfoDisplay 
@@ -165,6 +170,7 @@ export default function AgentCard({ agent }: AgentCardProps) {
             bank_account_number: agent.bank_account_number,
             bank_swift: agent.bank_swift,
             mpesa_phone: agent.mpesa_phone,
+            binance_address: agent.binance_address,     // ← NEW
           }} 
         />
       </div>

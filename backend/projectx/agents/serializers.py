@@ -16,14 +16,14 @@ class AgentSerializer(serializers.ModelSerializer):
             'id', 'name', 'method', 'image', 'phone', 'email',
             'mpesa_phone', 'paypal_email', 'paypal_link',
             'bank_name', 'bank_account_name', 'bank_account_number',
+            'binance_address',                    # ← NEW
             'instructions', 'deposit_rate_kes_to_usd', 'withdrawal_rate_usd_to_kes',
             'location', 'rating', 'reviews', 'min_amount', 'max_amount',
             'response_time', 'verified'
         ]
 
     def get_image(self, obj):
-        if obj.profile_picture:  # ← FIXED: was obj.image
-            # For S3: use .url (full public URL)
+        if obj.profile_picture:
             request = self.context.get('request')
             if request:
                 return request.build_absolute_uri(obj.profile_picture.url)
@@ -73,14 +73,14 @@ class AgentDepositSerializer(serializers.ModelSerializer):
         if agent.max_amount and amount_kes > agent.max_amount:
             raise serializers.ValidationError({"amount_kes": f"Maximum for this agent is {agent.max_amount} KES"})
 
-        # Proof validation
+        # Proof validation per method
         if method == 'mpesa':
             code = data.get('transaction_code', '').strip()
             if not code:
                 raise serializers.ValidationError({"transaction_code": "M-Pesa code required"})
             if len(code) != 10 or not code.isalnum():
                 raise serializers.ValidationError({"transaction_code": "Invalid M-Pesa code"})
-            if 'screenshot' not in data or not data['screenshot']:
+            if not data.get('screenshot'):
                 raise serializers.ValidationError({"screenshot": "Screenshot required for M-Pesa"})
 
         elif method == 'paypal':
@@ -94,8 +94,23 @@ class AgentDepositSerializer(serializers.ModelSerializer):
             ref = data.get('bank_reference', '').strip()
             if not ref:
                 raise serializers.ValidationError({"bank_reference": "Bank reference required"})
-            if 'screenshot' not in data or not data['screenshot']:
+            if not data.get('screenshot'):
                 raise serializers.ValidationError({"screenshot": "Screenshot required for Bank Transfer"})
+
+        elif method == 'binance':                     # ← NEW
+            tx_hash = data.get('binance_tx_hash', '').strip()
+            if not tx_hash:
+                raise serializers.ValidationError({
+                    "binance_tx_hash": "Binance Transaction Hash (TxID) is required"
+                })
+            if len(tx_hash) < 8:
+                raise serializers.ValidationError({
+                    "binance_tx_hash": "Invalid Binance Transaction Hash"
+                })
+            if not data.get('screenshot'):
+                raise serializers.ValidationError({
+                    "screenshot": "Screenshot of the transfer is required for Binance"
+                })
 
         # DO NOT calculate amount_usd here
         return data
@@ -119,6 +134,7 @@ class AgentDepositSerializer(serializers.ModelSerializer):
         # Create and return
         deposit = AgentDeposit.objects.create(**validated_data)
         return deposit
+
 
 class AgentWithdrawalSerializer(serializers.ModelSerializer):
     agent = serializers.PrimaryKeyRelatedField(
@@ -177,6 +193,9 @@ class AgentWithdrawalSerializer(serializers.ModelSerializer):
 
             if errors:
                 raise serializers.ValidationError(errors)
+
+        # === BINANCE (No extra withdrawal fields needed for now) ===
+        # Just pass through
 
         # === MPESA (no extra fields needed) ===
         # Just pass through

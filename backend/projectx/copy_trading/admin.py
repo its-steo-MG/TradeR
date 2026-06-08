@@ -11,8 +11,9 @@ class TraderAdmin(admin.ModelAdmin):
     list_display = (
         'user',
         'risk_level_display',
-        'performance_fee_percent',
         'min_allocation',
+        'max_allocation',           # ← NEW
+        'performance_fee_percent',
         'is_active',
         'win_rate_display',
         'average_return_display',
@@ -21,6 +22,14 @@ class TraderAdmin(admin.ModelAdmin):
     list_filter = ('risk_level', 'is_active')
     search_fields = ('user__username', 'user__email', 'bio')
     readonly_fields = ('created_at',)
+    fieldsets = (
+        (None, {
+            'fields': ('user', 'bio', 'risk_level', 'is_active')
+        }),
+        ('Allocation Settings', {
+            'fields': ('min_allocation', 'max_allocation', 'performance_fee_percent')
+        }),
+    )
 
     def risk_level_display(self, obj):
         colors = {'low': 'green', 'medium': 'orange', 'high': 'red'}
@@ -134,13 +143,13 @@ class CopiedTradeAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         return False  # CopiedTrade is auto-created only via signals
 
-    # Optional: Allow deletion for cleanup, but prevent changing data
+    # Prevent editing existing records
     def has_change_permission(self, request, obj=None):
-        return False  # Make all existing records read-only
+        return False
 
-    # Extra safety
+    # Extra safety - disable bulk delete
     def get_actions(self, request):
         actions = super().get_actions(request)
         if 'delete_selected' in actions:
-            del actions['delete_selected']  # Optional: disable bulk delete
+            del actions['delete_selected']
         return actions

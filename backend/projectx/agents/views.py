@@ -37,10 +37,22 @@ class AgentDepositView(APIView):
             # === ADMIN EMAIL NOTIFICATION (New Deposit Alert) ===
             try:
                 proof_link = ""
+                tx_info = ""
+
                 if deposit.screenshot:
                     proof_link = request.build_absolute_uri(deposit.screenshot.url)
-                elif deposit.paypal_transaction_id:
+
+                # Handle different methods
+                if deposit.payment_method == 'paypal' and deposit.paypal_transaction_id:
                     proof_link = f"https://www.paypal.com/activity/payment/{deposit.paypal_transaction_id}"
+                    tx_info = deposit.paypal_transaction_id
+                elif deposit.payment_method == 'binance' and deposit.binance_tx_hash:
+                    tx_info = deposit.binance_tx_hash
+                    proof_link = f"https://bscscan.com/tx/{deposit.binance_tx_hash}"  # Common for Binance Smart Chain
+                elif deposit.transaction_code:
+                    tx_info = deposit.transaction_code
+                elif deposit.bank_reference:
+                    tx_info = deposit.bank_reference
 
                 send_mail(
                     subject=f"New Deposit Request – {deposit.get_payment_method_display()}",
@@ -49,12 +61,12 @@ class AgentDepositView(APIView):
                         f"Amount: KSh {deposit.amount_kes:,.2f} → ${deposit.amount_usd:,.2f} USD\n"
                         f"Agent: {deposit.agent.name} ({deposit.agent.method})\n"
                         f"Method: {deposit.get_payment_method_display()}\n"
-                        f"Transaction Code / ID: {deposit.transaction_code or deposit.paypal_transaction_id or deposit.bank_reference or '—'}\n"
+                        f"Transaction Code / ID: {tx_info or '—'}\n"
                         f"Proof: {proof_link or 'No proof yet'}\n"
                         f"Time: {timezone.localtime().strftime('%Y-%m-%d %H:%M %Z')}\n\n"
                         f"Go to admin → Agent Deposits to verify/reject."
                     ),
-                    from_email=settings.DEFAULT_FROM_EMAIL,   # Resend + mail.traderiserapp.com
+                    from_email=settings.DEFAULT_FROM_EMAIL,
                     recipient_list=[ADMIN_EMAIL],
                     fail_silently=False,
                 )
@@ -277,8 +289,8 @@ class AgentWithdrawalVerifyView(APIView):
                 f"   • Account Number: {withdrawal.user_bank_account_number}\n"
                 f"   • SWIFT: {withdrawal.user_bank_swift or 'N/A'}"
             )
-        else:  # mpesa
-            phone = getattr(withdrawal.user, 'phone', 'Not set')   # Fixed: use .phone
+        else:  # mpesa or binance (no extra user details needed for deposit side)
+            phone = getattr(withdrawal.user, 'phone', 'Not set')
             return f"   • M-Pesa Phone: {phone}"
 
 

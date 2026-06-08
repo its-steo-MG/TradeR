@@ -139,6 +139,7 @@ export function Sidebar({
       ? activeAccount.account_type === "pro-fx"
         ? [
             { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+            //{ href: "/forex-trading", label: "Forex Trading", icon: Zap },
             { href: "/fx-pro-trading", label: "Pro-FX Trading", icon: Zap },
             { href: "/fx-pro-robots", label: "Pro-Robots", icon: Bot },            
             { href: "/wallet", label: "Wallet", icon: WalletIcon },
@@ -152,6 +153,7 @@ export function Sidebar({
         : [
             { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
             { href: "/trading", label: "Trading", icon: TrendingUp },
+            //{ href: "/forex-trading", label: "Forex Trading", icon: Zap },
             { href: "/digits-trading", label: "Digits Trading", icon: Hash },
             { href: "/robots", label: "Robots", icon: Bot },
             { href: "/wallet", label: "Wallet", icon: WalletIcon },
@@ -167,6 +169,7 @@ export function Sidebar({
           //...(hasProFxAccount && loginType === "real"
           //  ? [{ href: "/fx-pro-trading", label: "Pro-FX Trading", icon: Zap }]
           //  : []),
+          //{ href: "/forex-trading", label: "Forex Trading", icon: Zap },
           { href: "/digits-trading", label: "Digits Trading", icon: Hash },
           { href: "/robots", label: "Robots", icon: Bot },
           { href: "/wallet", label: "Wallet", icon: WalletIcon },

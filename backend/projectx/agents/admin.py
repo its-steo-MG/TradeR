@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 class AgentAdmin(admin.ModelAdmin):
     list_display = ('name', 'method', 'is_active', 'location', 'verified')
     list_filter = ('method', 'is_active', 'verified')
-    search_fields = ('name', 'mpesa_phone', 'paypal_email')
+    search_fields = ('name', 'mpesa_phone', 'paypal_email', 'binance_address')
 
 
 class AgentDepositForm(forms.ModelForm):
@@ -39,10 +39,13 @@ class AgentDepositForm(forms.ModelForm):
 @admin.register(AgentDeposit)
 class AgentDepositAdmin(admin.ModelAdmin):
     form = AgentDepositForm
-    list_display = ('user', 'agent', 'amount_kes', 'amount_usd_display', 'method_badge', 'proof', 'status', 'verified_at')
+    list_display = ('user', 'agent', 'amount_kes', 'amount_usd_display', 
+                   'method_badge', 'proof', 'status', 'verified_at')
     list_filter = ('payment_method', 'status', 'agent__method')
-    search_fields = ('user__username', 'transaction_code', 'paypal_transaction_id', 'bank_reference')
-    readonly_fields = ('payment_method', 'amount_usd', 'created_at', 'updated_at', 'verified_at', 'verified_by')
+    search_fields = ('user__username', 'transaction_code', 'paypal_transaction_id', 
+                    'bank_reference', 'binance_tx_hash')   # ← NEW
+    readonly_fields = ('payment_method', 'amount_usd', 'created_at', 
+                      'updated_at', 'verified_at', 'verified_by')
     actions = ['verify_selected', 'reject_selected']
 
     def amount_usd_display(self, obj):
@@ -50,7 +53,12 @@ class AgentDepositAdmin(admin.ModelAdmin):
     amount_usd_display.short_description = "USD"
 
     def method_badge(self, obj):
-        icons = {'mpesa': 'Mobile', 'paypal': 'PayPal', 'bank_transfer': 'Bank'}
+        icons = {
+            'mpesa': 'Mobile',
+            'paypal': 'PayPal',
+            'bank_transfer': 'Bank',
+            'binance': 'Binance'          # ← NEW
+        }
         return format_html('<b>{}</b>', icons.get(obj.payment_method, ''))
     method_badge.short_description = "Method"
 
@@ -58,8 +66,18 @@ class AgentDepositAdmin(admin.ModelAdmin):
         if obj.paypal_transaction_id:
             url = f"https://www.paypal.com/activity/payment/{obj.paypal_transaction_id}"
             return format_html('<a href="{}" target="_blank">PayPal Tx</a>', url)
-        if obj.screenshot:
+
+        elif obj.binance_tx_hash:                                   # ← NEW
+            # Binance transaction explorer link (BSC / General)
+            explorer_url = f"https://bscscan.com/tx/{obj.binance_tx_hash}"
+            return format_html(
+                '<a href="{}" target="_blank">Binance Tx</a><br><small>{}</small>',
+                explorer_url, obj.binance_tx_hash[:16] + "..."
+            )
+
+        elif obj.screenshot:
             return format_html('<a href="{}" target="_blank">View Proof</a>', obj.screenshot.url)
+
         return "—"
     proof.short_description = "Proof"
 
@@ -96,7 +114,6 @@ class AgentDepositAdmin(admin.ModelAdmin):
                         wallet_type='main',
                         currency__code='USD'
                     )
-                    old_balance = wallet.balance
                     wallet.balance += deposit.amount_usd
                     wallet.save(update_fields=['balance'])
 
@@ -108,7 +125,7 @@ class AgentDepositAdmin(admin.ModelAdmin):
                         description=f"Verified deposit via {deposit.agent.name} ({deposit.amount_kes} KES → ${deposit.amount_usd} USD)"
                     )
 
-                    # === SEND EMAIL WITH RESEND (via django-anymail) ===
+                    # Send success email
                     html_content = render_to_string('emails/deposit_verified.html', {
                         'amount_kes': f"{deposit.amount_kes:,.2f}",
                         'amount_usd': f"{deposit.amount_usd:,.2f}",
@@ -119,7 +136,7 @@ class AgentDepositAdmin(admin.ModelAdmin):
                     email = EmailMultiAlternatives(
                         subject="Deposit Verified & Credited!",
                         body="Your deposit has been confirmed and added to your wallet.",
-                        from_email=settings.DEFAULT_FROM_EMAIL,   # Now uses Resend + mail.traderiserapp.com
+                        from_email=settings.DEFAULT_FROM_EMAIL,
                         to=[deposit.user.email]
                     )
                     email.attach_alternative(html_content, "text/html")
@@ -188,7 +205,12 @@ class AgentWithdrawalAdmin(admin.ModelAdmin):
     actions = ['complete_selected', 'reject_refund']
 
     def method_badge(self, obj):
-        icons = {'mpesa': 'Mobile', 'paypal': 'PayPal', 'bank_transfer': 'Bank'}
+        icons = {
+            'mpesa': 'Mobile',
+            'paypal': 'PayPal',
+            'bank_transfer': 'Bank',
+            'binance': 'Binance'          # ← NEW
+        }
         return format_html('<b>{}</b>', icons.get(obj.payment_method, ''))
     method_badge.short_description = "Method"
 

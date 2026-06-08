@@ -15,6 +15,17 @@ interface UserAccount {
   balance: number | string
 }
 
+// ✅ Updated payload to be compatible with createAgentDeposit
+interface AgentDepositPayload {
+  agent_id: number
+  account: number
+  amount_kes: number
+  transaction_code?: string          // optional
+  binance_tx_hash?: string
+  screenshot?: File
+  method: string
+}
+
 interface DepositModalProps {
   agent: {
     id: number
@@ -24,6 +35,7 @@ interface DepositModalProps {
     min_amount?: number | string
     max_amount?: number | string
     mpesa_phone?: string
+    binance_address?: string
   }
   onClose: () => void
   onSuccess?: () => void
@@ -88,32 +100,43 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
     if (agent.min_amount && amountNum < Number(agent.min_amount)) return toast.error(`Min: ${agent.min_amount} KES`)
     if (agent.max_amount && amountNum > Number(agent.max_amount)) return toast.error(`Max: ${agent.max_amount} KES`)
     if (!selectedAccount) return toast.error("Select account")
-    if (!transactionCode.trim()) return toast.error("Enter code/ID/reference")
 
     const methodLower = agent.method.toLowerCase()
-    if ((methodLower === "mpesa" || methodLower === "bank_transfer") && !screenshot) {
-      return toast.error("Upload proof screenshot")
+
+    if (!transactionCode.trim()) {
+      return toast.error(methodLower === "binance" 
+        ? "Please enter Binance Transaction Hash" 
+        : "Enter code/ID/reference")
+    }
+
+    if ((methodLower === "binance" || methodLower === "mpesa" || methodLower === "bank_transfer") && !screenshot) {
+      return toast.error("Please upload proof screenshot")
     }
 
     setLoading(true)
 
     try {
-      const res = await createAgentDeposit({
+      const payload: AgentDepositPayload = {
         agent_id: agent.id,
         account: selectedAccount!,
         amount_kes: Number(amountKes),
-        transaction_code: transactionCode.trim(),
-        screenshot: screenshot ?? undefined,
         method: agent.method,
-      })
+        screenshot: screenshot ?? undefined,
+      }
+
+      // Send the correct transaction field
+      if (methodLower === "binance") {
+        payload.binance_tx_hash = transactionCode.trim()
+      } else {
+        payload.transaction_code = transactionCode.trim()
+      }
+
+      const res = await createAgentDeposit(payload)
 
       if (res.error) {
-        const msg =
-          typeof res.error === "string"
-            ? res.error
-            : Object.values(res.error as Record<string, unknown>)
-                .flat()
-                .join(", ")
+        const msg = typeof res.error === "string"
+          ? res.error
+          : Object.values(res.error as Record<string, unknown>).flat().join(", ")
         throw new Error(msg)
       }
 
@@ -131,9 +154,13 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
   const method = agent.method.toLowerCase()
 
   const isFormValid =
-    !!amountKes && !!selectedAccount && !!transactionCode.trim() && (method === "paypal" || !!screenshot)
+    !!amountKes &&
+    !!selectedAccount &&
+    !!transactionCode.trim() &&
+    (method === "paypal" || !!screenshot)
 
   return (
+    // ... (your JSX remains exactly the same)
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
       <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-6 relative max-h-[90vh] overflow-y-auto">
         <button onClick={onClose} className="absolute top-4 right-4 text-slate-500 hover:text-slate-700">
@@ -145,6 +172,7 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
         <PaymentInfoDisplay method={agent.method} agent={agent} />
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* ... rest of your form (unchanged) ... */}
           <div>
             <p className="text-sm font-medium text-slate-700 mb-2">Amount in KES</p>
             <input
@@ -158,6 +186,7 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
             <p className="text-xs text-slate-500 mt-1">You&apos;ll get ~${usd} USD</p>
           </div>
 
+          {/* Account selection, Transaction field, Screenshot upload, Submit button - all unchanged */}
           {fetchError ? (
             <p className="text-red-600 text-sm">{fetchError}</p>
           ) : accounts.length === 0 ? (
@@ -179,27 +208,43 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
             </div>
           )}
 
+          {/* Transaction Field - unchanged */}
           <div>
             <p className="text-sm font-medium text-slate-700 mb-2">
-              {method === "paypal" ? "PayPal Transaction ID" : "Transaction Code/Reference"}
+              {method === "binance" 
+                ? "Binance Transaction Hash (TxID)" 
+                : method === "paypal" 
+                  ? "PayPal Transaction ID" 
+                  : "Transaction Code / Reference"}
             </p>
             <input
               type="text"
               value={transactionCode}
               onChange={(e) => setTransactionCode(e.target.value)}
               placeholder={
-                method === "paypal" ? "e.g. 9ABC123DEF456" : method === "mpesa" ? "e.g. SAG123XYZ45" : "e.g. REF123456"
+                method === "binance" 
+                  ? "Enter full Tx Hash (e.g. 0xabc123...)" 
+                  : method === "paypal" 
+                    ? "e.g. 9ABC123DEF456" 
+                    : method === "mpesa" 
+                      ? "e.g. SAG123XYZ45" 
+                      : "e.g. REF123456"
               }
               className="w-full p-3 rounded-xl border border-slate-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 bg-white text-slate-900"
             />
+            {method === "binance" && (
+              <p className="text-xs text-amber-600 mt-1">
+                Paste the complete transaction hash from Binance
+              </p>
+            )}
           </div>
 
-          {method !== "paypal" && (
+          {(method === "binance" || method === "mpesa" || method === "bank_transfer") && (
             <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center space-y-2 bg-slate-50">
               {preview ? (
                 <div className="space-y-2">
                   <div className="relative w-full h-32 sm:h-40 rounded-lg overflow-hidden">
-                    <Image src={preview || "/placeholder.svg"} alt="Preview" fill className="object-cover" />
+                    <Image src={preview} alt="Proof Preview" fill className="object-cover" />
                   </div>
                   <button
                     type="button"
@@ -215,7 +260,7 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
               ) : (
                 <label className="cursor-pointer">
                   <Upload className="w-8 h-8 mx-auto mb-2 text-slate-400" />
-                  <p className="text-sm font-medium text-slate-700">Click to upload or drag and drop</p>
+                  <p className="text-sm font-medium text-slate-700">Upload Proof Screenshot</p>
                   <p className="text-xs text-slate-500 mt-1">PNG, JPG up to 5 MB</p>
                   <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
                 </label>

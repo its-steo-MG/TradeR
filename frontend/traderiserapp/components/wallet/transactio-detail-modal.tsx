@@ -13,8 +13,6 @@ interface TransactionDetailModalProps {
 }
 
 export function TransactionDetailModal({ transaction, onClose }: TransactionDetailModalProps) {
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
   const txType = transaction.transaction_type.toLowerCase();
 
   const flagSrc = (() => {
@@ -34,18 +32,30 @@ export function TransactionDetailModal({ transaction, onClose }: TransactionDeta
   let primaryAmount: string;
   let secondaryAmount: string = "";
 
+  const formatAmount = (amount: number | string, currencyCode: string = "USD") => {
+    const num = Number(amount);
+    if (currencyCode.toUpperCase() === "KES" || currencyCode.toUpperCase() === "KSH") {
+      return `KSH ${num.toLocaleString("en-US")}`;
+    }
+    return `$${num.toLocaleString("en-US")}`;
+  };
+
   if (txType === "transfer_in" || txType === "transfer_out") {
     const amount = transaction.amount || transaction.converted_amount || 0;
     const sign = txType === "transfer_in" ? "+" : "-";
     primaryAmount = `${sign}$${formatCurrency(amount)}`;
   } else {
-    primaryAmount = txType === "deposit"
-      ? `${formatCurrency(transaction.amount)} ${transaction.currency.code}`
-      : `$${formatCurrency(transaction.amount)}`;
+    if (txType === "deposit") {
+      primaryAmount = formatAmount(transaction.amount, transaction.currency?.code || "KES");
+    } else {
+      primaryAmount = `$${formatCurrency(transaction.amount)}`;
+    }
 
-    secondaryAmount = txType === "deposit"
-      ? `$${formatCurrency(transaction.converted_amount || 0)}`
-      : `- ${formatCurrency(transaction.converted_amount || 0)} ${transaction.target_currency?.code || "KSH"}`;
+    if (txType === "deposit" && transaction.converted_amount) {
+      secondaryAmount = `$${formatCurrency(transaction.converted_amount)} USD`;
+    } else if (txType === "withdrawal" && transaction.converted_amount) {
+      secondaryAmount = `KSH ${formatCurrency(transaction.converted_amount)}`;
+    }
   }
 
   const derivId = transaction.reference_id
@@ -81,17 +91,27 @@ export function TransactionDetailModal({ transaction, onClose }: TransactionDeta
 
         <div className="bg-white rounded-2xl p-6 text-center border border-slate-200">
           <h3 className="text-lg font-bold text-slate-900 mb-4">{title}</h3>
+          
           <div className="w-16 h-16 mx-auto mb-4 rounded-full overflow-hidden">
             <Image src={flagSrc} alt="Flag" width={64} height={64} className="object-cover" />
           </div>
-          <p className="text-2xl font-bold text-slate-900 mb-2">{primaryAmount}</p>
+
+          {/* Primary Amount - Bold & Large */}
+          <p className="text-3xl font-bold text-slate-900 mb-1 tracking-tight">
+            {primaryAmount}
+          </p>
+          
+          {/* Secondary Amount - Semibold */}
           {secondaryAmount && (
-            <p className="text-xl font-bold text-slate-900 mb-6">{secondaryAmount}</p>
+            <p className="text-xl font-semibold text-slate-600 mb-6">
+              {secondaryAmount}
+            </p>
           )}
+
           <p className="text-sm text-slate-600">TRADERISER ID: {derivId}</p>
           
           {(txType === "deposit" || txType === "withdrawal") && (
-            <p className="text-sm text-green-600 bg-green-50 inline-block px-3 py-1 rounded-full mt-2">
+            <p className="text-sm text-green-600 bg-green-50 inline-block px-3 py-1 rounded-full mt-3">
               M-PESA ID: {mpesaId}
             </p>
           )}

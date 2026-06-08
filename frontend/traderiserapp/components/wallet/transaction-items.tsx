@@ -35,18 +35,24 @@ export function TransactionItem({ transaction, onClick }: TransactionItemProps) 
     }
   };
 
-  // Format amount cleanly in USD (or fallback currency)
-  const formatCurrency = (value: string | number, currency: string = "USD") => {
-    const num = typeof value === "string" ? parseFloat(value.replace(/[^0-9.-]+/g, "")) : Number(value);
+  // Improved formatCurrency - KSH comes before amount, USD after
+  const formatCurrency = (value: string | number, currencyCode: string = "USD") => {
+    const num = typeof value === "string" 
+      ? parseFloat(value.replace(/[^0-9.-]+/g, "")) 
+      : Number(value);
+
     if (isNaN(num)) return String(value);
 
-    return (
-      new Intl.NumberFormat("en-US", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(num) +
-      ` ${currency}`
-    );
+    const formattedNumber = new Intl.NumberFormat("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(num);
+
+    if (currencyCode.toUpperCase() === "KSH" || currencyCode.toUpperCase() === "KES") {
+      return `KSH ${formattedNumber}`;
+    } else {
+      return `${formattedNumber} ${currencyCode}`;
+    }
   };
 
   // Select unique icon based on transaction type
@@ -55,27 +61,33 @@ export function TransactionItem({ transaction, onClick }: TransactionItemProps) 
 
   switch (txType) {
     case "deposit":
-      imageSrc = "/real-account-icon.png";           // e.g. green money bag or M-Pesa receive
+      imageSrc = "/real-account-icon.png";
       break;
     case "withdrawal":
-      imageSrc = "/transaction-icon.png";        // your original outgoing icon
+      imageSrc = "/transaction-icon.png";
       break;
     case "transfer_in":
-      imageSrc = "/transfer-in-icon.png";       // incoming transfer (green arrow / receive from user)
+      imageSrc = "/transfer-in-icon.png";
       break;
     case "transfer_out":
-      imageSrc = "/transfer-in-icon.png";      // outgoing transfer (purple arrow / send to user)
+      imageSrc = "/transfer-in-icon.png";
       break;
     default:
       imageSrc = "/transaction-icon.png";
   }
 
-  // Use converted_amount if available (for transfers it's the same as amount, but in USD)
+  // Use converted_amount if available, otherwise amount
   const displayAmount = transaction.convertedAmount
-    ? formatCurrency(transaction.convertedAmount, transaction.target_currency?.code || "USD")
-    : formatCurrency(transaction.amount, transaction.currency?.code || "USD");
+    ? formatCurrency(
+        transaction.convertedAmount, 
+        transaction.target_currency?.code || "USD"
+      )
+    : formatCurrency(
+        transaction.amount, 
+        transaction.currency?.code || "USD"
+      );
 
-  // Clean display label: "Transfer In", "Transfer Out", etc.
+  // Clean display label
   const displayType = transaction.type
     .replace(/_/g, " ")
     .split(" ")
