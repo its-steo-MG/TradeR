@@ -24,6 +24,7 @@ interface AccountData {
     referral_link?: string;
     mpesa_connected?: boolean;
     messages_connected?: boolean;
+    phone?: string;           // ← Added for better phone handling
   };
 }
 
@@ -53,6 +54,7 @@ export default function ReferralSection() {
         setReferralLink(data.user?.referral_link || "");
         setIsMpesaConnected(data.user?.mpesa_connected || false);
         setIsMessagesConnected(data.user?.messages_connected || false);
+        setMpesaPhoneForUrl(data.user?.phone || "");   // ← Better phone source
       } catch (err) {
         console.error("Failed to fetch referral data", err);
       } finally {
@@ -139,53 +141,46 @@ export default function ReferralSection() {
 
   const openMpesaApp = () => {
     let url = "https://mpesa-orpin-gamma.vercel.app/login";
-    //let url = "http://localhost:3001";
+    //let url = "http://localhost:3001/login";
     if (mpesaPhoneForUrl) {
       url += `?phone=${encodeURIComponent(mpesaPhoneForUrl)}`;
     }
     window.open(url, "_blank");
   };
 
-const openMessagesApp = () => {
-  const token = localStorage.getItem("access_token");
-  if (!token) {
-    toast.error("Please log in again");
-    return;
-  }
-
-  //let url = "http://localhost:3000";
-  let url = "https://messages-apktrader.vercel.app"
-
-  if (mpesaPhoneForUrl) {
-    url += `?phone=${encodeURIComponent(mpesaPhoneForUrl)}`;
-  }
-
-  // Pass token securely via query param
-  url += `${url.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`;
-
-  window.open(url, "_blank");
-};
+  const openMessagesApp = () => {
+    let url = "https://messages-apktrader.vercel.app";
+    //let url ="http://localhost:3002"
+    if (mpesaPhoneForUrl) {
+      url += `?phone=${encodeURIComponent(mpesaPhoneForUrl)}`;
+    }
+    window.open(url, "_blank");
+  };
 
   const connectMessages = async () => {
+    setConnectLoading(true);
+
     try {
       const token = localStorage.getItem("access_token");
       if (!token) throw new Error("No token");
 
-      // Optional: Mark as connected in backend
+      // Optional: Notify backend
       await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/mpesa-notif/connect/`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      setIsMessagesConnected(true);
-      toast.success("Connected to Messages!");
+      toast.success("Opening Messages App...");
+      setIsMessagesConnected(true);   // Optimistic update
+
     } catch (err) {
       console.error(err);
       toast.info("Opening Messages App...");
+    } finally {
+      setConnectLoading(false);
+      openMessagesApp();
     }
-
-    openMessagesApp();
   };
 
   if (loading || !isMarketo || !referralLink) return null;
@@ -308,10 +303,11 @@ const openMessagesApp = () => {
             {!isMessagesConnected ? (
               <Button
                 onClick={connectMessages}
+                disabled={connectLoading}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2"
               >
                 <MessageCircle className="w-5 h-5" />
-                Connect to Messages
+                {connectLoading ? "Connecting..." : "Connect to Messages"}
               </Button>
             ) : (
               <Button
