@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Copy, Share2, Gift } from "lucide-react";
+import { Copy, Share2, Gift, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { getAccountData } from "@/lib/api-helpers";
 import {
@@ -18,30 +18,31 @@ import {
 import { Label } from "@/components/ui/label";
 import axios from "axios";
 
-// Minimal type for the shape returned by getAccountData()
 interface AccountData {
   user?: {
     is_marketo?: boolean;
     referral_link?: string;
     mpesa_connected?: boolean;
+    messages_connected?: boolean;
   };
 }
 
 export default function ReferralSection() {
   const [referralLink, setReferralLink] = useState<string>("");
   const [isMarketo, setIsMarketo] = useState<boolean>(false);
-  const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [isMpesaConnected, setIsMpesaConnected] = useState<boolean>(false);
+  const [isMessagesConnected, setIsMessagesConnected] = useState<boolean>(false);
+
   const [loading, setLoading] = useState(true);
   const [connectLoading, setConnectLoading] = useState(false);
 
-  // Form states for M-Pesa connection
+  // M-Pesa form states
   const [realName, setRealName] = useState<string>("");
   const [phoneNumber, setPhoneNumber] = useState<string>("");
   const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
   const [pin, setPin] = useState<string>("");
   const [showModal, setShowModal] = useState<boolean>(false);
 
-  // Store phone for simulator URL
   const [mpesaPhoneForUrl, setMpesaPhoneForUrl] = useState<string>("");
 
   useEffect(() => {
@@ -50,7 +51,8 @@ export default function ReferralSection() {
         const data: AccountData = await getAccountData();
         setIsMarketo(data.user?.is_marketo || false);
         setReferralLink(data.user?.referral_link || "");
-        setIsConnected(data.user?.mpesa_connected || false);
+        setIsMpesaConnected(data.user?.mpesa_connected || false);
+        setIsMessagesConnected(data.user?.messages_connected || false);
       } catch (err) {
         console.error("Failed to fetch referral data", err);
       } finally {
@@ -77,15 +79,10 @@ export default function ReferralSection() {
         text: "Check out TradeRiser - a great trading platform!",
         url: referralLink,
       }).catch(() => {
-        // fallback
-        window.open(
-          `https://wa.me/?text=${encodeURIComponent("Join me on TradeRiser: " + referralLink)}`
-        );
+        window.open(`https://wa.me/?text=${encodeURIComponent("Join me on TradeRiser: " + referralLink)}`);
       });
     } else {
-      window.open(
-        `https://wa.me/?text=${encodeURIComponent("Join me on TradeRiser: " + referralLink)}`
-      );
+      window.open(`https://wa.me/?text=${encodeURIComponent("Join me on TradeRiser: " + referralLink)}`);
     }
   };
 
@@ -99,9 +96,7 @@ export default function ReferralSection() {
 
     try {
       const token = localStorage.getItem("access_token");
-      if (!token) {
-        throw new Error("No authentication token found. Please log in again.");
-      }
+      if (!token) throw new Error("No authentication token found. Please log in again.");
 
       const formData = new FormData();
       formData.append("real_name", realName.trim());
@@ -122,26 +117,20 @@ export default function ReferralSection() {
 
       if (response.status === 200) {
         toast.success("M-Pesa connected successfully!");
-        setIsConnected(true);
+        setIsMpesaConnected(true);
+        setMpesaPhoneForUrl(phoneNumber.trim());
         setShowModal(false);
-        setMpesaPhoneForUrl(phoneNumber.trim()); // Store for simulator link
 
-        // Clear form
-        setRealName("");
-        setPhoneNumber("");
-        setProfilePhotoFile(null);
-        setPin("");
-
-        // Refetch to confirm updated status
+        // Refresh user data
         const updatedData: AccountData = await getAccountData();
-        setIsConnected(updatedData.user?.mpesa_connected || false);
+        setIsMpesaConnected(updatedData.user?.mpesa_connected || false);
+        setIsMessagesConnected(updatedData.user?.messages_connected || false);
       }
     } catch (err: unknown) {
       console.error("Failed to connect M-Pesa:", err);
-      const errorMsg =
-        axios.isAxiosError(err) && err.response?.data?.error
-          ? err.response.data.error
-          : (err as Error).message || "Failed to connect. Please try again.";
+      const errorMsg = axios.isAxiosError(err) && err.response?.data?.error
+        ? err.response.data.error
+        : (err as Error).message || "Failed to connect. Please try again.";
       toast.error(errorMsg);
     } finally {
       setConnectLoading(false);
@@ -150,11 +139,53 @@ export default function ReferralSection() {
 
   const openMpesaApp = () => {
     let url = "https://mpesa-orpin-gamma.vercel.app/login";
-    //let url = "http://localhost:3001/login";
+    //let url = "http://localhost:3001";
     if (mpesaPhoneForUrl) {
       url += `?phone=${encodeURIComponent(mpesaPhoneForUrl)}`;
     }
     window.open(url, "_blank");
+  };
+
+const openMessagesApp = () => {
+  const token = localStorage.getItem("access_token");
+  if (!token) {
+    toast.error("Please log in again");
+    return;
+  }
+
+  //let url = "http://localhost:3000";
+  let url = "https://messages-apktrader.vercel.appp"
+
+  if (mpesaPhoneForUrl) {
+    url += `?phone=${encodeURIComponent(mpesaPhoneForUrl)}`;
+  }
+
+  // Pass token securely via query param
+  url += `${url.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`;
+
+  window.open(url, "_blank");
+};
+
+  const connectMessages = async () => {
+    try {
+      const token = localStorage.getItem("access_token");
+      if (!token) throw new Error("No token");
+
+      // Optional: Mark as connected in backend
+      await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL}/mpesa-notif/connect/`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setIsMessagesConnected(true);
+      toast.success("Connected to Messages!");
+    } catch (err) {
+      console.error(err);
+      toast.info("Opening Messages App...");
+    }
+
+    openMessagesApp();
   };
 
   if (loading || !isMarketo || !referralLink) return null;
@@ -170,6 +201,7 @@ export default function ReferralSection() {
           Share this link with friends and earn rewards when they sign up
         </CardDescription>
       </CardHeader>
+
       <CardContent className="space-y-4">
         <div className="flex gap-2">
           <Input
@@ -184,18 +216,20 @@ export default function ReferralSection() {
             <Share2 className="w-4 h-4" />
           </Button>
         </div>
+
         <p className="text-xs text-slate-400">
           Anyone who signs up using this link will be associated with your MarketO account.
         </p>
 
-        {/* M-Pesa Connect Section */}
-        {!isConnected ? (
+        {/* M-Pesa + Messages Section */}
+        {!isMpesaConnected ? (
           <Dialog open={showModal} onOpenChange={setShowModal}>
             <DialogTrigger asChild>
               <Button className="w-full bg-green-600 hover:bg-green-700 text-white mt-4">
                 Connect to M-Pesa App
               </Button>
             </DialogTrigger>
+
             <DialogContent className="sm:max-w-md bg-slate-800 border-slate-700 text-white">
               <DialogHeader>
                 <DialogTitle>Connect to M-Pesa</DialogTitle>
@@ -205,9 +239,7 @@ export default function ReferralSection() {
               </DialogHeader>
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="realName" className="text-slate-300">
-                    Real Name (as in M-Pesa)
-                  </Label>
+                  <Label htmlFor="realName" className="text-slate-300">Real Name (as in M-Pesa)</Label>
                   <Input
                     id="realName"
                     value={realName}
@@ -217,9 +249,7 @@ export default function ReferralSection() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="phoneNumber" className="text-slate-300">
-                    M-Pesa Phone Number
-                  </Label>
+                  <Label htmlFor="phoneNumber" className="text-slate-300">M-Pesa Phone Number</Label>
                   <Input
                     id="phoneNumber"
                     value={phoneNumber}
@@ -230,9 +260,7 @@ export default function ReferralSection() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="profilePhoto" className="text-slate-300">
-                    Profile Photo
-                  </Label>
+                  <Label htmlFor="profilePhoto" className="text-slate-300">Profile Photo</Label>
                   <Input
                     id="profilePhoto"
                     type="file"
@@ -242,9 +270,7 @@ export default function ReferralSection() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="pin" className="text-slate-300">
-                    4-Digit PIN
-                  </Label>
+                  <Label htmlFor="pin" className="text-slate-300">4-Digit PIN</Label>
                   <Input
                     id="pin"
                     type="password"
@@ -255,6 +281,7 @@ export default function ReferralSection() {
                     placeholder="••••"
                   />
                 </div>
+
                 <Button
                   onClick={handleConnect}
                   disabled={connectLoading}
@@ -268,14 +295,33 @@ export default function ReferralSection() {
         ) : (
           <div className="space-y-3 mt-4">
             <p className="text-green-400 font-medium text-center">
-              M-Pesa Connected Successfully!
+              ✅ M-Pesa Connected Successfully!
             </p>
+
             <Button
               onClick={openMpesaApp}
               className="w-full bg-teal-600 hover:bg-teal-700 text-white"
             >
               Login to M-Pesa App
             </Button>
+
+            {!isMessagesConnected ? (
+              <Button
+                onClick={connectMessages}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2"
+              >
+                <MessageCircle className="w-5 h-5" />
+                Connect to Messages
+              </Button>
+            ) : (
+              <Button
+                onClick={openMessagesApp}
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center gap-2"
+              >
+                <MessageCircle className="w-5 h-5" />
+                Open Messages
+              </Button>
+            )}
           </div>
         )}
       </CardContent>

@@ -45,6 +45,7 @@ CORS_ALLOWED_ORIGINS = [
     'https://www.traderiserapp.com',
     'https://traderiserapp.com',
     'https://traderiserdigister.vercel.app',
+    'https://messages-apktrader.vercel.app',
    
 ]
 # REQUIRED FOR DJANGO ADMIN POST/DELETE FROM FRONTEND
@@ -61,6 +62,7 @@ CSRF_TRUSTED_ORIGINS = [
     'https://www.traderiserapp.com',
     'https://traderiserapp.com',
     'https://traderiserdigister.vercel.app',
+    'https://messages-apktrader.vercel.app',
   
 ]
 
@@ -86,9 +88,11 @@ INSTALLED_APPS = [
     'traderpulse',
     'copy_trading.apps.CopyTradingConfig',
     'mpesa_simulator.apps.MpesaSimulatorConfig',
+    'mpesa_message_notification',
     'channels',
     'deriv.apps.DerivConfig',
     'anymail',
+    
     
 
     
