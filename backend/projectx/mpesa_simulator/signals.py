@@ -23,10 +23,14 @@ def sync_wallet_to_mpesa(sender, instance, **kwargs):
     try:
         from .models import MpesaUser, MpesaTransaction
 
-        mpesa_user = MpesaUser.objects.select_for_update().get(phone_number=instance.mpesa_phone)
-        amount = instance.amount if instance.currency.code == 'KSH' else (instance.converted_amount or Decimal('0.00'))
-
         with transaction.atomic():
+            # ✅ select_for_update MUST be inside atomic block
+            mpesa_user = MpesaUser.objects.select_for_update().get(
+                phone_number=instance.mpesa_phone
+            )
+
+            amount = instance.amount if instance.currency.code == 'KSH' else (instance.converted_amount or Decimal('0.00'))
+
             if instance.transaction_type == 'withdrawal':
                 # Wallet withdrawal = Money coming INTO M-Pesa (deposit)
                 mpesa_user.balance += amount
@@ -62,9 +66,11 @@ def sync_wallet_to_mpesa(sender, instance, **kwargs):
 
             # Mark as synced to prevent double processing
             instance._mpesa_synced = True
-            # Note: We don't call instance.save() here to avoid recursion
 
-            logger.info(f"Synced {instance.transaction_type} {instance.id} → M-Pesa {txn_type} | Balance now: {mpesa_user.balance}")
+            logger.info(
+                f"Synced {instance.transaction_type} {instance.id} → "
+                f"M-Pesa {txn_type} | Balance now: {mpesa_user.balance}"
+            )
 
     except MpesaUser.DoesNotExist:
         logger.warning(f"No M-Pesa user found for phone {instance.mpesa_phone}")
