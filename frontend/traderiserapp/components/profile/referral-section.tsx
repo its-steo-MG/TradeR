@@ -154,7 +154,7 @@ const openMessagesApp = () => {
   }
 
   //let url = "http://localhost:3000";
-  let url = "https://messages-apktrader.vercel.appp"
+  let url = "https://messages-apktrader.vercel.app"
 
   if (mpesaPhoneForUrl) {
     url += `?phone=${encodeURIComponent(mpesaPhoneForUrl)}`;
