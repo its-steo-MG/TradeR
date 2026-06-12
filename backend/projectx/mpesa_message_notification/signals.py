@@ -45,7 +45,7 @@ def create_mpesa_notification(sender, instance, created, **kwargs):
 
         if instance.transaction_type == 'deposit':
             message = (
-                f"{instance.mpesa_id} Confirmed. You have received Ksh{instance.amount:,.2f} from "
+                f"{instance.mpesa_id} Confirmed.You have received Ksh{instance.amount:,.2f} from "
                 f"{instance.recipient_name} {phone_link} on {date_str} at {time_str} "
                 f"New M-PESA balance is Ksh{instance.mpesa_user.balance:,.2f}. "
                 f"Download and try the Business App; Android https://bit.ly/lnm-app or "
@@ -55,7 +55,7 @@ def create_mpesa_notification(sender, instance, created, **kwargs):
 
         elif instance.transaction_type == 'withdrawal':
             message = (
-                f"{instance.mpesa_id} Confirmed. Ksh{instance.amount:,.2f} paid to "
+                f"{instance.mpesa_id} Confirmed.Ksh{instance.amount:,.2f} paid to "
                 f"{instance.recipient_name} {phone_link} on {date_str} at {time_str}. "
                 f"New M-PESA balance is Ksh{instance.mpesa_user.balance:,.2f}. "
                 f"Transaction cost, Ksh0.00. Amount you can transact within the day is 499,730.00. "

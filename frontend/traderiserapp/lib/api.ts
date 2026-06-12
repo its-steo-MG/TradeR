@@ -327,6 +327,20 @@ export interface SuspensionInfo {
   details: SuspensionDetails;
 }
 
+/* ------------------------------------------------------------------ */
+/*  MPESA NOTIFICATION TYPE                                            */
+/* ------------------------------------------------------------------ */
+export type MpesaNotification = {
+  id: number;
+  mpesa_id: string | null;
+  notification_type: "received" | "sent";
+  message: string;
+  caller_id: string;
+  is_read: boolean;
+  created_at: string;
+  transaction_type: string | null;
+};
+
 export type LoginResponseData = {
   access: string;
   refresh: string;
@@ -1148,6 +1162,41 @@ export async function appealSuspension(formData: FormData) {
   );
 }
 
+/* ------------------------------------------------------------------ */
+/*  MPESA NOTIFICATIONS                                               */
+/* ------------------------------------------------------------------ */
+
+const MPESA_NOTIF_BASE = process.env.NEXT_PUBLIC_API_URL || "https://traderiserproapp.onrender.com"
+//const MPESA_NOTIF_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+
+
+async function mpesaNotifRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const token = getAccess()
+  const url = `${MPESA_NOTIF_BASE}/mpesa-notif${path}`
+  const res = await fetch(url, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(init.headers as Record<string, string>),
+    },
+    cache: "no-store",
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => "")
+    throw new Error(`${res.status}: ${text || res.statusText}`)
+  }
+  return res.json() as Promise<T>
+}
+
+export const listMpesaNotifications = () =>
+  mpesaNotifRequest<MpesaNotification[]>("/notifications/")
+
+export const markMpesaRead = (id: number) =>
+  mpesaNotifRequest<{ status: string }>(`/notifications/${id}/read/`, { method: "POST" })
+
+/* ------------------------------------------------------------------ */
+
 export const placeDigitTrade = (data: {
   market_id: number;
   digit_contract_type: 'over' | 'under' | 'matches' | 'differs' | 'even' | 'odd';
@@ -1257,5 +1306,7 @@ export const api = {
   answerAudioCall,
   endAudioCall,
   getMissedCalls,
-  closeEAPositions
+  closeEAPositions,
+  listMpesaNotifications,
+  markMpesaRead,
 }

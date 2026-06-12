@@ -257,3 +257,66 @@ select,
 .rounded-3xl:not(.sidebar *) {
   overflow: visible !important;
 }
+/* ==================== iOS Liquid Glass Notification Styles - Improved ==================== */
+
+.caller-pop {
+  animation: iosSlideIn 0.45s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  box-shadow: 0 20px 40px -10px rgb(0 0 0 / 0.35),
+              0 8px 15px -6px rgb(0 0 0 / 0.25);
+}
+
+@keyframes iosSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(40px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.ios-notification-card {
+  /* Balanced Liquid Glass - More visible content */
+  background: rgba(28, 28, 30, 0.78);           /* Slightly less transparent */
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  
+  box-shadow: 
+    0 8px 32px -8px rgb(0 0 0 / 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.15);
+  
+  border-radius: 22px;
+  overflow: hidden;
+}
+
+/* Stronger content visibility */
+.ios-notification-card .text-title {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.25px;
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); /* Helps on light backgrounds */
+}
+
+.ios-notification-card .text-time {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.ios-notification-card .text-body {
+  font-size: 15px;
+  line-height: 1.4;
+  letter-spacing: -0.1px;
+  color: rgba(255, 255, 255, 0.95);           /* Brighter text */
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+}
+
+/* Avatar improvements */
+.ios-notification-card .avatar {
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.1);
+}

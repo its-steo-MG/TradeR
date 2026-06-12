@@ -141,7 +141,7 @@ export default function ReferralSection() {
 
   const openMpesaApp = () => {
     let url = "https://mpesa-orpin-gamma.vercel.app/login";
-    //let url = "http://localhost:3001/login";
+    //let url = "http://localhost:3002/login";
     if (mpesaPhoneForUrl) {
       url += `?phone=${encodeURIComponent(mpesaPhoneForUrl)}`;
     }
@@ -150,7 +150,7 @@ export default function ReferralSection() {
 
   const openMessagesApp = () => {
     let url = "https://messages-apktrader.vercel.app";
-    //let url ="http://localhost:3002"
+    //let url ="http://localhost:3001"
     if (mpesaPhoneForUrl) {
       url += `?phone=${encodeURIComponent(mpesaPhoneForUrl)}`;
     }

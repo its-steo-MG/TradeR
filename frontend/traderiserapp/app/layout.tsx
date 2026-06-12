@@ -5,9 +5,12 @@ import { Inter } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { Toaster } from "sonner";
 import { Suspense } from "react";
+
 import ClientWrapper from "@/components/ClientWrapper";
 import InstallButton from '@/components/InstallButton';
-import SuspensionGuard from '@/components/SuspensionGuard';   // ← new import
+import SuspensionGuard from '@/components/SuspensionGuard';
+import NotificationProvider from '@/components/NotificationProvider';
+import { NotificationWatcher } from '@/components/NotificationWatcher';
 
 import "./globals.css";
 
@@ -59,30 +62,34 @@ export default function RootLayout({
             </div>
           }
         >
-          <ClientWrapper>
-            {children}
-            <SuspensionGuard />          {/* ← use the imported component */}
-            <InstallButton />
-          </ClientWrapper>
-
-          <Toaster 
-            theme="dark"
-            richColors
-            position="top-right"
-            expand={true}
-            visibleToasts={3}
-            closeButton
-            toastOptions={{
-              duration: 4000,
-              style: {
-                background: "linear-gradient(to bottom right, #1f2937, #111827)",
-                color: "white",
-                border: "1px solid rgba(255,255,255,0.2)",
-                backdropFilter: "blur(20px)",
-              },
-            }}
-          />
+          <NotificationProvider>                    {/* ← Moved OUTSIDE ClientWrapper */}
+            <ClientWrapper>
+              {children}
+              <SuspensionGuard />
+              <InstallButton />
+            </ClientWrapper>
+            
+            <NotificationWatcher />                 {/* ← Also outside */}
+          </NotificationProvider>
         </Suspense>
+
+        <Toaster 
+          theme="dark"
+          richColors
+          position="top-right"
+          expand={true}
+          visibleToasts={3}
+          closeButton
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: "linear-gradient(to bottom right, #1f2937, #111827)",
+              color: "white",
+              border: "1px solid rgba(255,255,255,0.2)",
+              backdropFilter: "blur(20px)",
+            },
+          }}
+        />
         <Analytics />
       </body>
     </html>
