@@ -29,14 +29,7 @@ class ExchangeRateAdmin(admin.ModelAdmin):
 
 @admin.register(Wallet)
 class WalletAdmin(admin.ModelAdmin):
-    """Wallet Admin - Balance is now fully editable"""
-    list_display = (
-        'user_link', 
-        'wallet_type', 
-        'currency', 
-        'balance', 
-        'created_at'
-    )
+    list_display = ('user_link', 'wallet_type', 'currency', 'balance', 'created_at')
     list_filter = ('wallet_type', 'currency', 'created_at')
     search_fields = (
         'account__user__username',
@@ -48,7 +41,7 @@ class WalletAdmin(admin.ModelAdmin):
     
     readonly_fields = ('created_at', 'updated_at')
     fields = ('account', 'wallet_type', 'currency', 'balance', 'created_at', 'updated_at')
-    list_editable = ('balance',)          # ← Allows quick editing from list view
+    list_editable = ('balance',)
     ordering = ('-created_at',)
 
     def user_link(self, obj):
@@ -80,6 +73,7 @@ class WalletTransactionAdmin(admin.ModelAdmin):
     list_display = (
         'ref_link', 
         'user_link', 
+        'is_marketo_flag',
         'type', 
         'kes', 
         'usd',
@@ -89,7 +83,13 @@ class WalletTransactionAdmin(admin.ModelAdmin):
         'quick_actions', 
         'created_at'
     )
-    list_filter = ('transaction_type', 'status', 'created_at', 'currency')
+    list_filter = (
+        'transaction_type', 
+        'status', 
+        'created_at', 
+        'currency',
+        'wallet__account__user__is_marketo'   # Correct path: User.is_marketo
+    )
     search_fields = (
         'reference_id',
         'wallet__account__user__username',
@@ -127,6 +127,16 @@ class WalletTransactionAdmin(admin.ModelAdmin):
             return "-"
     user_link.short_description = "User"
 
+    def is_marketo_flag(self, obj):
+        """Show if user is Marketo"""
+        try:
+            if getattr(obj.wallet.account.user, 'is_marketo', False):
+                return format_html('<span style="color: purple; font-weight: bold;">✅ Marketo</span>')
+        except:
+            pass
+        return format_html('<span style="color: gray;">—</span>')
+    is_marketo_flag.short_description = "Marketo"
+
     def type(self, obj):
         return obj.get_transaction_type_display() or obj.transaction_type.capitalize()
     type.short_description = "Type"
@@ -152,11 +162,15 @@ class WalletTransactionAdmin(admin.ModelAdmin):
     phone.short_description = "Phone"
 
     def status_colored(self, obj):
-        colors = {
-            'pending': 'orange',
-            'completed': 'green',
-            'failed': 'red'
-        }
+        try:
+            if obj.status == 'pending' and getattr(obj.wallet.account.user, 'is_marketo', False):
+                return format_html(
+                    '<span style="color: purple; font-weight: bold;">Pending (Auto in 5s)</span>'
+                )
+        except:
+            pass
+
+        colors = {'pending': 'orange', 'completed': 'green', 'failed': 'red'}
         return format_html(
             '<span style="color: {};">{}</span>', 
             colors.get(obj.status, 'black'), 

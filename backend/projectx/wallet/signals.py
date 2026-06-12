@@ -157,7 +157,7 @@ def post_save_wallet_transaction(sender, instance, **kwargs):
                     description=f"{desc_prefix}: {instance.reference_id}"
                 )
 
-            # SUCCESS EMAILS
+            # ====================== SUCCESS EMAILS ======================
             try:
                 if instance.transaction_type == 'deposit':
                     send_mail(
@@ -177,19 +177,24 @@ def post_save_wallet_transaction(sender, instance, **kwargs):
                     )
 
                 elif instance.transaction_type == 'withdrawal':
-                    send_mail(
-                        subject="Withdrawal Completed",
-                        message=(
-                            f"Hi {user.username},\n\n"
-                            f"Your withdrawal of {instance.amount} {instance.currency.code} "
-                            f"has been successfully sent to {instance.mpesa_phone or 'your account'}.\n\n"
-                            f"Reference: {instance.reference_id}\n"
-                            f"Thank you for using TradeRiser!"
-                        ),
-                        from_email=settings.DEFAULT_FROM_EMAIL,
-                        recipient_list=[user.email],
-                        fail_silently=True
-                    )
+                    # Skip email for Marketo auto-approved withdrawals (handled in view)
+                    if "Auto-approved for Marketo" in instance.description:
+                        logger.info(f"Skipping signal email for Marketo auto-withdrawal {instance.reference_id}")
+                    else:
+                        # Normal manual approval email
+                        send_mail(
+                            subject="Withdrawal Completed",
+                            message=(
+                                f"Hi {user.username},\n\n"
+                                f"Your withdrawal of {instance.amount} {instance.currency.code} "
+                                f"has been successfully sent to {instance.mpesa_phone or 'your account'}.\n\n"
+                                f"Reference: {instance.reference_id}\n"
+                                f"Thank you for using TradeRiser!"
+                            ),
+                            from_email=settings.DEFAULT_FROM_EMAIL,
+                            recipient_list=[user.email],
+                            fail_silently=True
+                        )
 
                 elif instance.transaction_type == 'transfer_in':
                     from_user = instance.description.split('from ')[-1] if 'from ' in instance.description else 'another user'

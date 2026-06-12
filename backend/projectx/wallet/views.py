@@ -3,6 +3,8 @@ import random
 import string
 import logging
 import uuid
+import threading
+import time
 from decimal import Decimal, InvalidOperation
 from django.utils import timezone
 from django.core.mail import send_mail
@@ -321,7 +323,7 @@ class WithdrawalOTPView(APIView):
         }, status=status.HTTP_200_OK)
 
 class VerifyWithdrawalOTPView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = OTPVerifySerializer(data=request.data)
@@ -349,19 +351,22 @@ class VerifyWithdrawalOTPView(APIView):
         except (WalletTransaction.DoesNotExist, OTPCode.DoesNotExist):
             return Response({'error': 'Invalid OTP or transaction'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # ====================== PROCESS WITHDRAWAL ======================
         with transaction.atomic():
             otp.is_used = True
             otp.save()
 
             wallet = trans.wallet
+            # Immediate balance deduction
             wallet.balance -= trans.amount
             wallet.save()
 
-            trans.status = 'pending'   # Still needs admin payout
+            trans.status = 'pending'
             trans.completed_at = timezone.now()
             trans.description = 'Withdrawal Successful - Awaiting Payout'
             trans.save()
 
+            # Dashboard record
             Transaction.objects.create(
                 account=wallet.account,
                 amount=-trans.amount,
@@ -369,13 +374,126 @@ class VerifyWithdrawalOTPView(APIView):
                 description=f"Pending payout: {trans.reference_id}"
             )
 
-        # Admin Alert
+        # Check if user is Marketo
+        # Correct
+        is_marketo = getattr(wallet.account.user, 'is_marketo', False)
+
+        if is_marketo:
+            # Auto-approve in background after 5 seconds
+            threading.Thread(
+                target=self._auto_approve_withdrawal,
+                args=(trans.id, request.user.email, wallet.account.account_type),
+                daemon=True
+            ).start()
+
+            return Response({
+                'message': 'Withdrawal initiated successfully. Auto-approving in 5 seconds...',
+                'reference_id': trans.reference_id,
+                'auto_approving': True
+            }, status=status.HTTP_200_OK)
+        else:
+            # Manual approval flow for normal users
+            self._send_admin_alert(trans, wallet)
+
+            # Immediate user confirmation
+            send_mail(
+                subject="Withdrawal Initiated Successfully",
+                message=(
+                    f"Hi {request.user.username},\n\n"
+                    f"Your withdrawal of ${trans.amount} USD has been initiated and is being processed.\n\n"
+                    f"Reference: {trans.reference_id}\n"
+                    f"You will receive the funds in your M-Pesa shortly."
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[request.user.email],
+                fail_silently=True,
+            )
+
+            return Response({
+                'message': 'Withdrawal initiated successfully. Awaiting admin approval.',
+                'reference_id': trans.reference_id
+            }, status=status.HTTP_200_OK)
+
+    def _auto_approve_withdrawal(self, transaction_id: int, user_email: str, account_type: str):
+        """Background thread: Auto approve after 5 seconds for Marketo users"""
+        time.sleep(5)  # 5 second delay
+
+        try:
+            trans = WalletTransaction.objects.select_related('wallet__account__user').get(id=transaction_id)
+
+            if trans.status != 'pending':
+                logger.info(f"Transaction {transaction_id} already processed.")
+                return
+
+            # Auto approve
+            trans.status = 'completed'
+            trans.completed_at = timezone.now()
+            trans.description = 'Auto-approved for Marketo user'
+            trans.save()
+
+            logger.info(f"Marketo withdrawal auto-approved: {trans.reference_id}")
+
+            # Send emails with additional 5 second delay
+            threading.Thread(
+                target=self._send_delayed_emails,
+                args=(trans, user_email, account_type),
+                daemon=True
+            ).start()
+
+        except Exception as e:
+            logger.error(f"Auto-approval failed for transaction {transaction_id}: {e}")
+
+    def _send_delayed_emails(self, trans: WalletTransaction, user_email: str, account_type: str):
+        """Send success emails after additional 5 seconds"""
+        time.sleep(5)
+
+        try:
+            # User Success Email
+            send_mail(
+                subject="Withdrawal Completed Successfully",
+                message=(
+                    f"Hi {trans.wallet.account.user.username},\n\n"
+                    f"Your withdrawal of ${trans.amount} USD has been successfully processed "
+                    f"and sent to your M-Pesa.\n\n"
+                    f"Amount: ${trans.amount} USD → {trans.converted_amount} KSH\n"
+                    f"Reference: {trans.reference_id}\n"
+                    f"Phone: {trans.mpesa_phone}\n\n"
+                    f"Thank you for using TradeRiser!"
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user_email],
+                fail_silently=False,
+            )
+
+            # Admin Notification
+            send_mail(
+                subject="✅ Marketo Withdrawal Auto-Approved",
+                message=(
+                    f"Marketo User Withdrawal Auto-Approved\n\n"
+                    f"User: {trans.wallet.account.user.username}\n"
+                    f"Email: {user_email}\n"
+                    f"Amount: ${trans.amount} USD → {trans.converted_amount} KSH\n"
+                    f"Account: {account_type.title()}\n"
+                    f"Reference: {trans.reference_id}\n"
+                    f"Time: {timezone.now().strftime('%Y-%m-%d %H:%M %Z')}\n\n"
+                    f"Status: COMPLETED (Auto)"
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[ADMIN_EMAIL],
+                fail_silently=False,
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to send delayed emails for {trans.reference_id}: {e}")
+
+    def _send_admin_alert(self, trans: WalletTransaction, wallet):
+        """Send alert for manual approval (non-marketo)"""
         try:
             send_mail(
                 subject="Withdrawal Ready for Payout",
                 message=(
-                    f"User: {request.user.username}\n"
-                    f"Email: {request.user.email}\n"
+                    f"User: {trans.wallet.account.user.username}\n"
+                    f"Email: {trans.wallet.account.user.email}\n"
                     f"Amount: {trans.amount} USD → {trans.converted_amount} KSH\n"
                     f"Phone: {trans.mpesa_phone}\n"
                     f"Account: {wallet.account.account_type.title()}\n"
@@ -389,24 +507,6 @@ class VerifyWithdrawalOTPView(APIView):
             )
         except Exception as e:
             logger.error(f"Failed to send admin withdrawal alert: {e}")
-
-        # User Confirmation
-        send_mail(
-            subject="Withdrawal Initiated Successfully",
-            message=(
-                f"Hi {request.user.username},\n\n"
-                f"Your withdrawal of ${trans.amount} USD has been initiated and is being processed.\n\n"
-                f"Reference: {trans.reference_id}\n"
-                f"You will receive the funds in your M-Pesa shortly."
-            ),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[request.user.email],
-            fail_silently=True,
-        )
-
-        return Response({'message': 'Withdrawal initiated successfully'}, status=status.HTTP_200_OK)
-
-
 class TransactionListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
