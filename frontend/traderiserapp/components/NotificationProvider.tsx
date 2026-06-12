@@ -18,17 +18,15 @@ export default function NotificationProvider({ children }: { children: ReactNode
 
   // Initialize audio once
   useEffect(() => {
-    audioRef.current = new Audio("/sounds/mpesa-notification.mp3"); // ← Put your sound here
+    audioRef.current = new Audio("/sounds/mpesa-notification.mp3");
     audioRef.current.preload = "auto";
-    audioRef.current.volume = 0.7; // Adjust volume (0.0 - 1.0)
+    audioRef.current.volume = 0.7;
   }, []);
 
   const playNotificationSound = useCallback(() => {
     if (audioRef.current) {
-      // Reset and play
       audioRef.current.currentTime = 0;
       audioRef.current.play().catch((err) => {
-        // Silent fail - autoplay may be blocked by browser
         console.log("Notification sound blocked by browser:", err);
       });
     }
@@ -37,10 +35,8 @@ export default function NotificationProvider({ children }: { children: ReactNode
   const popNotification = useCallback((n: MpesaNotification) => {
     setQueue((q) => [...q, n]);
     
-    // Play sound when new notification pops
     playNotificationSound();
 
-    // Optional haptic feedback
     if (typeof navigator !== "undefined" && "vibrate" in navigator) {
       navigator.vibrate?.([60, 30, 60]);
     }
@@ -54,8 +50,8 @@ export default function NotificationProvider({ children }: { children: ReactNode
     <NotificationCtx.Provider value={{ popNotification }}>
       {children}
       
-      {/* Notification Container */}
-      <div className="fixed top-0 inset-x-0 z-50 flex flex-col items-center pointer-events-none">
+      {/* Notification Container - Now appears ABOVE everything */}
+      <div className="fixed top-0 inset-x-0 z-[9999] flex flex-col items-center pointer-events-none">
         {queue.map((n) => (
           <CallerPopup 
             key={n.id} 
