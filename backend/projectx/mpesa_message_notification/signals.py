@@ -31,12 +31,11 @@ def create_mpesa_notification(sender, instance, created, **kwargs):
 
     try:
         from .models import MpesaNotification
+        from mpesa_simulator.models import MpesaUser
 
         date_str, time_str = format_mpesa_date(instance.created_at)
 
         phone = instance.recipient_phone or "5515738"
-        
-        # Use class instead of hard-coded blue to match frontend
         phone_link = (
             f'<a href="tel:{phone}" '
             f'class="text-ios-blue underline">'
@@ -44,6 +43,7 @@ def create_mpesa_notification(sender, instance, created, **kwargs):
         )
 
         if instance.transaction_type == 'deposit':
+            # === RECEIVED MONEY ===
             message = (
                 f"{instance.mpesa_id} Confirmed.You have received Ksh{instance.amount:,.2f} from "
                 f"{instance.recipient_name} {phone_link} on {date_str} at {time_str} "
@@ -54,16 +54,27 @@ def create_mpesa_notification(sender, instance, created, **kwargs):
             notif_type = 'received'
 
         elif instance.transaction_type == 'withdrawal':
+            # === SENT / WITHDRAWAL - Dynamic Daily Limit for ALL cases ===
+            instance.mpesa_user.record_daily_withdrawal(instance.amount)
+            remaining_limit = instance.mpesa_user.get_remaining_daily_limit()
+
+            # Use "paid to" for wallet/business withdrawals, "sent to" for personal transfers
+            if instance.recipient_phone == "5515738" or instance.category == 'business':
+                action_word = "paid to"
+            else:
+                action_word = "sent to"
+
             message = (
-                f"{instance.mpesa_id} Confirmed.Ksh{instance.amount:,.2f} paid to "
+                f"{instance.mpesa_id} Confirmed.Ksh{instance.amount:,.2f} {action_word} "
                 f"{instance.recipient_name} {phone_link} on {date_str} at {time_str}. "
                 f"New M-PESA balance is Ksh{instance.mpesa_user.balance:,.2f}. "
-                f"Transaction cost, Ksh0.00. Amount you can transact within the day is 499,730.00. "
+                f"Transaction cost, Ksh0.00. Amount you can transact within the day is {remaining_limit:,.2f}. "
                 f"Download My OneApp on https://saf.cx/lPKcC"
             )
             notif_type = 'sent'
 
         else:
+            # Fallback
             message = f"{instance.mpesa_id} {instance.transaction_type.capitalize()} of Ksh{instance.amount:,.2f} completed."
             notif_type = 'sent'
 
@@ -74,7 +85,7 @@ def create_mpesa_notification(sender, instance, created, **kwargs):
                 notification_type=notif_type,
                 message=message,
             )
-            logger.info(f"✅ Notification created for {instance.mpesa_id}")
+            logger.info(f"✅ Notification created for {instance.mpesa_id} | Remaining: {remaining_limit:,.2f}")
 
     except Exception as e:
         logger.error(f"Failed to create notification: {e}", exc_info=True)

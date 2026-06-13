@@ -22,11 +22,47 @@ class MpesaUser(models.Model):
     )
     fuliza = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
 
+    # === New fields for Daily Transaction Limit ===
+    daily_sent_total = models.DecimalField(
+        max_digits=14, 
+        decimal_places=2, 
+        default=Decimal('0.00')
+    )
+    daily_limit_reset_at = models.DateTimeField(null=True, blank=True)
+
     def set_pin(self, raw_pin):
         self.pin = make_password(raw_pin)
 
     def check_pin(self, raw_pin):
         return check_password(raw_pin, self.pin)
+
+    def reset_daily_limit_if_needed(self):
+        """Reset daily sent total if 24 hours have passed"""
+        if not self.daily_limit_reset_at:
+            self.daily_limit_reset_at = timezone.now()
+            self.daily_sent_total = Decimal('0.00')
+            return True
+
+        # Reset if more than 24 hours have passed
+        if timezone.now() > self.daily_limit_reset_at + timezone.timedelta(hours=24):
+            self.daily_sent_total = Decimal('0.00')
+            self.daily_limit_reset_at = timezone.now()
+            return True
+        return False
+
+    def get_remaining_daily_limit(self):
+        """Returns remaining amount user can send today (max 500,000 KSH)"""
+        self.reset_daily_limit_if_needed()
+        daily_limit = Decimal('500000.00')
+        remaining = daily_limit - self.daily_sent_total
+        return max(remaining, Decimal('0.00'))
+
+    def record_daily_withdrawal(self, amount):
+        """Record a withdrawal and update daily sent total"""
+        self.reset_daily_limit_if_needed()
+        self.daily_sent_total += amount
+        # Save only the changed fields for performance
+        self.save(update_fields=['daily_sent_total', 'daily_limit_reset_at'])
 
     def save(self, *args, **kwargs):
         if not self.phone_number:
@@ -35,6 +71,11 @@ class MpesaUser(models.Model):
                 self.phone_number = mpesa_num.phone_number
             except MpesaNumber.DoesNotExist:
                 self.phone_number = self.user.phone or ''
+        
+        # Initialize daily limit tracking on first save
+        if not self.daily_limit_reset_at:
+            self.daily_limit_reset_at = timezone.now()
+            
         super().save(*args, **kwargs)
 
     def __str__(self):
