@@ -2,43 +2,46 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation"; // For navigation
+import { useRouter } from "next/navigation";
 import { formatCurrency } from "@/lib/format-currency";
 import { type WalletTransaction, api } from "@/lib/api";
 import { TransactionItem } from "./transaction-items";
-import { TransactionDetailModal } from "./transactio-detail-modal"; // New import
+import { TransactionDetailModal } from "./transactio-detail-modal";
 import { toast } from "sonner";
-
-interface TransactionsResponse {
-  transactions?: WalletTransaction[];
-}
 
 export function TransactionList() {
   const router = useRouter();
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedTransaction, setSelectedTransaction] = useState<WalletTransaction | null>(null); // For detail modal
+  const [selectedTransaction, setSelectedTransaction] = useState<WalletTransaction | null>(null);
 
   const fetchTransactions = async () => {
     try {
       const res = await api.getWalletTransactions();
       if (res.error) throw new Error(res.error);
 
-      const data: WalletTransaction[] = (() => {
-        if (!res.data) return [];
-        if (Array.isArray(res.data)) return res.data as WalletTransaction[];
+      // Robust handling for all possible backend response formats
+      let data: WalletTransaction[] = [];
 
-        // Type guard for TransactionsResponse structure
-        const responseData = res.data as TransactionsResponse;
-        if (
-          typeof responseData === "object" &&
-          "transactions" in responseData &&
-          Array.isArray(responseData.transactions)
-        ) {
-          return responseData.transactions as WalletTransaction[];
-        }
-        return [];
-      })();
+      if (!res.data) {
+        data = [];
+      } 
+      // 1. Direct array response
+      else if (Array.isArray(res.data)) {
+        data = res.data as WalletTransaction[];
+      } 
+      // 2. DRF Paginated response { count, next, previous, results }
+      else if (res.data.results && Array.isArray(res.data.results)) {
+        data = res.data.results as WalletTransaction[];
+      } 
+      // 3. Old wrapped format { transactions: [...] }
+      else if (res.data.transactions && Array.isArray(res.data.transactions)) {
+        data = res.data.transactions as WalletTransaction[];
+      } 
+      // 4. Fallback - try to use the object directly if it's an array-like
+      else if (typeof res.data === "object") {
+        data = Object.values(res.data).find(Array.isArray) || [];
+      }
 
       setTransactions(data);
     } catch (error) {
@@ -55,7 +58,6 @@ export function TransactionList() {
     const handleSessionUpdate = () => fetchTransactions();
     window.addEventListener("session-updated", handleSessionUpdate);
 
-    // Polling for real-time updates (every 30s)
     const interval = setInterval(fetchTransactions, 30000);
 
     return () => {
@@ -65,11 +67,11 @@ export function TransactionList() {
   }, []);
 
   const handleViewAll = () => {
-    router.push("/wallet/transactions"); // Navigate to full list
+    router.push("/wallet/transactions");
   };
 
   const handleTransactionClick = (tx: WalletTransaction) => {
-    setSelectedTransaction(tx); // Open detail modal
+    setSelectedTransaction(tx);
   };
 
   return (
@@ -98,7 +100,7 @@ export function TransactionList() {
               transaction={{
                 id: transaction.id,
                 type: transaction.transaction_type.charAt(0).toUpperCase() + transaction.transaction_type.slice(1),
-                amount: `${formatCurrency(transaction.amount)} ${transaction.currency.code}`,
+                amount: `${formatCurrency(transaction.amount)} ${transaction.currency?.code || "USD"}`,
                 convertedAmount: transaction.converted_amount
                   ? `${formatCurrency(transaction.converted_amount)} ${transaction.target_currency?.code || "USD"}`
                   : undefined,
@@ -114,10 +116,10 @@ export function TransactionList() {
                 status: transaction.status,
                 currency: transaction.currency,
                 target_currency: transaction.target_currency,
-                reference_id: transaction.reference_id, // Pass for details
-                checkout_request_id: transaction.checkout_request_id, // Pass for M-PESA
+                reference_id: transaction.reference_id,
+                checkout_request_id: transaction.checkout_request_id,
               }}
-              onClick={() => handleTransactionClick(transaction)} // Handle click
+              onClick={() => handleTransactionClick(transaction)}
             />
           ))
         )}

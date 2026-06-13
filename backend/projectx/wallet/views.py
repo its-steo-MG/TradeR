@@ -15,6 +15,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
+from rest_framework.pagination import PageNumberPagination
 
 from .models import Wallet, WalletTransaction, MpesaNumber, Currency, ExchangeRate, OTPCode
 from .serializers import (
@@ -27,6 +28,13 @@ from .payment import PaymentClient
 
 logger = logging.getLogger('wallet')
 ADMIN_EMAIL = "steomustadd@gmail.com"
+
+
+# ====================== PAGINATION ======================
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 50
+    page_size_query_param = 'page_size'
+    max_page_size = 200
 
 
 def generate_reference_id(length: int = 12) -> str:
@@ -160,7 +168,6 @@ class DepositView(APIView):
             mpesa_phone=mpesa_phone,
         )
 
-        # Initiate STK Push
         payment_client = PaymentClient()
         stk_response = payment_client.initiate_stk_push(mpesa_phone, amount, reference_id)
 
@@ -168,7 +175,6 @@ class DepositView(APIView):
             transaction.checkout_request_id = stk_response['CheckoutRequestID']
             transaction.save(update_fields=['checkout_request_id'])
 
-            # Admin Notification
             try:
                 send_mail(
                     subject="New Deposit Request – STK Push Sent",
@@ -223,16 +229,12 @@ class WithdrawalOTPView(APIView):
         wallet_type = data['wallet_type']
         account_type = data['account_type']
 
-        # ====================== WALLET VERIFIER CHECK ======================
         try:
             account = Account.objects.get(user=request.user, account_type=account_type)
             if not account.is_wallet_verified:
-                return Response({
-                    'error': 'Withdrawal failed please contact support'
-                }, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': 'Withdrawal failed please contact support'}, status=status.HTTP_400_BAD_REQUEST)
         except Account.DoesNotExist:
             return Response({'error': 'Account not found'}, status=status.HTTP_400_BAD_REQUEST)
-        # ==================================================================
 
         MIN_WITHDRAWAL_USD = Decimal('2.00')
         MAX_WITHDRAWAL_USD = Decimal('2000.00')
@@ -293,7 +295,6 @@ class WithdrawalOTPView(APIView):
                 expires_at=timezone.now() + timezone.timedelta(minutes=5)
             )
 
-        # Send OTP Email
         try:
             send_mail(
                 subject="Your TradeRiser Withdrawal OTP",
@@ -321,6 +322,7 @@ class WithdrawalOTPView(APIView):
             'amount_ksh': str(converted_amount),
             'transaction_id': trans.id
         }, status=status.HTTP_200_OK)
+
 
 class VerifyWithdrawalOTPView(APIView):
     permission_classes = [IsAuthenticated]
@@ -351,13 +353,11 @@ class VerifyWithdrawalOTPView(APIView):
         except (WalletTransaction.DoesNotExist, OTPCode.DoesNotExist):
             return Response({'error': 'Invalid OTP or transaction'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # ====================== PROCESS WITHDRAWAL ======================
         with transaction.atomic():
             otp.is_used = True
             otp.save()
 
             wallet = trans.wallet
-            # Immediate balance deduction
             wallet.balance -= trans.amount
             wallet.save()
 
@@ -366,7 +366,6 @@ class VerifyWithdrawalOTPView(APIView):
             trans.description = 'Withdrawal Successful - Awaiting Payout'
             trans.save()
 
-            # Dashboard record
             Transaction.objects.create(
                 account=wallet.account,
                 amount=-trans.amount,
@@ -374,12 +373,9 @@ class VerifyWithdrawalOTPView(APIView):
                 description=f"Pending payout: {trans.reference_id}"
             )
 
-        # Check if user is Marketo
-        # Correct
         is_marketo = getattr(wallet.account.user, 'is_marketo', False)
 
         if is_marketo:
-            # Auto-approve in background after 5 seconds
             threading.Thread(
                 target=self._auto_approve_withdrawal,
                 args=(trans.id, request.user.email, wallet.account.account_type),
@@ -392,10 +388,8 @@ class VerifyWithdrawalOTPView(APIView):
                 'auto_approving': True
             }, status=status.HTTP_200_OK)
         else:
-            # Manual approval flow for normal users
             self._send_admin_alert(trans, wallet)
 
-            # Immediate user confirmation
             send_mail(
                 subject="Withdrawal Initiated Successfully",
                 message=(
@@ -415,40 +409,27 @@ class VerifyWithdrawalOTPView(APIView):
             }, status=status.HTTP_200_OK)
 
     def _auto_approve_withdrawal(self, transaction_id: int, user_email: str, account_type: str):
-        """Background thread: Auto approve after 5 seconds for Marketo users"""
-        time.sleep(5)  # 5 second delay
-
+        time.sleep(5)
         try:
             trans = WalletTransaction.objects.select_related('wallet__account__user').get(id=transaction_id)
-
             if trans.status != 'pending':
-                logger.info(f"Transaction {transaction_id} already processed.")
                 return
-
-            # Auto approve
             trans.status = 'completed'
             trans.completed_at = timezone.now()
             trans.description = 'Auto-approved for Marketo user'
             trans.save()
 
-            logger.info(f"Marketo withdrawal auto-approved: {trans.reference_id}")
-
-            # Send emails with additional 5 second delay
             threading.Thread(
                 target=self._send_delayed_emails,
                 args=(trans, user_email, account_type),
                 daemon=True
             ).start()
-
         except Exception as e:
-            logger.error(f"Auto-approval failed for transaction {transaction_id}: {e}")
+            logger.error(f"Auto-approval failed: {e}")
 
     def _send_delayed_emails(self, trans: WalletTransaction, user_email: str, account_type: str):
-        """Send success emails after additional 5 seconds"""
         time.sleep(5)
-
         try:
-            # User Success Email
             send_mail(
                 subject="Withdrawal Completed Successfully",
                 message=(
@@ -464,8 +445,6 @@ class VerifyWithdrawalOTPView(APIView):
                 recipient_list=[user_email],
                 fail_silently=False,
             )
-
-            # Admin Notification
             send_mail(
                 subject="✅ Marketo Withdrawal Auto-Approved",
                 message=(
@@ -482,12 +461,10 @@ class VerifyWithdrawalOTPView(APIView):
                 recipient_list=[ADMIN_EMAIL],
                 fail_silently=False,
             )
-
         except Exception as e:
-            logger.error(f"Failed to send delayed emails for {trans.reference_id}: {e}")
+            logger.error(f"Failed to send delayed emails: {e}")
 
     def _send_admin_alert(self, trans: WalletTransaction, wallet):
-        """Send alert for manual approval (non-marketo)"""
         try:
             send_mail(
                 subject="Withdrawal Ready for Payout",
@@ -506,17 +483,35 @@ class VerifyWithdrawalOTPView(APIView):
                 fail_silently=False,
             )
         except Exception as e:
-            logger.error(f"Failed to send admin withdrawal alert: {e}")
+            logger.error(f"Failed to send admin alert: {e}")
+
+
+# ====================== OPTIMIZED TRANSACTIONS VIEW ======================
 class TransactionListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
 
     def get(self, request):
         transactions = WalletTransaction.objects.filter(
             wallet__account__user=request.user
+        ).select_related(
+            'wallet',
+            'wallet__account',
+            'wallet__currency',
+            'target_currency'
         ).order_by('-created_at')
-        serializer = WalletTransactionSerializer(transactions, many=True)
-        return Response(serializer.data)
 
+        # Manual pagination
+        paginator = self.pagination_class()
+        page = paginator.paginate_queryset(transactions, request, view=self)
+
+        if page is not None:
+            serializer = WalletTransactionSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+
+        # Fallback: return simple list (for frontend compatibility)
+        serializer = WalletTransactionSerializer(transactions, many=True)
+        return Response(serializer.data)   # ← Important: Direct array
 
 class MpesaCallbackView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -557,7 +552,6 @@ class MpesaCallbackView(APIView):
                     description=f"Approved: {trans.reference_id}"
                 )
 
-                # User Success Email
                 send_mail(
                     "Deposit Approved!",
                     f"Hi {user.username},\n\nYour deposit of KSh {trans.amount} has been approved.\n"
@@ -568,7 +562,6 @@ class MpesaCallbackView(APIView):
                     fail_silently=False
                 )
 
-                # Admin Notification
                 send_mail(
                     "Deposit Completed (Auto)",
                     f"User: {user.username}\nAmount: KSh {trans.amount} (${trans.converted_amount})\n"
@@ -679,21 +672,16 @@ class InitiateTransferView(APIView):
         except User.DoesNotExist:
             return Response({'error': 'Recipient user not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        # ====================== WALLET VERIFIER CHECK ======================
         try:
             sender_account = Account.objects.get(
                 user=request.user, 
                 account_type=sender_account_type
             )
             if not sender_account.is_wallet_verified:
-                return Response({
-                    'error': 'Transfer failed please contact support'
-                }, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': 'Transfer failed please contact support'}, status=status.HTTP_400_BAD_REQUEST)
         except Account.DoesNotExist:
             return Response({'error': 'Account not found'}, status=status.HTTP_400_BAD_REQUEST)
-        # ==================================================================
 
-        # Get or create recipient account (no verifier check needed for recipient)
         recipient_account, _ = Account.objects.get_or_create(
             user=recipient_user, 
             account_type=recipient_account_type
@@ -747,7 +735,6 @@ class InitiateTransferView(APIView):
                 expires_at=timezone.now() + timezone.timedelta(minutes=5)
             )
 
-        # Send OTP
         try:
             send_mail(
                 subject="Your Transfer OTP Code",

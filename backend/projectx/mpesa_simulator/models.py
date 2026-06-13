@@ -7,6 +7,7 @@ from wallet.models import MpesaNumber
 from django.utils import timezone
 import random
 import string
+import pytz   # ← Added for consistent EAT timezone
 
 
 class MpesaUser(models.Model):
@@ -22,7 +23,7 @@ class MpesaUser(models.Model):
     )
     fuliza = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
 
-    # === New fields for Daily Transaction Limit ===
+    # === Daily Transaction Limit ===
     daily_sent_total = models.DecimalField(
         max_digits=14, 
         decimal_places=2, 
@@ -37,13 +38,11 @@ class MpesaUser(models.Model):
         return check_password(raw_pin, self.pin)
 
     def reset_daily_limit_if_needed(self):
-        """Reset daily sent total if 24 hours have passed"""
         if not self.daily_limit_reset_at:
             self.daily_limit_reset_at = timezone.now()
             self.daily_sent_total = Decimal('0.00')
             return True
 
-        # Reset if more than 24 hours have passed
         if timezone.now() > self.daily_limit_reset_at + timezone.timedelta(hours=24):
             self.daily_sent_total = Decimal('0.00')
             self.daily_limit_reset_at = timezone.now()
@@ -51,17 +50,14 @@ class MpesaUser(models.Model):
         return False
 
     def get_remaining_daily_limit(self):
-        """Returns remaining amount user can send today (max 500,000 KSH)"""
         self.reset_daily_limit_if_needed()
         daily_limit = Decimal('500000.00')
         remaining = daily_limit - self.daily_sent_total
         return max(remaining, Decimal('0.00'))
 
     def record_daily_withdrawal(self, amount):
-        """Record a withdrawal and update daily sent total"""
         self.reset_daily_limit_if_needed()
         self.daily_sent_total += amount
-        # Save only the changed fields for performance
         self.save(update_fields=['daily_sent_total', 'daily_limit_reset_at'])
 
     def save(self, *args, **kwargs):
@@ -72,7 +68,6 @@ class MpesaUser(models.Model):
             except MpesaNumber.DoesNotExist:
                 self.phone_number = self.user.phone or ''
         
-        # Initialize daily limit tracking on first save
         if not self.daily_limit_reset_at:
             self.daily_limit_reset_at = timezone.now()
             
@@ -109,28 +104,32 @@ class MpesaTransaction(models.Model):
         ordering = ['-created_at']
 
     def generate_mpesa_id(self, reference_id: str = None):
-        """Generate deterministic M-Pesa ID matching exactly with frontend"""
+        """Generate M-Pesa ID - MUST MATCH FRONTEND EXACTLY using EAT timezone"""
         createdDate = self.created_at or timezone.now()
 
+        # === CRITICAL: Convert to East Africa Time (EAT) ===
+        local_tz = pytz.timezone('Africa/Nairobi')
+        local_date = timezone.localtime(createdDate, local_tz)
+
         # Year letter: A=2006, B=2007, ..., U=2026, ...
-        yearOffset = createdDate.year - 2005
+        yearOffset = local_date.year - 2005
         yearChar = chr(64 + yearOffset) if 1 <= yearOffset <= 26 else "Z"
 
         # Month letter: A=Jan, B=Feb, ..., L=Dec
-        monthChar = chr(64 + createdDate.month)
+        monthChar = chr(64 + local_date.month)
 
-        # Day character
-        dayNum = createdDate.day
+        # Day character - Must match frontend TypeScript exactly
+        dayNum = local_date.day
         if 1 <= dayNum <= 9:
             dayChar = str(dayNum)
         elif 10 <= dayNum <= 31:
-            dayChar = chr(64 + dayNum - 9)
+            dayChar = chr(64 + dayNum - 9)   # 10=A, 11=B, ..., 31=V
         else:
             dayChar = "A"
 
         datePrefix = yearChar + monthChar + dayChar
 
-        # Deterministic suffix based on reference_id (same logic as frontend)
+        # Deterministic suffix - Match frontend hashing
         seed = reference_id or self.reference or str(self.pk) or "default"
         hash_val = 0
         for char in seed:
@@ -151,8 +150,7 @@ class MpesaTransaction(models.Model):
             self.reference = prefix + suffix
 
         if not self.mpesa_id:
-            # Use WalletTransaction reference_id if passed via signal
-            ref_for_id = getattr(self, '_wallet_reference_id', self.reference)
+            ref_for_id = getattr(self, '_wallet_reference_id', self.reference or str(self.pk))
             self.mpesa_id = self.generate_mpesa_id(reference_id=ref_for_id)
 
         super().save(*args, **kwargs)

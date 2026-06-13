@@ -21,7 +21,26 @@ export default function TransactionsPage() {
     try {
       const res = await api.getWalletTransactions();
       if (res.error) throw new Error(res.error);
-      const data = (res.data?.transactions || res.data || []) as WalletTransaction[];
+
+      // Handle different possible response structures from backend
+      let data: WalletTransaction[] = [];
+
+      if (!res.data) {
+        data = [];
+      } else if (Array.isArray(res.data)) {
+        // Direct array response
+        data = res.data as WalletTransaction[];
+      } else if (res.data.results && Array.isArray(res.data.results)) {
+        // DRF Paginated response (most common now)
+        data = res.data.results as WalletTransaction[];
+      } else if (res.data.transactions && Array.isArray(res.data.transactions)) {
+        // Old format { transactions: [...] }
+        data = res.data.transactions as WalletTransaction[];
+      } else {
+        // Fallback
+        data = [];
+      }
+
       setTransactions(data);
       filterTransactions(data, activeTab);
     } catch (error) {
@@ -101,7 +120,9 @@ export default function TransactionsPage() {
             <div className="p-8 text-center text-gray-500">Loading transactions...</div>
           ) : filteredTransactions.length === 0 ? (
             <div className="p-12 text-center text-gray-500">
-              <p className="text-lg">No {activeTab === "all" ? "" : activeTab} yet</p>
+              <p className="text-lg">
+                No {activeTab === "all" ? "" : activeTab} yet
+              </p>
             </div>
           ) : (
             <div className="divide-y divide-gray-200">
@@ -111,7 +132,7 @@ export default function TransactionsPage() {
                   transaction={{
                     id: transaction.id,
                     type: transaction.transaction_type.charAt(0).toUpperCase() + transaction.transaction_type.slice(1),
-                    amount: `${formatCurrency(transaction.amount)} ${transaction.currency.code}`,
+                    amount: `${formatCurrency(transaction.amount)} ${transaction.currency?.code || "USD"}`,
                     convertedAmount: transaction.converted_amount
                       ? `${formatCurrency(transaction.converted_amount)} ${transaction.target_currency?.code || "USD"}`
                       : undefined,

@@ -698,7 +698,17 @@ export const getWallets = async () => {
   return response
 }
 
-export const getWalletTransactions = () => apiRequest<{ transactions: WalletTransaction[] }>("/wallet/transactions/")
+export const getWalletTransactions = () => 
+  apiRequest<
+    WalletTransaction[] | 
+    { 
+      results?: WalletTransaction[]; 
+      transactions?: WalletTransaction[]; 
+      count?: number; 
+      next?: string | null; 
+      previous?: string | null;
+    }
+  >("/wallet/transactions/");
 
 export const deposit = (data: {
   amount: number
