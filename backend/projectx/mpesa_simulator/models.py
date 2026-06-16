@@ -92,6 +92,7 @@ class MpesaTransaction(models.Model):
     mpesa_user = models.ForeignKey(MpesaUser, on_delete=models.CASCADE, related_name='transactions')
     transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPES)
     amount = models.DecimalField(max_digits=14, decimal_places=2)
+    fee = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
     description = models.TextField(blank=True)
     reference = models.CharField(max_length=50, blank=True, null=True)
     mpesa_id = models.CharField(max_length=50, blank=True, null=True, unique=True)
@@ -157,3 +158,5 @@ class MpesaTransaction(models.Model):
 
     def __str__(self):
         return f"{self.transaction_type.capitalize()} - {self.amount} KSH for {self.mpesa_user.user.username}"
+    
+    

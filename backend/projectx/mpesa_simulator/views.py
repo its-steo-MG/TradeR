@@ -13,6 +13,38 @@ from .serializers import MpesaUserSerializer, MpesaTransactionSerializer
 from accounts.authentication import SuspendedUserJWTAuthentication
 
 
+def calculate_mpesa_send_fee(amount: Decimal) -> Decimal:
+    """Calculate M-PESA Send Money fee (as of 2026)"""
+    amount = Decimal(str(amount))
+
+    if amount <= 100:
+        return Decimal('0.00')
+    elif amount <= 500:
+        return Decimal('6.00')
+    elif amount <= 1000:
+        return Decimal('12.00')
+    elif amount <= 1500:
+        return Decimal('22.00')
+    elif amount <= 2500:
+        return Decimal('32.00')
+    elif amount <= 3500:
+        return Decimal('51.00')
+    elif amount <= 5000:
+        return Decimal('55.00')
+    elif amount <= 7500:
+        return Decimal('65.00')
+    elif amount <= 10000:
+        return Decimal('77.00')
+    elif amount <= 15000:
+        return Decimal('87.00')
+    elif amount <= 20000:
+        return Decimal('97.00')
+    elif amount <= 70000:
+        return Decimal('102.00')
+    else:
+        return Decimal('102.00')
+
+
 class ConnectMpesaView(APIView):
     permission_classes = [IsAuthenticated]
     authentication_classes = [SuspendedUserJWTAuthentication]
@@ -131,7 +163,7 @@ class MpesaTransactionDetailView(APIView):
             return Response({'error': 'M-Pesa profile not connected'}, status=status.HTTP_404_NOT_FOUND)
 
 
-# ====================== IMPROVED SEND MONEY ======================
+# ====================== SEND MONEY ======================
 class SendMoneyView(APIView):
     permission_classes = [IsAuthenticated]
     authentication_classes = [SuspendedUserJWTAuthentication]
@@ -157,6 +189,10 @@ class SendMoneyView(APIView):
         except:
             return Response({'error': 'Invalid amount'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Calculate transaction fee
+        fee = calculate_mpesa_send_fee(amount)
+        total_debit = amount + fee
+
         # Check PIN
         if not sender.check_pin(pin):
             return Response({'error': 'Invalid PIN'}, status=status.HTTP_401_UNAUTHORIZED)
@@ -167,9 +203,11 @@ class SendMoneyView(APIView):
                 'error': f'Daily limit exceeded. You can only send up to {sender.get_remaining_daily_limit():,.2f} KSH today.'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Check sufficient balance
-        if sender.balance < amount:
-            return Response({'error': 'Insufficient balance'}, status=status.HTTP_400_BAD_REQUEST)
+        # Check sufficient balance (amount + fee)
+        if sender.balance < total_debit:
+            return Response({
+                'error': f'Insufficient balance. You need at least Ksh {total_debit:,.2f} (including Ksh {fee} fee)'
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         # Find recipient
         try:
@@ -177,14 +215,12 @@ class SendMoneyView(APIView):
             if recipient.pk == sender.pk:
                 return Response({'error': 'You cannot send money to yourself'}, status=status.HTTP_400_BAD_REQUEST)
         except MpesaUser.DoesNotExist:
-            return Response({
-                'error': 'This phone number is not registered on M-Pesa'
-            }, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': 'This phone number is not registered on M-Pesa'}, status=status.HTTP_404_NOT_FOUND)
 
-        # Process atomically
+        # Process transaction
         with transaction.atomic():
-            # Deduct from sender
-            sender.balance -= amount
+            # Deduct amount + fee from sender
+            sender.balance -= total_debit
             sender.record_daily_withdrawal(amount)
             sender.save(update_fields=['balance'])
 
@@ -192,20 +228,20 @@ class SendMoneyView(APIView):
             recipient.balance += amount
             recipient.save(update_fields=['balance'])
 
-            # Create Withdrawal for sender
-            withdrawal = MpesaTransaction(
+            # Create transaction for sender
+            withdrawal = MpesaTransaction.objects.create(
                 mpesa_user=sender,
                 transaction_type='withdrawal',
                 amount=amount,
+                fee=fee,
                 description=description,
                 recipient_name=recipient.real_name,
                 recipient_phone=recipient.phone_number,
                 category='family_friends',
             )
-            withdrawal.save()                     # ← This generates mpesa_id
 
-            # Create Deposit for recipient
-            deposit = MpesaTransaction(
+            # Create transaction for recipient
+            MpesaTransaction.objects.create(
                 mpesa_user=recipient,
                 transaction_type='deposit',
                 amount=amount,
@@ -214,26 +250,27 @@ class SendMoneyView(APIView):
                 recipient_phone=sender.phone_number,
                 category='family_friends',
             )
-            deposit.save()                        # ← This also generates mpesa_id
 
         return Response({
             'message': 'Send money successful',
-            'mpesa_id': withdrawal.mpesa_id,           # Sender's transaction ID
-            'deposit_mpesa_id': deposit.mpesa_id,      # Receiver's transaction ID
+            'mpesa_id': withdrawal.mpesa_id,
             'recipient_name': recipient.real_name,
             'recipient_phone': recipient.phone_number,
             'amount': str(amount),
+            'fee': str(fee),
+            'total_debited': str(total_debit),
             'new_balance': str(sender.balance),
             'transaction_type': 'withdrawal'
         }, status=status.HTTP_200_OK)
-    
-    # ====================== NEW: RECIPIENT LOOKUP ======================
+
+
+# ====================== RECIPIENT LOOKUP ======================
 class RecipientLookupView(APIView):
     permission_classes = [IsAuthenticated]
     authentication_classes = [SuspendedUserJWTAuthentication]
 
     def post(self, request):
-        """Lookup recipient by phone number - shows real name like real M-Pesa"""
+        """Lookup recipient by phone number before sending money"""
         try:
             sender = request.user.mpesa_user
         except MpesaUser.DoesNotExist:
@@ -246,21 +283,19 @@ class RecipientLookupView(APIView):
 
         try:
             recipient = MpesaUser.objects.get(phone_number=recipient_phone.strip())
-            
+
             if recipient.pk == sender.pk:
-                return Response({
-                    'error': 'You cannot send money to yourself'
-                }, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': 'You cannot send money to yourself'}, status=status.HTTP_400_BAD_REQUEST)
 
             return Response({
+                'exists': True,
                 'recipient_name': recipient.real_name,
                 'recipient_phone': recipient.phone_number,
-                'exists': True,
                 'message': f"Sending to {recipient.real_name}"
-            })
+            }, status=status.HTTP_200_OK)
 
         except MpesaUser.DoesNotExist:
             return Response({
-                'error': 'This phone number is not registered on M-Pesa. Please check and try again.',
-                'exists': False
+                'exists': False,
+                'error': 'This phone number is not registered on M-Pesa. Please check and try again.'
             }, status=status.HTTP_404_NOT_FOUND)

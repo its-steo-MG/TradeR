@@ -35,6 +35,7 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:8080",
     "http://localhost:3001",
     "http://127.0.0.1:3001",
     "http://localhost:3002",
@@ -51,6 +52,7 @@ CORS_ALLOWED_ORIGINS = [
 # REQUIRED FOR DJANGO ADMIN POST/DELETE FROM FRONTEND
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
+    "http://localhost:8080",
     "http://127.0.0.1:3000",
     "http://localhost:3001",
     "http://127.0.0.1:3001",

@@ -178,17 +178,15 @@ class DepositView(APIView):
             try:
                 send_mail(
                     subject="New Deposit Request – STK Push Sent",
-                    message=(
-                        f"User: {request.user.username}\n"
-                        f"Email: {request.user.email}\n"
-                        f"Amount: {amount} {incoming_currency.code}\n"
-                        f"Converted: ~{converted_amount:.2f} USD\n"
-                        f"Phone: {mpesa_phone}\n"
-                        f"Account Type: {account_type.title()}\n"
-                        f"Reference: {reference_id}\n"
-                        f"Time: {timezone.now().strftime('%Y-%m-%d %H:%M %Z')}\n\n"
-                        f"User has been prompted to enter PIN. Awaiting completion."
-                    ),
+                    message=(f"User: {request.user.username}\n"
+                             f"Email: {request.user.email}\n"
+                             f"Amount: {amount} {incoming_currency.code}\n"
+                             f"Converted: ~{converted_amount:.2f} USD\n"
+                             f"Phone: {mpesa_phone}\n"
+                             f"Account Type: {account_type.title()}\n"
+                             f"Reference: {reference_id}\n"
+                             f"Time: {timezone.now().strftime('%Y-%m-%d %H:%M %Z')}\n\n"
+                             f"User has been prompted to enter PIN. Awaiting completion."),
                     from_email=settings.DEFAULT_FROM_EMAIL,
                     recipient_list=[ADMIN_EMAIL],
                     fail_silently=False,
@@ -298,15 +296,13 @@ class WithdrawalOTPView(APIView):
         try:
             send_mail(
                 subject="Your TradeRiser Withdrawal OTP",
-                message=(
-                    f"Hi {request.user.username},\n\n"
-                    f"Your OTP for withdrawing ${amount} USD (≈ {converted_amount:.2f} KSh)\n"
-                    f"from your {account_type.title()} account (Ref: {reference_id}) is:\n\n"
-                    f"{otp_code}\n\n"
-                    f"This OTP expires in 5 minutes.\n"
-                    f"If you did not request this, please contact support immediately.\n\n"
-                    f"TradeRiser Team"
-                ),
+                message=(f"Hi {request.user.username},\n\n"
+                         f"Your OTP for withdrawing ${amount} USD (≈ {converted_amount:.2f} KSh)\n"
+                         f"from your {account_type.title()} account (Ref: {reference_id}) is:\n\n"
+                         f"{otp_code}\n\n"
+                         f"This OTP expires in 5 minutes.\n"
+                         f"If you did not request this, please contact support immediately.\n\n"
+                         f"TradeRiser Team"),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[request.user.email],
                 fail_silently=False,
@@ -392,12 +388,10 @@ class VerifyWithdrawalOTPView(APIView):
 
             send_mail(
                 subject="Withdrawal Initiated Successfully",
-                message=(
-                    f"Hi {request.user.username},\n\n"
-                    f"Your withdrawal of ${trans.amount} USD has been initiated and is being processed.\n\n"
-                    f"Reference: {trans.reference_id}\n"
-                    f"You will receive the funds in your M-Pesa shortly."
-                ),
+                message=(f"Hi {request.user.username},\n\n"
+                         f"Your withdrawal of ${trans.amount} USD has been initiated and is being processed.\n\n"
+                         f"Reference: {trans.reference_id}\n"
+                         f"You will receive the funds in your M-Pesa shortly."),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[request.user.email],
                 fail_silently=True,
@@ -432,31 +426,27 @@ class VerifyWithdrawalOTPView(APIView):
         try:
             send_mail(
                 subject="Withdrawal Completed Successfully",
-                message=(
-                    f"Hi {trans.wallet.account.user.username},\n\n"
-                    f"Your withdrawal of ${trans.amount} USD has been successfully processed "
-                    f"and sent to your M-Pesa.\n\n"
-                    f"Amount: ${trans.amount} USD → {trans.converted_amount} KSH\n"
-                    f"Reference: {trans.reference_id}\n"
-                    f"Phone: {trans.mpesa_phone}\n\n"
-                    f"Thank you for using TradeRiser!"
-                ),
+                message=(f"Hi {trans.wallet.account.user.username},\n\n"
+                         f"Your withdrawal of ${trans.amount} USD has been successfully processed "
+                         f"and sent to your M-Pesa.\n\n"
+                         f"Amount: ${trans.amount} USD → {trans.converted_amount} KSH\n"
+                         f"Reference: {trans.reference_id}\n"
+                         f"Phone: {trans.mpesa_phone}\n\n"
+                         f"Thank you for using TradeRiser!"),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[user_email],
                 fail_silently=False,
             )
             send_mail(
                 subject="✅ Marketo Withdrawal Auto-Approved",
-                message=(
-                    f"Marketo User Withdrawal Auto-Approved\n\n"
-                    f"User: {trans.wallet.account.user.username}\n"
-                    f"Email: {user_email}\n"
-                    f"Amount: ${trans.amount} USD → {trans.converted_amount} KSH\n"
-                    f"Account: {account_type.title()}\n"
-                    f"Reference: {trans.reference_id}\n"
-                    f"Time: {timezone.now().strftime('%Y-%m-%d %H:%M %Z')}\n\n"
-                    f"Status: COMPLETED (Auto)"
-                ),
+                message=(f"Marketo User Withdrawal Auto-Approved\n\n"
+                         f"User: {trans.wallet.account.user.username}\n"
+                         f"Email: {user_email}\n"
+                         f"Amount: ${trans.amount} USD → {trans.converted_amount} KSH\n"
+                         f"Account: {account_type.title()}\n"
+                         f"Reference: {trans.reference_id}\n"
+                         f"Time: {timezone.now().strftime('%Y-%m-%d %H:%M %Z')}\n\n"
+                         f"Status: COMPLETED (Auto)"),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[ADMIN_EMAIL],
                 fail_silently=False,
@@ -468,16 +458,14 @@ class VerifyWithdrawalOTPView(APIView):
         try:
             send_mail(
                 subject="Withdrawal Ready for Payout",
-                message=(
-                    f"User: {trans.wallet.account.user.username}\n"
-                    f"Email: {trans.wallet.account.user.email}\n"
-                    f"Amount: {trans.amount} USD → {trans.converted_amount} KSH\n"
-                    f"Phone: {trans.mpesa_phone}\n"
-                    f"Account: {wallet.account.account_type.title()}\n"
-                    f"Reference: {trans.reference_id}\n"
-                    f"Time: {timezone.now().strftime('%Y-%m-%d %H:%M %Z')}\n\n"
-                    f"OTP verified. Funds deducted. Please process payout via M-Pesa."
-                ),
+                message=(f"User: {trans.wallet.account.user.username}\n"
+                         f"Email: {trans.wallet.account.user.email}\n"
+                         f"Amount: {trans.amount} USD → {trans.converted_amount} KSH\n"
+                         f"Phone: {trans.mpesa_phone}\n"
+                         f"Account: {wallet.account.account_type.title()}\n"
+                         f"Reference: {trans.reference_id}\n"
+                         f"Time: {timezone.now().strftime('%Y-%m-%d %H:%M %Z')}\n\n"
+                         f"OTP verified. Funds deducted. Please process payout via M-Pesa."),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[ADMIN_EMAIL],
                 fail_silently=False,
@@ -513,6 +501,7 @@ class TransactionListView(APIView):
         serializer = WalletTransactionSerializer(transactions, many=True)
         return Response(serializer.data)   # ← Important: Direct array
 
+
 class MpesaCallbackView(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -535,6 +524,59 @@ class MpesaCallbackView(APIView):
                 amount = next((item['Value'] for item in items if item['Name'] == 'Amount'), None)
                 receipt = next((item['Value'] for item in items if item['Name'] == 'MpesaReceiptNumber'), None)
 
+                # ====================== SPECIAL HANDLING FOR MARKETO TRANSFER FUNDING ======================
+                if trans.transaction_type == 'transfer_out' and getattr(user, 'is_marketo', False):
+                    # This STK was to fund a marketo → non-marketo transfer
+                    trans.description = f"STK payment successful for transfer funding. Receipt: {receipt}. Awaiting admin approval."
+                    trans.status = 'pending'
+                    trans.completed_at = timezone.now()
+                    trans.save()
+
+                    # Also update the paired transfer_in
+                    try:
+                        paired = WalletTransaction.objects.get(
+                            reference_id=trans.reference_id,
+                            transaction_type='transfer_in'
+                        )
+                        paired.status = 'pending'
+                        paired.description = f"M-Pesa funding received for transfer {trans.reference_id}. Awaiting admin approval. Receipt: {receipt}"
+                        paired.completed_at = timezone.now()
+                        paired.save()
+                    except WalletTransaction.DoesNotExist:
+                        pass
+
+                    # Notify sender and admin
+                    try:
+                        send_mail(
+                            subject="M-Pesa Payment Received for Your Transfer",
+                            message=(f"Hi {user.username},\n\n"
+                                     f"Your M-Pesa payment for transfer {trans.reference_id} has been received.\n"
+                                     f"The transfer is now pending admin approval before funds are moved to the recipient.\n\n"
+                                     f"Reference: {trans.reference_id}\n"
+                                     f"Thank you for using TradeRiser!"),
+                            from_email=settings.DEFAULT_FROM_EMAIL,
+                            recipient_list=[user.email],
+                            fail_silently=True
+                        )
+                        send_mail(
+                            subject="✅ Marketo Transfer Funding Received - Ready for Admin Approval",
+                            message=(f"Marketo User Transfer Funding Received\n\n"
+                                     f"User: {user.username} ({user.email})\n"
+                                     f"Transfer Ref: {trans.reference_id}\n"
+                                     f"Amount: ${trans.amount} USD (funded via KSh {amount} M-Pesa)\n"
+                                     f"Status: Pending Admin Approval\n\n"
+                                     f"Please review and approve the transfer_out in the admin panel to complete the transfer."),
+                            from_email=settings.DEFAULT_FROM_EMAIL,
+                            recipient_list=[ADMIN_EMAIL],
+                            fail_silently=True
+                        )
+                    except Exception as e:
+                        logger.error(f"Email error in transfer funding callback: {e}")
+
+                    # DO NOT credit wallet or create deposit transaction — admin approval will handle deduction/credit via signal
+                    return JsonResponse({'ResultCode': 0})
+
+                # ====================== NORMAL DEPOSIT LOGIC ======================
                 trans.amount = Decimal(amount) if amount else trans.amount
                 trans.description = f"Completed: {receipt}"
                 trans.status = 'completed'
@@ -624,12 +666,10 @@ class ResendOTPView(APIView):
         try:
             send_mail(
                 subject="Withdrawal OTP (Resent)",
-                message=(
-                    f"Hi {request.user.username},\n\n"
-                    f"Your new OTP for withdrawing {wallet_transaction.amount} USD "
-                    f"from {wallet_transaction.wallet.account.account_type} account "
-                    f"(Ref: {wallet_transaction.reference_id}) is: {otp_code}"
-                ),
+                message=(f"Hi {request.user.username},\n\n"
+                         f"Your new OTP for withdrawing {wallet_transaction.amount} USD "
+                         f"from {wallet_transaction.wallet.account.account_type} account "
+                         f"(Ref: {wallet_transaction.reference_id}) is: {otp_code}"),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[request.user.email],
                 fail_silently=False,
@@ -738,14 +778,12 @@ class InitiateTransferView(APIView):
         try:
             send_mail(
                 subject="Your Transfer OTP Code",
-                message=(
-                    f"Hi {request.user.username},\n\n"
-                    f"Your OTP for transferring ${amount} USD (Ref: {reference_id}) is:\n\n"
-                    f"{otp.code}\n\n"
-                    f"This code expires in 5 minutes.\n"
-                    f"If you didn't initiate this, contact support immediately.\n\n"
-                    f"TradeRiser Team"
-                ),
+                message=(f"Hi {request.user.username},\n\n"
+                         f"Your OTP for transferring ${amount} USD (Ref: {reference_id}) is:\n\n"
+                         f"{otp.code}\n\n"
+                         f"This code expires in 5 minutes.\n"
+                         f"If you didn't initiate this, contact support immediately.\n\n"
+                         f"TradeRiser Team"),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[request.user.email],
                 fail_silently=False,
@@ -794,27 +832,133 @@ class VerifyTransferOTPView(APIView):
         except (WalletTransaction.DoesNotExist, OTPCode.DoesNotExist):
             return Response({'error': 'Invalid or expired OTP'}, status=status.HTTP_400_BAD_REQUEST)
 
-        reference_id = transfer_out.reference_id
+        # Mark OTP used (always)
+        otp_obj.is_used = True
+        otp_obj.save()
 
-        with transaction.atomic():
+        # Fetch paired transfer_in
+        try:
             transfer_in = WalletTransaction.objects.get(
-                reference_id=reference_id,
+                reference_id=transfer_out.reference_id,
                 transaction_type='transfer_in'
             )
+            recipient_user = transfer_in.wallet.account.user
+        except WalletTransaction.DoesNotExist:
+            transfer_in = None
+            recipient_user = None
 
-            transfer_out.status = 'completed'
-            transfer_out.completed_at = timezone.now()
-            transfer_out.save()
+        sender_user = transfer_out.wallet.account.user
 
-            transfer_in.status = 'completed'
-            transfer_in.completed_at = timezone.now()
-            transfer_in.save()
+        # Check for special Marketo → non-Marketo transfer
+        is_special_marketo_transfer = (
+            getattr(sender_user, 'is_marketo', False) and
+            recipient_user is not None and
+            not getattr(recipient_user, 'is_marketo', False)
+        )
 
-            otp_obj.is_used = True
-            otp_obj.save()
+        if is_special_marketo_transfer:
+            # ========== SPECIAL FLOW: STK Push to fund the transfer ==========
+            try:
+                mpesa_obj = MpesaNumber.objects.get(user=sender_user)
+                mpesa_phone = mpesa_obj.phone_number
+            except MpesaNumber.DoesNotExist:
+                transfer_out.status = 'failed'
+                transfer_out.description = 'Transfer failed: No M-Pesa number configured for Marketo user'
+                transfer_out.save()
+                if transfer_in:
+                    transfer_in.status = 'failed'
+                    transfer_in.save()
+                return Response({'error': 'Please set up your M-Pesa number first (required for Marketo transfers to non-Marketo users)'}, status=status.HTTP_400_BAD_REQUEST)
 
-        return Response({
-            'message': 'Transfer completed successfully!',
-            'reference_id': reference_id,
-            'amount': str(transfer_out.amount)
-        }, status=status.HTTP_200_OK)
+            try:
+                usd_cur = Currency.objects.get(code='USD')
+                ksh_cur = Currency.objects.get(code='KSH')
+                rate_obj = ExchangeRate.objects.get(base_currency=usd_cur, target_currency=ksh_cur)
+                ksh_amount = (transfer_out.amount * rate_obj.admin_withdrawal_rate).quantize(Decimal('0.01'))
+            except Exception as e:
+                logger.error(f"Exchange rate error in special transfer: {e}")
+                return Response({'error': 'Exchange rate configuration error. Contact support.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Initiate STK Push to the Marketo sender's phone
+            payment_client = PaymentClient()
+            stk_response = payment_client.initiate_stk_push(mpesa_phone, ksh_amount, transfer_out.reference_id)
+
+            if 'CheckoutRequestID' in stk_response:
+                checkout_id = stk_response['CheckoutRequestID']
+
+                # Update both sides - keep pending, attach checkout + mpesa info
+                transfer_out.checkout_request_id = checkout_id
+                transfer_out.mpesa_phone = mpesa_phone
+                transfer_out.status = 'pending'
+                transfer_out.description = (f"Marketo transfer to non-Marketo user. "
+                                            f"STK Push sent for KSh {ksh_amount} funding. "
+                                            f"Awaiting M-Pesa payment + admin approval.")
+                transfer_out.save()
+
+                if transfer_in:
+                    transfer_in.checkout_request_id = checkout_id
+                    transfer_in.mpesa_phone = mpesa_phone
+                    transfer_in.status = 'pending'
+                    transfer_in.description = f"Awaiting M-Pesa funding confirmation for transfer {transfer_out.reference_id}"
+                    transfer_in.save()
+
+                # Notify sender
+                try:
+                    send_mail(
+                        subject="STK Push Sent to Fund Your Transfer",
+                        message=(f"Hi {sender_user.username},\n\n"
+                                 f"To complete your transfer of ${transfer_out.amount} USD to {recipient_user.username},\n"
+                                 f"an STK Push for KSh {ksh_amount} has been sent to your M-Pesa ({mpesa_phone}).\n\n"
+                                 f"Reference: {transfer_out.reference_id}\n\n"
+                                 f"Please complete the payment on your phone.\n"
+                                 f"Once paid, the transfer will move to 'Pending Admin Approval'.\n"
+                                 f"You will be notified when the admin processes it.\n\n"
+                                 f"TradeRiser Team"),
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        recipient_list=[sender_user.email],
+                        fail_silently=True,
+                    )
+                except Exception as e:
+                    logger.error(f"STK funding email failed: {e}")
+
+                return Response({
+                    'message': 'STK Push sent to your M-Pesa to fund this transfer. Complete the payment to proceed.',
+                    'reference_id': transfer_out.reference_id,
+                    'ksh_amount': str(ksh_amount),
+                    'checkout_request_id': checkout_id,
+                    'status': 'pending_mpesa_payment'
+                }, status=status.HTTP_200_OK)
+            else:
+                # STK initiation failed
+                error_detail = stk_response.get('error') or stk_response.get('ResponseDescription', 'Unknown STK error')
+                transfer_out.status = 'failed'
+                transfer_out.description = f"STK Push for transfer funding failed: {error_detail}"
+                transfer_out.save()
+                if transfer_in:
+                    transfer_in.status = 'failed'
+                    transfer_in.save()
+                return Response({
+                    'error': 'Failed to send STK Push for transfer funding',
+                    'details': error_detail
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        else:
+            # ========== NORMAL TRANSFER FLOW (instant complete after OTP) ==========
+            with transaction.atomic():
+                transfer_out.status = 'completed'
+                transfer_out.completed_at = timezone.now()
+                transfer_out.save()
+
+                if transfer_in:
+                    transfer_in.status = 'completed'
+                    transfer_in.completed_at = timezone.now()
+                    transfer_in.save()
+
+            return Response({
+                'message': 'Transfer completed successfully!',
+                'reference_id': transfer_out.reference_id,
+                'amount': str(transfer_out.amount)
+            }, status=status.HTTP_200_OK)
+
+
+# ====================== END OF FILE ======================

@@ -65,7 +65,8 @@ def create_mpesa_notification(sender, instance, created, **kwargs):
                 f"{mpesa_id} Confirmed.Ksh{instance.amount:,.2f} {action_word} "
                 f"{instance.recipient_name} {phone_link} on {date_str} at {time_str}. "
                 f"New M-PESA balance is Ksh{instance.mpesa_user.balance:,.2f}. "
-                f"Transaction cost, Ksh0.00. Amount you can transact within the day is {remaining_limit:,.2f}. "
+                f"Transaction cost, Ksh{instance.fee:,.2f}. "
+                f"Amount you can transact within the day is {remaining_limit:,.2f}. "
                 f"Download My OneApp on https://saf.cx/lPKcC"
             )
             notif_type = 'sent'

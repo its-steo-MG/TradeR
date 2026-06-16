@@ -88,7 +88,7 @@ class WalletTransactionAdmin(admin.ModelAdmin):
         'status', 
         'created_at', 
         'currency',
-        'wallet__account__user__is_marketo'   # Correct path: User.is_marketo
+        'wallet__account__user__is_marketo'
     )
     search_fields = (
         'reference_id',
@@ -164,6 +164,11 @@ class WalletTransactionAdmin(admin.ModelAdmin):
     def status_colored(self, obj):
         try:
             if obj.status == 'pending' and getattr(obj.wallet.account.user, 'is_marketo', False):
+                # Special message for the new Marketo transfer funding flow
+                if obj.transaction_type == 'transfer_out':
+                    return format_html(
+                        '<span style="color: #6b21a8; font-weight: bold;">Pending Admin Approval (Marketo Funded)</span>'
+                    )
                 return format_html(
                     '<span style="color: purple; font-weight: bold;">Pending (Auto in 5s)</span>'
                 )
@@ -197,6 +202,22 @@ class WalletTransactionAdmin(admin.ModelAdmin):
             obj.completed_at = timezone.now()
             obj.save()
             updated += 1
+
+            # Auto-complete paired transfer_in when approving transfer_out (for Marketo funding flow)
+            if obj.transaction_type == 'transfer_out':
+                try:
+                    paired = WalletTransaction.objects.get(
+                        reference_id=obj.reference_id,
+                        transaction_type='transfer_in',
+                        status='pending'
+                    )
+                    paired.status = 'completed'
+                    paired.completed_at = timezone.now()
+                    paired.description = (paired.description or '') + " | Auto-completed with outgoing side (admin bulk approve)"
+                    paired.save()
+                except WalletTransaction.DoesNotExist:
+                    pass
+
         messages.success(request, f"{updated} transaction(s) approved.")
     approve_selected.short_description = "Approve selected transactions"
 
@@ -231,7 +252,25 @@ class WalletTransactionAdmin(admin.ModelAdmin):
             obj.status = 'completed'
             obj.completed_at = timezone.now()
             obj.save()
-            messages.success(request, f"Transaction {obj.reference_id} approved.")
+
+            # === NEW: Auto-complete the paired transfer_in for Marketo transfer funding flow ===
+            if obj.transaction_type == 'transfer_out':
+                try:
+                    paired = WalletTransaction.objects.get(
+                        reference_id=obj.reference_id,
+                        transaction_type='transfer_in',
+                        status__in=['pending', 'failed']  # allow recovering failed ones too
+                    )
+                    paired.status = 'completed'
+                    paired.completed_at = timezone.now()
+                    paired.description = (paired.description or '') + " | Auto-completed when outgoing side was approved"
+                    paired.save()
+                    messages.success(request, f"Transaction {obj.reference_id} approved (paired incoming transfer also completed).")
+                except WalletTransaction.DoesNotExist:
+                    messages.success(request, f"Transaction {obj.reference_id} approved.")
+            else:
+                messages.success(request, f"Transaction {obj.reference_id} approved.")
+
         return HttpResponseRedirect("../..")
 
     def fail_transaction_view(self, request, transaction_id):
@@ -242,6 +281,21 @@ class WalletTransactionAdmin(admin.ModelAdmin):
                 obj.description = ""
             obj.description += " | Manually failed by admin"
             obj.save()
+
+            # Also fail the paired side if it's a transfer
+            if obj.transaction_type == 'transfer_out':
+                try:
+                    paired = WalletTransaction.objects.get(
+                        reference_id=obj.reference_id,
+                        transaction_type='transfer_in'
+                    )
+                    if paired.status != 'failed':
+                        paired.status = 'failed'
+                        paired.description = (paired.description or '') + " | Failed together with outgoing side"
+                        paired.save()
+                except WalletTransaction.DoesNotExist:
+                    pass
+
             messages.success(request, f"Transaction {obj.reference_id} marked as failed.")
         return HttpResponseRedirect("../..")
 
