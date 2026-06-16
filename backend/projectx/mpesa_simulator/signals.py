@@ -1,88 +1,75 @@
-# mpesa_message_notification/signals.py
+# mpesa_simulator/signals.py
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-from django.utils import timezone
-import pytz
+from decimal import Decimal
 import logging
+from django.db import transaction
 
-logger = logging.getLogger('mpesa_message_notification')
+from wallet.models import WalletTransaction
 
-
-def format_mpesa_date(dt):
-    if dt is None:
-        dt = timezone.now()
-    
-    local_tz = pytz.timezone('Africa/Nairobi')
-    local_time = timezone.localtime(dt, local_tz)
-
-    date_str = f"{local_time.day}/{local_time.month}/{local_time.strftime('%y')}"
-    hour = local_time.strftime("%I").lstrip("0") or "12"
-    time_str = f"{hour}:{local_time.strftime('%M')} {local_time.strftime('%p')}"
-    
-    return date_str, time_str
+logger = logging.getLogger('mpesa_simulator')
 
 
-@receiver(post_save, sender='mpesa_simulator.MpesaTransaction')
-def create_mpesa_notification(sender, instance, created, **kwargs):
-    if not created:
+@receiver(post_save, sender=WalletTransaction)
+def sync_wallet_to_mpesa(sender, instance, **kwargs):
+    """
+    Wallet Withdrawal → Deposit into M-PESA (adds to M-PESA balance)
+    Wallet Deposit   → Withdrawal from M-PESA (deducts from M-PESA balance)
+    """
+
+    if instance.status != 'completed' or not instance.mpesa_phone:
+        return
+
+    if getattr(instance, '_mpesa_synced', False):
         return
 
     try:
-        from .models import MpesaNotification
-        from mpesa_simulator.models import MpesaUser
+        from .models import MpesaUser, MpesaTransaction
 
-        # Force refresh to get the FINAL saved data
-        instance.refresh_from_db()
-
-        # CRITICAL: Use the already generated mpesa_id - DO NOT regenerate
-        mpesa_id = instance.mpesa_id
-
-        date_str, time_str = format_mpesa_date(instance.created_at)
-
-        phone = instance.recipient_phone or "5515738"
-        phone_link = f'<a href="tel:{phone}" class="text-ios-blue underline">{phone}</a>'
-
-        if instance.transaction_type == 'deposit':
-            message = (
-                f"{mpesa_id} Confirmed.You have received Ksh{instance.amount:,.2f} from "
-                f"{instance.recipient_name} {phone_link} on {date_str} at {time_str} "
-                f"New M-PESA balance is Ksh{instance.mpesa_user.balance:,.2f}. "
-                f"Download and try the Business App; Android https://bit.ly/lnm-app or "
-                f"IOS https://bit.ly/LNM-app"
+        with transaction.atomic():
+            mpesa_user = MpesaUser.objects.select_for_update().get(
+                phone_number=instance.mpesa_phone
             )
-            notif_type = 'received'
 
-        elif instance.transaction_type == 'withdrawal':
-            instance.mpesa_user.record_daily_withdrawal(instance.amount)
-            remaining_limit = instance.mpesa_user.get_remaining_daily_limit()
+            amount = instance.amount if getattr(instance.currency, 'code', None) == 'KSH' else \
+                     (instance.converted_amount or Decimal('0.00'))
 
-            if instance.recipient_phone == "5515738" or instance.category == 'business':
-                action_word = "paid to"
+            if instance.transaction_type == 'withdrawal':
+                # Wallet Withdrawal → Money goes INTO M-PESA
+                mpesa_user.balance += amount
+                txn_type = 'deposit'
+
+            elif instance.transaction_type == 'deposit':
+                # Wallet Deposit → Money comes OUT of M-PESA
+                if mpesa_user.balance < amount:
+                    logger.warning(f"Insufficient M-PESA balance for deposit sync {instance.id}")
+                    return
+                mpesa_user.balance -= amount
+                txn_type = 'withdrawal'
+
             else:
-                action_word = "sent to"
+                return
 
-            message = (
-                f"{mpesa_id} Confirmed.Ksh{instance.amount:,.2f} {action_word} "
-                f"{instance.recipient_name} {phone_link} on {date_str} at {time_str}. "
-                f"New M-PESA balance is Ksh{instance.mpesa_user.balance:,.2f}. "
-                f"Transaction cost, Ksh{instance.fee:,.2f}. "
-                f"Amount you can transact within the day is {remaining_limit:,.2f}. "
-                f"Download My OneApp on https://saf.cx/lPKcC"
+            mpesa_user.save(update_fields=['balance'])
+
+            # Create M-PESA transaction record
+            MpesaTransaction.objects.create(
+                mpesa_user=mpesa_user,
+                transaction_type=txn_type,
+                amount=amount,
+                description='SASHITRENDY TECH',
+                reference=instance.reference_id or '5515738',
+                recipient_name='SASHITRENDY TECHNOLOGIES',
+                recipient_phone='5515738',
+                category='business',
             )
-            notif_type = 'sent'
 
-        else:
-            message = f"{mpesa_id} {instance.transaction_type.capitalize()} of Ksh{instance.amount:,.2f} completed."
-            notif_type = 'sent'
+            # Mark as synced (NO save needed here)
+            instance._mpesa_synced = True
 
-        if not MpesaNotification.objects.filter(mpesa_transaction=instance).exists():
-            MpesaNotification.objects.create(
-                mpesa_user=instance.mpesa_user,
-                mpesa_transaction=instance,
-                notification_type=notif_type,
-                message=message,
-            )
-            logger.info(f"✅ Notification created → {mpesa_id}")
+            logger.info(f"✅ Synced Wallet {instance.transaction_type} → M-PESA {txn_type} | Amount: {amount}")
 
+    except MpesaUser.DoesNotExist:
+        logger.warning(f"No M-Pesa user found for phone {instance.mpesa_phone}")
     except Exception as e:
-        logger.error(f"Failed to create notification: {e}", exc_info=True)
+        logger.error(f"Error syncing wallet transaction {instance.id}: {e}", exc_info=True)
