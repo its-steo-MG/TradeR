@@ -172,9 +172,15 @@ export interface AgentDeposit {
   agent: number
   amount_kes: number
   amount_usd: number
+  payment_method?: string
   status: "pending" | "verified" | "rejected"
   screenshot_url?: string
+  binance_tx_hash?: string          // ← Added for Binance
+  transaction_code?: string
+  paypal_transaction_id?: string
+  bank_reference?: string
   created_at: string
+  updated_at?: string
 }
 
 export interface AgentWithdrawal {
@@ -182,10 +188,18 @@ export interface AgentWithdrawal {
   agent: number
   amount_usd: number
   amount_kes: number
-  phone_number: string
-  status: "pending" | "otp_sent" | "verified" | "completed" | "cancelled"
+  payment_method?: string
+  status: "pending_otp" | "otp_verified" | "completed" | "rejected"
   otp_code?: string
+  user_binance_address?: string          // ← For Binance withdrawals
+  user_paypal_email?: string
+  user_bank_name?: string
+  user_bank_account_name?: string
+  user_bank_account_number?: string
+  user_bank_swift?: string
   created_at: string
+  updated_at?: string
+  completed_at?: string
 }
 
 interface Transaction {
@@ -837,40 +851,45 @@ export const getAgentById = (agentId: number) => apiRequest<{ agent: Agent }>(`/
 export const createAgentDeposit = async (data: {
   agent_id: number
   account: number
-  amount_kes: number
-  transaction_code?: string      // ← Made optional
+  amount_kes?: number
+  amount_usd_input?: number
+  transaction_code?: string
   binance_tx_hash?: string
   screenshot?: File
   method: string
 }) => {
   const fd = new FormData()
+
   fd.append("agent", data.agent_id.toString())
   fd.append("account", data.account.toString())
-  fd.append("amount_kes", data.amount_kes.toString())
+  fd.append("method", data.method)
 
-  const method = data.method.toLowerCase()
+  const methodLower = data.method.toLowerCase()
 
-  if (method === "binance") {
+  if (methodLower === "binance") {
+    // Binance → Use USD amount
+    if (data.amount_usd_input !== undefined) {
+      fd.append("amount_usd_input", data.amount_usd_input.toString())
+    }
     if (data.binance_tx_hash) {
       fd.append("binance_tx_hash", data.binance_tx_hash)
     }
-    if (data.screenshot) fd.append("screenshot", data.screenshot)
-  } 
-  else if (method === "mpesa") {
-    if (data.transaction_code) fd.append("transaction_code", data.transaction_code)
-    if (!data.screenshot) return { error: "Screenshot required for M-Pesa" } as ApiResponse<AgentDeposit>
-    fd.append("screenshot", data.screenshot)
-  } 
-  else if (method === "paypal") {
-    if (data.transaction_code) fd.append("paypal_transaction_id", data.transaction_code)
-  } 
-  else if (method === "bank_transfer") {
-    if (data.transaction_code) fd.append("bank_reference", data.transaction_code)
-    if (!data.screenshot) return { error: "Screenshot required for Bank Transfer" } as ApiResponse<AgentDeposit>
-    fd.append("screenshot", data.screenshot)
-  } 
-  else {
-    if (data.transaction_code) fd.append("transaction_code", data.transaction_code)
+    if (data.screenshot) {
+      fd.append("screenshot", data.screenshot)
+    }
+  } else {
+    // Other methods → Use KES
+    if (data.amount_kes !== undefined) {
+      fd.append("amount_kes", data.amount_kes.toString())
+    }
+
+    if (methodLower === "mpesa" || methodLower === "bank_transfer") {
+      if (data.transaction_code) fd.append("transaction_code", data.transaction_code)
+      if (data.screenshot) fd.append("screenshot", data.screenshot)
+    } 
+    else if (methodLower === "paypal") {
+      if (data.transaction_code) fd.append("paypal_transaction_id", data.transaction_code)
+    }
   }
 
   return apiRequestWithFile<AgentDeposit>("/agents/deposit/", fd)
@@ -886,12 +905,13 @@ export const requestAgentWithdrawal = (data: {
   agent: number
   account: number
   amount_usd: number
-  phone_number?: string // Optional for M-Pesa
-  user_paypal_email?: string // For PayPal
-  user_bank_name?: string // For bank
+  user_binance_address?: string          // ← NEW
+  user_paypal_email?: string
+  user_bank_name?: string
   user_bank_account_name?: string
   user_bank_account_number?: string
   user_bank_swift?: string
+  phone_number?: string
 }) =>
   apiRequest<{ id: number }>("/agents/withdraw/request/", {
     method: "POST",
@@ -899,13 +919,13 @@ export const requestAgentWithdrawal = (data: {
       agent: data.agent,
       account: data.account,
       amount_usd: data.amount_usd,
-      // Conditionally include fields to avoid sending unexpected ones
-      ...(data.phone_number && { phone_number: data.phone_number }),
+      ...(data.user_binance_address && { user_binance_address: data.user_binance_address }),
       ...(data.user_paypal_email && { user_paypal_email: data.user_paypal_email }),
       ...(data.user_bank_name && { user_bank_name: data.user_bank_name }),
       ...(data.user_bank_account_name && { user_bank_account_name: data.user_bank_account_name }),
       ...(data.user_bank_account_number && { user_bank_account_number: data.user_bank_account_number }),
       ...(data.user_bank_swift && { user_bank_swift: data.user_bank_swift }),
+      ...(data.phone_number && { phone_number: data.phone_number }),
     }),
   })
 

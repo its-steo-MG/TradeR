@@ -43,7 +43,7 @@ class AgentDepositAdmin(admin.ModelAdmin):
                    'method_badge', 'proof', 'status', 'verified_at')
     list_filter = ('payment_method', 'status', 'agent__method')
     search_fields = ('user__username', 'transaction_code', 'paypal_transaction_id', 
-                    'bank_reference', 'binance_tx_hash')   # ← NEW
+                    'bank_reference', 'binance_tx_hash')
     readonly_fields = ('payment_method', 'amount_usd', 'created_at', 
                       'updated_at', 'verified_at', 'verified_by')
     actions = ['verify_selected', 'reject_selected']
@@ -57,7 +57,7 @@ class AgentDepositAdmin(admin.ModelAdmin):
             'mpesa': 'Mobile',
             'paypal': 'PayPal',
             'bank_transfer': 'Bank',
-            'binance': 'Binance'          # ← NEW
+            'binance': 'Binance'
         }
         return format_html('<b>{}</b>', icons.get(obj.payment_method, ''))
     method_badge.short_description = "Method"
@@ -67,8 +67,7 @@ class AgentDepositAdmin(admin.ModelAdmin):
             url = f"https://www.paypal.com/activity/payment/{obj.paypal_transaction_id}"
             return format_html('<a href="{}" target="_blank">PayPal Tx</a>', url)
 
-        elif obj.binance_tx_hash:                                   # ← NEW
-            # Binance transaction explorer link (BSC / General)
+        elif obj.binance_tx_hash:
             explorer_url = f"https://bscscan.com/tx/{obj.binance_tx_hash}"
             return format_html(
                 '<a href="{}" target="_blank">Binance Tx</a><br><small>{}</small>',
@@ -93,7 +92,6 @@ class AgentDepositAdmin(admin.ModelAdmin):
                 try:
                     logger.info(f"[VERIFY] Starting deposit ID {deposit.id} for {deposit.user.username}")
 
-                    # Recalculate amount_usd if needed
                     if not deposit.amount_usd or deposit.amount_usd <= 0:
                         rate = deposit.agent.deposit_rate_kes_to_usd
                         if rate <= 0:
@@ -102,13 +100,11 @@ class AgentDepositAdmin(admin.ModelAdmin):
                         deposit.amount_usd = deposit.amount_usd.quantize(Decimal('0.01'))
                         deposit.save(update_fields=['amount_usd'])
 
-                    # Update status
                     deposit.status = 'verified'
                     deposit.verified_by = request.user
                     deposit.verified_at = timezone.now()
                     deposit.save()
 
-                    # Credit wallet
                     wallet = Wallet.objects.select_for_update().get(
                         account=deposit.account,
                         wallet_type='main',
@@ -117,7 +113,6 @@ class AgentDepositAdmin(admin.ModelAdmin):
                     wallet.balance += deposit.amount_usd
                     wallet.save(update_fields=['balance'])
 
-                    # Log transaction
                     Transaction.objects.create(
                         account=deposit.account,
                         amount=deposit.amount_usd,
@@ -125,7 +120,6 @@ class AgentDepositAdmin(admin.ModelAdmin):
                         description=f"Verified deposit via {deposit.agent.name} ({deposit.amount_kes} KES → ${deposit.amount_usd} USD)"
                     )
 
-                    # Send success email
                     html_content = render_to_string('emails/deposit_verified.html', {
                         'amount_kes': f"{deposit.amount_kes:,.2f}",
                         'amount_usd': f"{deposit.amount_usd:,.2f}",
@@ -200,7 +194,7 @@ class AgentDepositAdmin(admin.ModelAdmin):
 class AgentWithdrawalAdmin(admin.ModelAdmin):
     list_display = ('user', 'agent', 'amount_usd', 'amount_kes', 'method_badge', 'status', 'user_details', 'created_at')
     list_filter = ('payment_method', 'status')
-    search_fields = ('user__username', 'user_paypal_email', 'user_bank_account_number')
+    search_fields = ('user__username', 'user_paypal_email', 'user_bank_account_number', 'user_binance_address')  # ← Added binance
     readonly_fields = ('payment_method', 'amount_kes', 'created_at', 'updated_at', 'completed_at', 'otp_sent_at')
     actions = ['complete_selected', 'reject_refund']
 
@@ -209,7 +203,7 @@ class AgentWithdrawalAdmin(admin.ModelAdmin):
             'mpesa': 'Mobile',
             'paypal': 'PayPal',
             'bank_transfer': 'Bank',
-            'binance': 'Binance'          # ← NEW
+            'binance': 'Binance'
         }
         return format_html('<b>{}</b>', icons.get(obj.payment_method, ''))
     method_badge.short_description = "Method"
@@ -225,6 +219,8 @@ class AgentWithdrawalAdmin(admin.ModelAdmin):
                 obj.user_bank_account_number or 'N/A',
                 obj.user_bank_swift or 'N/A'
             )
+        elif obj.payment_method == 'binance':
+            return obj.user_binance_address or 'N/A'          # ← FIXED: Now shows Binance address
         return 'N/A'
     user_details.short_description = "User Details"
 

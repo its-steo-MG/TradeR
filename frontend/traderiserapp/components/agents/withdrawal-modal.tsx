@@ -27,12 +27,16 @@ export default function WithdrawalModal({ agent, onClose, onSuccess }: Withdrawa
   const [accountId, setAccountId] = useState<number | null>(null)
   const [withdrawalId, setWithdrawalId] = useState<number | null>(null)
 
+  // Existing fields
   const [paypalEmail, setPaypalEmail] = useState("")
   const [bankName, setBankName] = useState("")
   const [accName, setAccName] = useState("")
   const [accNumber, setAccNumber] = useState("")
   const [swift, setSwift] = useState("")
   const [mpesaPhone, setMpesaPhone] = useState("")
+
+  // === NEW: Binance Address ===
+  const [binanceAddress, setBinanceAddress] = useState("")
 
   useEffect(() => {
     ;(async () => {
@@ -48,9 +52,7 @@ export default function WithdrawalModal({ agent, onClose, onSuccess }: Withdrawa
     })()
   }, [])
 
-  if (!agent) {
-    return null
-  }
+  if (!agent) return null
 
   const method = agent.method.toLowerCase()
   const rate = agent.withdrawal_rate_usd_to_kes
@@ -77,13 +79,17 @@ export default function WithdrawalModal({ agent, onClose, onSuccess }: Withdrawa
     }
     if (method === "mpesa") payload.phone_number = mpesaPhone.trim()
 
+    // === NEW: Send Binance address ===
+    if (method === "binance") {
+      payload.user_binance_address = binanceAddress.trim()
+    }
+
     try {
       const resp = await api.requestAgentWithdrawal(payload as Parameters<typeof api.requestAgentWithdrawal>[0])
       if (resp.error) {
         let msg = "Request failed"
-        if (typeof resp.error === "string") {
-          msg = resp.error
-        } else if (typeof resp.error === "object" && resp.error !== null) {
+        if (typeof resp.error === "string") msg = resp.error
+        else if (typeof resp.error === "object" && resp.error !== null) {
           const errorObj = resp.error as Record<string, unknown>
           msg = (errorObj.detail as string) || (errorObj.error as string) || "Request failed"
         }
@@ -94,8 +100,7 @@ export default function WithdrawalModal({ agent, onClose, onSuccess }: Withdrawa
       setStep("otp")
       toast.success("OTP sent! Check your email")
     } catch (err) {
-      const errorMessage = (err as Error).message || "Please try again"
-      toast.error("Network error: " + errorMessage)
+      toast.error("Network error: " + ((err as Error).message || "Please try again"))
     } finally {
       setLoading(false)
     }
@@ -108,9 +113,8 @@ export default function WithdrawalModal({ agent, onClose, onSuccess }: Withdrawa
       const resp = await api.verifyAgentWithdrawal({ withdrawal_id: withdrawalId, otp })
       if (resp.error) {
         let msg = "Verification failed"
-        if (typeof resp.error === "string") {
-          msg = resp.error
-        } else if (typeof resp.error === "object" && resp.error !== null) {
+        if (typeof resp.error === "string") msg = resp.error
+        else if (typeof resp.error === "object" && resp.error !== null) {
           const errorObj = resp.error as Record<string, unknown>
           msg = (errorObj.detail as string) || (errorObj.error as string) || "Verification failed"
         }
@@ -121,8 +125,7 @@ export default function WithdrawalModal({ agent, onClose, onSuccess }: Withdrawa
       toast.success("Withdrawal confirmed!")
       onSuccess?.()
     } catch (err) {
-      const errorMessage = (err as Error).message || "Please try again"
-      toast.error("Network error: " + errorMessage)
+      toast.error("Network error: " + ((err as Error).message || "Please try again"))
     } finally {
       setLoading(false)
     }
@@ -211,34 +214,10 @@ export default function WithdrawalModal({ agent, onClose, onSuccess }: Withdrawa
 
               {method === "bank_transfer" && (
                 <>
-                  <input
-                    type="text"
-                    value={bankName}
-                    onChange={(e) => setBankName(e.target.value)}
-                    placeholder="Bank Name"
-                    className="w-full p-4 rounded-xl border-2 border-purple-200 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 transition bg-white text-slate-900 placeholder-slate-400"
-                  />
-                  <input
-                    type="text"
-                    value={accName}
-                    onChange={(e) => setAccName(e.target.value)}
-                    placeholder="Account Name"
-                    className="w-full p-4 rounded-xl border-2 border-purple-200 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 transition bg-white text-slate-900 placeholder-slate-400"
-                  />
-                  <input
-                    type="text"
-                    value={accNumber}
-                    onChange={(e) => setAccNumber(e.target.value)}
-                    placeholder="Account Number"
-                    className="w-full p-4 rounded-xl border-2 border-purple-200 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 transition bg-white text-slate-900 placeholder-slate-400"
-                  />
-                  <input
-                    type="text"
-                    value={swift}
-                    onChange={(e) => setSwift(e.target.value)}
-                    placeholder="SWIFT (optional)"
-                    className="w-full p-4 rounded-xl border-2 border-purple-200 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 transition bg-white text-slate-900 placeholder-slate-400"
-                  />
+                  <input type="text" value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="Bank Name" className="w-full p-4 rounded-xl border-2 border-purple-200 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 transition bg-white text-slate-900 placeholder-slate-400" />
+                  <input type="text" value={accName} onChange={(e) => setAccName(e.target.value)} placeholder="Account Name" className="w-full p-4 rounded-xl border-2 border-purple-200 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 transition bg-white text-slate-900 placeholder-slate-400" />
+                  <input type="text" value={accNumber} onChange={(e) => setAccNumber(e.target.value)} placeholder="Account Number" className="w-full p-4 rounded-xl border-2 border-purple-200 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 transition bg-white text-slate-900 placeholder-slate-400" />
+                  <input type="text" value={swift} onChange={(e) => setSwift(e.target.value)} placeholder="SWIFT (optional)" className="w-full p-4 rounded-xl border-2 border-purple-200 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 transition bg-white text-slate-900 placeholder-slate-400" />
                 </>
               )}
 
@@ -250,6 +229,25 @@ export default function WithdrawalModal({ agent, onClose, onSuccess }: Withdrawa
                   placeholder="0712345678"
                   className="w-full p-4 rounded-xl border-2 border-purple-200 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 transition bg-white text-slate-900 placeholder-slate-400"
                 />
+              )}
+
+              {/* === NEW: Binance Address Field === */}
+              {method === "binance" && (
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">
+                    Your Binance Wallet Address
+                  </label>
+                  <input
+                    type="text"
+                    value={binanceAddress}
+                    onChange={(e) => setBinanceAddress(e.target.value)}
+                    placeholder="0xYourBinanceAddress... (BEP20 recommended)"
+                    className="w-full p-4 rounded-xl border-2 border-purple-200 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 transition bg-white text-slate-900 placeholder-slate-400"
+                  />
+                  <p className="text-xs text-amber-600 mt-1">
+                    Paste your USDT (BEP20) or ERC20 wallet address
+                  </p>
+                </div>
               )}
 
               <button

@@ -2,28 +2,16 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { api } from "@/lib/api"
 import { toast } from "sonner"
 import { X, Upload, Loader2 } from "lucide-react"
 import Image from "next/image"
 import PaymentInfoDisplay from "./payment-info-display"
-import { createAgentDeposit } from "@/lib/api"
+import { createAgentDeposit, api } from "@/lib/api"
 
 interface UserAccount {
   id: number
   account_type: string
   balance: number | string
-}
-
-// ✅ Updated payload to be compatible with createAgentDeposit
-interface AgentDepositPayload {
-  agent_id: number
-  account: number
-  amount_kes: number
-  transaction_code?: string          // optional
-  binance_tx_hash?: string
-  screenshot?: File
-  method: string
 }
 
 interface DepositModalProps {
@@ -41,17 +29,36 @@ interface DepositModalProps {
   onSuccess?: () => void
 }
 
-const formatAccountLabel = (type: string, balance: number | string) => {
+// Type for API response
+interface ApiResponse<T = unknown> {
+  data?: T
+  error?: string | Record<string, unknown>
+}
+
+// Type expected by createAgentDeposit function
+interface CreateDepositPayload {
+  agent_id: number
+  account: number
+  method: string
+  amount_kes?: number
+  amount_usd_input?: number
+  transaction_code?: string
+  binance_tx_hash?: string
+  screenshot?: File
+}
+
+const formatAccountLabel = (type: string, balance: number | string | undefined) => {
   const map: Record<string, string> = {
     standard: "TradR Account",
     "pro-fx": "Pro-FX Account",
   }
   const name = map[type] ?? type
-  return `${name} ($${Number(balance).toFixed(2)})`
+  const safeBalance = balance ?? 0
+  return `${name} ($${Number(safeBalance).toFixed(2)})`
 }
 
 export default function DepositModal({ agent, onClose, onSuccess }: DepositModalProps) {
-  const [amountKes, setAmountKes] = useState("")
+  const [amount, setAmount] = useState("")
   const [transactionCode, setTransactionCode] = useState("")
   const [screenshot, setScreenshot] = useState<File | null>(null)
   const [preview, setPreview] = useState<string>("")
@@ -60,22 +67,33 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
   const [loading, setLoading] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
 
+  const method = agent.method.toLowerCase()
+  const isBinance = method === "binance"
+
   useEffect(() => {
     const fetchAccounts = async () => {
       try {
         setFetchError(null)
-        const res = await api.getAccount() as { data?: { user?: { accounts?: UserAccount[] } }; error?: string | null }
-        if (res.error) throw new Error(res.error)
+        const res = await api.getAccount() as ApiResponse<{ user?: { accounts?: UserAccount[] } }>
 
-        const all = (res.data?.user?.accounts ?? []) as UserAccount[]
-        const allowed = all.filter((a) => ["standard", "pro-fx"].includes(a.account_type))
+        if (res.error) throw new Error(typeof res.error === "string" ? res.error : "Failed to load accounts")
+
+        const allAccounts = res.data?.user?.accounts ?? []
+        const allowed = allAccounts.filter((a) => ["standard", "pro-fx"].includes(a.account_type))
+
         setAccounts(allowed)
-        if (allowed.length > 0) setSelectedAccount(allowed[0].id)
-      } catch (err) {
-        setFetchError((err as Error).message)
-        toast.error("Failed to load accounts. Try again.")
+        if (allowed.length > 0) {
+          setSelectedAccount(allowed[0].id)
+        } else {
+          setFetchError("No trading accounts found. Please create one first.")
+        }
+      } catch (err: unknown) {
+        console.error("Failed to fetch accounts:", err)
+        const message = err instanceof Error ? err.message : "Failed to load accounts"
+        setFetchError(message)
       }
     }
+
     fetchAccounts()
   }, [])
 
@@ -83,7 +101,7 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
     const file = e.target.files?.[0]
     if (!file) return
     if (file.size > 5 * 1024 * 1024) return toast.error("File too large (max 5MB)")
-    if (!file.type.startsWith("image/")) return toast.error("Images only (JPG/PNG)")
+    if (!file.type.startsWith("image/")) return toast.error("Images only")
 
     setScreenshot(file)
     const reader = new FileReader()
@@ -95,102 +113,115 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
     e.preventDefault()
     if (loading) return
 
-    const amountNum = Number(amountKes)
-    if (isNaN(amountNum) || amountNum <= 0) return toast.error("Enter valid amount")
-    if (agent.min_amount && amountNum < Number(agent.min_amount)) return toast.error(`Min: ${agent.min_amount} KES`)
-    if (agent.max_amount && amountNum > Number(agent.max_amount)) return toast.error(`Max: ${agent.max_amount} KES`)
-    if (!selectedAccount) return toast.error("Select account")
-
-    const methodLower = agent.method.toLowerCase()
-
+    const amountNum = Number(amount)
+    if (!amountNum || amountNum <= 0) return toast.error("Enter a valid amount")
+    if (!selectedAccount) return toast.error("Please select an account")
     if (!transactionCode.trim()) {
-      return toast.error(methodLower === "binance" 
-        ? "Please enter Binance Transaction Hash" 
-        : "Enter code/ID/reference")
+      return toast.error(isBinance ? "Binance Tx Hash is required" : "Transaction code is required")
     }
-
-    if ((methodLower === "binance" || methodLower === "mpesa" || methodLower === "bank_transfer") && !screenshot) {
-      return toast.error("Please upload proof screenshot")
+    if ((isBinance || method === "mpesa" || method === "bank_transfer") && !screenshot) {
+      return toast.error("Screenshot proof is required")
     }
 
     setLoading(true)
 
     try {
-      const payload: AgentDepositPayload = {
+      const payload: CreateDepositPayload = {
         agent_id: agent.id,
-        account: selectedAccount!,
-        amount_kes: Number(amountKes),
+        account: selectedAccount,
         method: agent.method,
-        screenshot: screenshot ?? undefined,
       }
 
-      // Send the correct transaction field
-      if (methodLower === "binance") {
+      if (isBinance) {
+        payload.amount_usd_input = amountNum
         payload.binance_tx_hash = transactionCode.trim()
       } else {
+        payload.amount_kes = amountNum
         payload.transaction_code = transactionCode.trim()
       }
 
-      const res = await createAgentDeposit(payload)
+      if (screenshot) {
+        payload.screenshot = screenshot
+      }
+
+      const res = await createAgentDeposit(payload) as ApiResponse
 
       if (res.error) {
-        const msg = typeof res.error === "string"
-          ? res.error
-          : Object.values(res.error as Record<string, unknown>).flat().join(", ")
+        const errorData = res.error
+        const msg =
+          typeof errorData === "string"
+            ? errorData
+            : Object.values(errorData).flat().join(", ") || "Failed to submit deposit"
         throw new Error(msg)
       }
 
-      toast.success("Deposit submitted! Awaiting verification.")
+      toast.success("Deposit submitted successfully! Awaiting verification.")
       onSuccess?.()
       onClose()
-    } catch (err) {
-      toast.error((err as Error).message)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to submit deposit. Please try again."
+      toast.error(message)
     } finally {
       setLoading(false)
     }
   }
 
-  const usd = amountKes ? (Number(amountKes) / agent.deposit_rate_kes_to_usd).toFixed(2) : "0.00"
-  const method = agent.method.toLowerCase()
+  const displayConversion = () => {
+    if (!amount) return "0.00"
+    const rate = agent.deposit_rate_kes_to_usd
+    if (!rate || rate <= 0) return "0.00"
+
+    return isBinance
+      ? (Number(amount) * rate).toFixed(0)
+      : (Number(amount) / rate).toFixed(2)
+  }
 
   const isFormValid =
-    !!amountKes &&
+    !!amount &&
     !!selectedAccount &&
     !!transactionCode.trim() &&
-    (method === "paypal" || !!screenshot)
+    (isBinance || !!screenshot)
 
   return (
-    // ... (your JSX remains exactly the same)
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
       <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-6 relative max-h-[90vh] overflow-y-auto">
-        <button onClick={onClose} className="absolute top-4 right-4 text-slate-500 hover:text-slate-700">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-slate-500 hover:text-slate-700"
+        >
           <X className="w-6 h-6" />
         </button>
 
         <h2 className="text-xl font-bold text-slate-900">Deposit via {agent.name}</h2>
-
         <PaymentInfoDisplay method={agent.method} agent={agent} />
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* ... rest of your form (unchanged) ... */}
+          {/* Amount Input */}
           <div>
-            <p className="text-sm font-medium text-slate-700 mb-2">Amount in KES</p>
+            <p className="text-sm font-medium text-slate-700 mb-2">
+              {isBinance ? "Amount in USD / USDT" : "Amount in KES"}
+            </p>
             <input
               type="number"
-              value={amountKes}
-              onChange={(e) => setAmountKes(e.target.value)}
-              placeholder="Enter amount"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder={isBinance ? "50.00" : "6500"}
               min="10"
+              step="0.01"
               className="w-full p-3 rounded-xl border border-slate-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 bg-white text-slate-900"
             />
-            <p className="text-xs text-slate-500 mt-1">You&apos;ll get ~${usd} USD</p>
+            <p className="text-xs text-slate-500 mt-1">
+              {isBinance
+                ? `You'll send ≈ ${displayConversion()} KES equivalent`
+                : `You'll get ≈ $${displayConversion()} USD`}
+            </p>
           </div>
 
-          {/* Account selection, Transaction field, Screenshot upload, Submit button - all unchanged */}
+          {/* Account Selection */}
           {fetchError ? (
             <p className="text-red-600 text-sm">{fetchError}</p>
           ) : accounts.length === 0 ? (
-            <p className="text-slate-500 text-sm">No accounts found</p>
+            <p className="text-slate-500 text-sm">No trading accounts found</p>
           ) : (
             <div>
               <p className="text-sm font-medium text-slate-700 mb-2">Credit to Account</p>
@@ -208,43 +239,27 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
             </div>
           )}
 
-          {/* Transaction Field - unchanged */}
+          {/* Transaction Field */}
           <div>
             <p className="text-sm font-medium text-slate-700 mb-2">
-              {method === "binance" 
-                ? "Binance Transaction Hash (TxID)" 
-                : method === "paypal" 
-                  ? "PayPal Transaction ID" 
-                  : "Transaction Code / Reference"}
+              {isBinance ? "Binance Transaction Hash (TxID)" : "Transaction Code / Reference"}
             </p>
             <input
               type="text"
               value={transactionCode}
               onChange={(e) => setTransactionCode(e.target.value)}
-              placeholder={
-                method === "binance" 
-                  ? "Enter full Tx Hash (e.g. 0xabc123...)" 
-                  : method === "paypal" 
-                    ? "e.g. 9ABC123DEF456" 
-                    : method === "mpesa" 
-                      ? "e.g. SAG123XYZ45" 
-                      : "e.g. REF123456"
-              }
+              placeholder={isBinance ? "0xabc123..." : "Enter code"}
               className="w-full p-3 rounded-xl border border-slate-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 bg-white text-slate-900"
             />
-            {method === "binance" && (
-              <p className="text-xs text-amber-600 mt-1">
-                Paste the complete transaction hash from Binance
-              </p>
-            )}
           </div>
 
-          {(method === "binance" || method === "mpesa" || method === "bank_transfer") && (
+          {/* Screenshot Upload */}
+          {(isBinance || method === "mpesa" || method === "bank_transfer") && (
             <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center space-y-2 bg-slate-50">
               {preview ? (
                 <div className="space-y-2">
-                  <div className="relative w-full h-32 sm:h-40 rounded-lg overflow-hidden">
-                    <Image src={preview} alt="Proof Preview" fill className="object-cover" />
+                  <div className="relative w-full h-32 rounded-lg overflow-hidden">
+                    <Image src={preview} alt="Proof" fill className="object-cover" />
                   </div>
                   <button
                     type="button"
@@ -254,7 +269,7 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
                     }}
                     className="text-sm text-red-600 hover:text-red-700 font-medium"
                   >
-                    Remove & Upload Again
+                    Remove
                   </button>
                 </div>
               ) : (
@@ -271,7 +286,7 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
           <button
             type="submit"
             disabled={loading || !isFormValid}
-            className="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-300 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 text-base"
+            className="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-300 text-white font-semibold rounded-xl flex items-center justify-center gap-2"
           >
             {loading ? (
               <>
@@ -279,7 +294,7 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
                 Processing...
               </>
             ) : (
-              `Deposit ${amountKes ? `${amountKes} KES` : ""}`
+              "Submit Deposit"
             )}
           </button>
         </form>

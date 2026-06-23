@@ -31,13 +31,14 @@ interface AgentCardProps {
     bank_account_number?: string
     bank_swift?: string
     mpesa_phone?: string
-    binance_address?: string          // ← NEW: Added for Binance
+    binance_address?: string
   }
 }
 
 export default function AgentCard({ agent }: AgentCardProps) {
   const [showDepositModal, setShowDepositModal] = useState(false)
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false)
+  const [imgError, setImgError] = useState(false)
 
   const getMethodBadge = (method: string) => {
     const badges: Record<string, { label: string; color: string; bgColor: string }> = {
@@ -56,7 +57,7 @@ export default function AgentCard({ agent }: AgentCardProps) {
         label: "Binance", 
         color: "text-amber-700", 
         bgColor: "bg-amber-50" 
-      },   // ← NEW
+      },
     }
     return (
       badges[method.toLowerCase()] || {
@@ -69,16 +70,23 @@ export default function AgentCard({ agent }: AgentCardProps) {
 
   const badge = getMethodBadge(agent.method)
 
+  // Safe image handling for S3 / external URLs
+  const imageSrc = (!imgError && agent.image) 
+    ? agent.image 
+    : "/placeholder-agent.jpg"
+
   return (
     <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden hover:shadow-lg hover:border-purple-300 transition-all duration-300 flex flex-col h-full">
-      {/* Banner Image */}
-      <div className="relative w-full h-32 sm:h-40">
+      
+      {/* Banner Image - FIXED */}
+      <div className="relative w-full h-32 sm:h-40 bg-slate-100">
         <Image
-          src={agent.image || "/placeholder-agent.jpg"}
+          src={imageSrc}
           alt={agent.name}
-          className="object-cover"
           fill
-          priority
+          className="object-cover"
+          onError={() => setImgError(true)}
+          unoptimized={imageSrc.startsWith("http")} // Important for S3 images
         />
       </div>
 
@@ -157,7 +165,7 @@ export default function AgentCard({ agent }: AgentCardProps) {
         </div>
       )}
 
-      {/* Payment Info Display - Now includes Binance */}
+      {/* Payment Info Display */}
       <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200">
         <p className="text-xs text-slate-600 mb-2 font-semibold">Payment Details</p>
         <PaymentInfoDisplay 
@@ -170,7 +178,7 @@ export default function AgentCard({ agent }: AgentCardProps) {
             bank_account_number: agent.bank_account_number,
             bank_swift: agent.bank_swift,
             mpesa_phone: agent.mpesa_phone,
-            binance_address: agent.binance_address,     // ← NEW
+            binance_address: agent.binance_address,
           }} 
         />
       </div>

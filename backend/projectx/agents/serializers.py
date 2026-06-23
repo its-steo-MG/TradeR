@@ -16,7 +16,7 @@ class AgentSerializer(serializers.ModelSerializer):
             'id', 'name', 'method', 'image', 'phone', 'email',
             'mpesa_phone', 'paypal_email', 'paypal_link',
             'bank_name', 'bank_account_name', 'bank_account_number',
-            'binance_address',                    # ← NEW
+            'binance_address',
             'instructions', 'deposit_rate_kes_to_usd', 'withdrawal_rate_usd_to_kes',
             'location', 'rating', 'reviews', 'min_amount', 'max_amount',
             'response_time', 'verified'
@@ -47,6 +47,12 @@ class AgentDepositSerializer(serializers.ModelSerializer):
     agent_detail = AgentSerializer(source='agent', read_only=True)
     account_detail = AccountDetailSerializer(source='account', read_only=True)
 
+    # Allow submitting amount in USD directly for Binance deposits
+    amount_usd_input = serializers.DecimalField(
+        max_digits=14, decimal_places=2, required=False, write_only=True,
+        help_text="For Binance deposits only: submit the USD/USDT amount directly"
+    )
+
     class Meta:
         model = AgentDeposit
         fields = '__all__'
@@ -54,6 +60,9 @@ class AgentDepositSerializer(serializers.ModelSerializer):
             'user', 'amount_usd', 'status', 'verified_at',
             'verified_by', 'created_at', 'payment_method', 'updated_at', 'screenshot_url'
         ]
+        extra_kwargs = {
+            'amount_kes': {'required': False, 'allow_null': True},
+        }
 
     def get_screenshot_url(self, obj):
         if obj.screenshot:
@@ -63,17 +72,35 @@ class AgentDepositSerializer(serializers.ModelSerializer):
     def validate(self, data):
         agent = data['agent']
         method = agent.method.lower()
-        amount_kes = data['amount_kes']
 
-        # Amount validation
+        # === BINANCE: Support amount_usd_input (USD) ===
+        usd_input = data.get('amount_usd_input')
+        if method == 'binance' and usd_input is not None:
+            rate = agent.deposit_rate_kes_to_usd
+            amount_kes = (Decimal(str(usd_input)) * rate).quantize(Decimal('0.01'))
+            data['amount_kes'] = amount_kes
+            data['amount_usd'] = Decimal(str(usd_input)).quantize(Decimal('0.01'))
+            data.pop('amount_usd_input', None)   # Clean up write-only field
+        else:
+            # Normal flow (M-Pesa, Bank, PayPal)
+            amount_kes = data.get('amount_kes')
+            if amount_kes is None:
+                raise serializers.ValidationError({
+                    "amount_kes": "amount_kes is required (use amount_usd_input for Binance)"
+                })
+
+        # Amount validation (based on KES equivalent)
+        # For Binance we already converted USD → KES above
         if amount_kes < Decimal('10'):
-            raise serializers.ValidationError({"amount_kes": "Minimum deposit is 10 KES"})
+            raise serializers.ValidationError({
+                "amount_kes": "Minimum deposit is 10 KES (~$0.08 USD)"
+            })
         if agent.min_amount and amount_kes < agent.min_amount:
             raise serializers.ValidationError({"amount_kes": f"Minimum for this agent is {agent.min_amount} KES"})
         if agent.max_amount and amount_kes > agent.max_amount:
             raise serializers.ValidationError({"amount_kes": f"Maximum for this agent is {agent.max_amount} KES"})
 
-        # Proof validation per method
+        # === Method-specific validation ===
         if method == 'mpesa':
             code = data.get('transaction_code', '').strip()
             if not code:
@@ -97,22 +124,15 @@ class AgentDepositSerializer(serializers.ModelSerializer):
             if not data.get('screenshot'):
                 raise serializers.ValidationError({"screenshot": "Screenshot required for Bank Transfer"})
 
-        elif method == 'binance':                     # ← NEW
+        elif method == 'binance':
             tx_hash = data.get('binance_tx_hash', '').strip()
             if not tx_hash:
-                raise serializers.ValidationError({
-                    "binance_tx_hash": "Binance Transaction Hash (TxID) is required"
-                })
+                raise serializers.ValidationError({"binance_tx_hash": "Binance Transaction Hash (TxID) is required"})
             if len(tx_hash) < 8:
-                raise serializers.ValidationError({
-                    "binance_tx_hash": "Invalid Binance Transaction Hash"
-                })
+                raise serializers.ValidationError({"binance_tx_hash": "Invalid Binance Transaction Hash"})
             if not data.get('screenshot'):
-                raise serializers.ValidationError({
-                    "screenshot": "Screenshot of the transfer is required for Binance"
-                })
+                raise serializers.ValidationError({"screenshot": "Screenshot of the transfer is required for Binance"})
 
-        # DO NOT calculate amount_usd here
         return data
 
     def create(self, validated_data):
@@ -120,18 +140,16 @@ class AgentDepositSerializer(serializers.ModelSerializer):
         user = request.user
         agent = validated_data['agent']
 
-        # CRITICAL: Calculate amount_usd HERE
-        amount_kes = validated_data['amount_kes']
-        rate = agent.deposit_rate_kes_to_usd
-        amount_usd = amount_kes / rate
-        amount_usd = amount_usd.quantize(Decimal('0.01'))
+        # Calculate amount_usd if not already set (for non-Binance flows)
+        if validated_data.get('amount_usd') is None:
+            amount_kes = validated_data['amount_kes']
+            rate = agent.deposit_rate_kes_to_usd
+            amount_usd = amount_kes / rate
+            validated_data['amount_usd'] = amount_usd.quantize(Decimal('0.01'))
 
-        # Set fields
         validated_data['user'] = user
-        validated_data['amount_usd'] = amount_usd
         validated_data['payment_method'] = agent.method
 
-        # Create and return
         deposit = AgentDeposit.objects.create(**validated_data)
         return deposit
 
@@ -194,13 +212,20 @@ class AgentWithdrawalSerializer(serializers.ModelSerializer):
             if errors:
                 raise serializers.ValidationError(errors)
 
-        # === BINANCE (No extra withdrawal fields needed for now) ===
-        # Just pass through
+        # === BINANCE ===
+        elif method == 'binance':
+            addr = data.get('user_binance_address', '').strip()
+            if not addr:
+                raise serializers.ValidationError({
+                    "user_binance_address": "Your Binance wallet address is required to receive the withdrawal"
+                })
+            if len(addr) < 8:
+                raise serializers.ValidationError({
+                    "user_binance_address": "Invalid Binance wallet address"
+                })
+            data['user_binance_address'] = addr
 
-        # === MPESA (no extra fields needed) ===
-        # Just pass through
-
-        # === Amount check
+        # === Amount check ===
         if data['amount_usd'] < Decimal('10'):
             raise serializers.ValidationError({
                 "amount_usd": "Minimum withdrawal is $10"
@@ -213,13 +238,11 @@ class AgentWithdrawalSerializer(serializers.ModelSerializer):
         request = self.context['request']
         user = request.user
 
-        # Auto-calculate KES
         amount_usd = validated_data['amount_usd']
         rate = validated_data['agent'].withdrawal_rate_usd_to_kes
         amount_kes = amount_usd * rate
         amount_kes = amount_kes.quantize(Decimal('0.01'))
 
-        # Create instance
         withdrawal = AgentWithdrawal.objects.create(
             user=user,
             payment_method=validated_data['agent'].method,

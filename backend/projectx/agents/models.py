@@ -28,7 +28,7 @@ class Agent(models.Model):
         ('mpesa', 'M-Pesa'),
         ('paypal', 'PayPal'),
         ('bank_transfer', 'Bank Transfer'),
-        ('binance', 'Binance'),          # ← NEW
+        ('binance', 'Binance'),
     ]
 
     name = models.CharField(max_length=100)
@@ -184,6 +184,14 @@ class AgentWithdrawal(models.Model):
     user_bank_account_name = models.CharField(max_length=100, blank=True, null=True)
     user_bank_account_number = models.CharField(max_length=50, blank=True, null=True)
     user_bank_swift = models.CharField(max_length=11, blank=True, null=True)
+
+    # === NEW: Binance withdrawal address ===
+    user_binance_address = models.CharField(
+        max_length=100, 
+        blank=True, 
+        null=True,
+        help_text="User's Binance wallet address to receive withdrawal (USDT BEP20 recommended)"
+    )
 
     otp_code = models.CharField(max_length=6, blank=True)
     otp_sent_at = models.DateTimeField(null=True, blank=True)

@@ -42,13 +42,12 @@ class AgentDepositView(APIView):
                 if deposit.screenshot:
                     proof_link = request.build_absolute_uri(deposit.screenshot.url)
 
-                # Handle different methods
                 if deposit.payment_method == 'paypal' and deposit.paypal_transaction_id:
                     proof_link = f"https://www.paypal.com/activity/payment/{deposit.paypal_transaction_id}"
                     tx_info = deposit.paypal_transaction_id
                 elif deposit.payment_method == 'binance' and deposit.binance_tx_hash:
                     tx_info = deposit.binance_tx_hash
-                    proof_link = f"https://bscscan.com/tx/{deposit.binance_tx_hash}"  # Common for Binance Smart Chain
+                    proof_link = f"https://bscscan.com/tx/{deposit.binance_tx_hash}"
                 elif deposit.transaction_code:
                     tx_info = deposit.transaction_code
                 elif deposit.bank_reference:
@@ -104,7 +103,6 @@ class AgentDepositVerifyView(APIView):
                 deposit.verified_at = timezone.now()
                 deposit.save()
 
-                # Credit wallet
                 wallet = Wallet.objects.select_for_update().get(
                     account=deposit.account,
                     wallet_type='main',
@@ -113,7 +111,6 @@ class AgentDepositVerifyView(APIView):
                 wallet.balance += deposit.amount_usd
                 wallet.save()
 
-                # Log transaction
                 Transaction.objects.create(
                     account=deposit.account,
                     amount=deposit.amount_usd,
@@ -121,7 +118,6 @@ class AgentDepositVerifyView(APIView):
                     description=f"Agent Deposit [{deposit.get_payment_method_display()}] - {deposit.agent.name}"
                 )
 
-                # Send success email to user
                 html_content = render_to_string('emails/deposit_verified.html', {
                     'method': deposit.get_payment_method_display(),
                     'amount_kes': f"{deposit.amount_kes:,.2f}",
@@ -142,7 +138,7 @@ class AgentDepositVerifyView(APIView):
                 logger.info(f"Deposit {deposit.id} verified for {deposit.user.username}")
                 return Response({"message": "Deposit verified & wallet credited"}, status=200)
 
-            else:  # reject
+            else:
                 deposit.status = 'rejected'
                 deposit.save()
 
@@ -203,15 +199,12 @@ class AgentWithdrawalVerifyView(APIView):
                 if wallet.balance < withdrawal.amount_usd:
                     return Response({'error': 'Insufficient balance'}, status=400)
 
-                # Deduct balance
                 wallet.balance -= withdrawal.amount_usd
                 wallet.save()
 
-                # Update status
                 withdrawal.status = 'otp_verified'
                 withdrawal.save()
 
-                # Log transaction
                 Transaction.objects.create(
                     account=withdrawal.account,
                     amount=-withdrawal.amount_usd,
@@ -219,7 +212,6 @@ class AgentWithdrawalVerifyView(APIView):
                     description=f"Withdrawal via {withdrawal.agent.name} ({withdrawal.get_payment_method_display()}) – Awaiting payment"
                 )
 
-            # === SEND CONFIRMATION EMAIL TO USER ===
             html_content = render_to_string('emails/withdrawal_locked.html', {
                 'amount_usd': f"{withdrawal.amount_usd:,.2f}",
                 'agent_name': withdrawal.agent.name,
@@ -237,7 +229,6 @@ class AgentWithdrawalVerifyView(APIView):
             user_email.attach_alternative(html_content, "text/html")
             user_email.send(fail_silently=False)
 
-            # === SEND ALERT TO ADMIN ===
             try:
                 admin_url = request.build_absolute_uri(
                     reverse('admin:agents_agentwithdrawal_change', args=[withdrawal.id])
@@ -289,7 +280,10 @@ class AgentWithdrawalVerifyView(APIView):
                 f"   • Account Number: {withdrawal.user_bank_account_number}\n"
                 f"   • SWIFT: {withdrawal.user_bank_swift or 'N/A'}"
             )
-        else:  # mpesa or binance (no extra user details needed for deposit side)
+        elif withdrawal.payment_method == 'binance':
+            # === FIXED: Now properly shows Binance address ===
+            return f"   • Binance Address: {withdrawal.user_binance_address or 'Not provided'}"
+        else:  # mpesa
             phone = getattr(withdrawal.user, 'phone', 'Not set')
             return f"   • M-Pesa Phone: {phone}"
 
@@ -336,7 +330,7 @@ class AgentWithdrawalAdminActionView(APIView):
             logger.info(f"Withdrawal {withdrawal.id} completed for {withdrawal.user.username}")
             return Response({"message": f"Withdrawal completed – {method} sent"})
 
-        else:  # reject
+        else:
             with transaction.atomic():
                 withdrawal.status = 'rejected'
                 withdrawal.save()
