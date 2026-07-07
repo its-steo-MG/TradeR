@@ -1,7 +1,7 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   TrendingUp,
@@ -17,168 +17,185 @@ import {
   Briefcase,
   Copy,
   Hash,
-} from "lucide-react"
-import { useState, useEffect } from "react"
-import type { Account } from "@/types/account"
+} from "lucide-react";
+import { useState, useEffect } from "react";
+import type { Account } from "@/types/account";
 
-type LoginType = "real" | "demo" | string
+type LoginType = "real" | "demo" | string;
 
 interface SidebarProps {
-  loginType: LoginType
-  activeAccount?: Account | null
-  accounts?: Account[] // Optional – safe default
-  onSwitchAccount?: (account: Account) => void
+  loginType: LoginType;
+  activeAccount?: Account | null;
+  accounts?: Account[];
+  onSwitchAccount?: (account: Account) => void;
 }
 
-const ACTIVE_ACCOUNT_KEY = "active_account_id"
+const ACTIVE_ACCOUNT_KEY = "active_account_id";
 
 export function Sidebar({
   loginType,
   activeAccount: propActiveAccount,
-  accounts = [], // Default to empty array
+  accounts = [],
   onSwitchAccount,
 }: SidebarProps) {
-  const pathname = usePathname()
-  const router = useRouter()
+  const pathname = usePathname();
+  const router = useRouter();
 
-  const [isOpen, setIsOpen] = useState(false)
-  const [hasProFxAccount, setHasProFxAccount] = useState(false)
-  const [activeAccount, setActiveAccount] = useState<Account | null>(propActiveAccount ?? null)
+  const [isOpen, setIsOpen] = useState(false);
+  const [activeAccount, setActiveAccount] = useState<Account | null>(propActiveAccount ?? null);
 
   /* -------------------------------------------------
-     1. Initialise active account from localStorage
-         (handles hard refresh)
+     1. Initialise active account
      ------------------------------------------------- */
   useEffect(() => {
-    const storedId = Number(localStorage.getItem(ACTIVE_ACCOUNT_KEY))
+    const storedId = Number(localStorage.getItem(ACTIVE_ACCOUNT_KEY));
+
     if (Array.isArray(accounts) && accounts.length > 0) {
-      const found = accounts.find((a) => a.id === storedId) ?? accounts[0]
-      setActiveAccount(found)
+      let found = accounts.find((a) => a.id === storedId);
+
+      if (!found) {
+        // Prefer Traderiser Demo when in demo mode
+        if (loginType === "demo") {
+          found = accounts.find(
+            (a) => a.account_type === "demo" && a.platform === "traderiser"
+          ) || accounts.find((a) => a.account_type === "demo");
+        } else {
+          found = accounts.find((a) => a.account_type === "standard") || accounts[0];
+        }
+      }
+
+      setActiveAccount(found || accounts[0]);
     } else if (propActiveAccount) {
-      setActiveAccount(propActiveAccount)
+      setActiveAccount(propActiveAccount);
     }
-  }, [accounts, propActiveAccount])
+  }, [accounts, propActiveAccount, loginType]);
 
   /* -------------------------------------------------
-     2. Listen for account switch from TopNavbar or anywhere
+     2. Listen for account switch
      ------------------------------------------------- */
   useEffect(() => {
     const handler = (e: Event) => {
-      const ev = e as CustomEvent<{ account: Account }>
-      setActiveAccount(ev.detail.account)
-    }
-    window.addEventListener("account-switch", handler)
-    return () => window.removeEventListener("account-switch", handler)
-  }, [])
+      const ev = e as CustomEvent<{ account: Account }>;
+      setActiveAccount(ev.detail.account);
+    };
+    window.addEventListener("account-switch", handler);
+    return () => window.removeEventListener("account-switch", handler);
+  }, []);
 
   /* -------------------------------------------------
-     3. Live balance updates (unchanged)
+     3. Live balance updates
      ------------------------------------------------- */
   useEffect(() => {
     const handler = (e: Event) => {
-      const newBalance = (e as CustomEvent).detail
-      setActiveAccount((prev) => (prev ? { ...prev, balance: newBalance } : prev))
-    }
-    window.addEventListener("balance-updated", handler)
-    return () => window.removeEventListener("balance-updated", handler)
-  }, [])
+      const newBalance = (e as CustomEvent).detail;
+      setActiveAccount((prev) => (prev ? { ...prev, balance: newBalance } : prev));
+    };
+    window.addEventListener("balance-updated", handler);
+    return () => window.removeEventListener("balance-updated", handler);
+  }, []);
 
   /* -------------------------------------------------
-     4. Detect Pro-FX account presence
+     4. Close mobile menu on route change
+     ------------------------------------------------- */
+  useEffect(() => setIsOpen(false), [pathname]);
+
+  /* -------------------------------------------------
+     5. Close on Escape
      ------------------------------------------------- */
   useEffect(() => {
-    const userSession = localStorage.getItem("user_session")
-    if (userSession) {
-      const user = JSON.parse(userSession)
-      setHasProFxAccount(user?.accounts?.some((acc: Account) => acc.account_type === "pro-fx") ?? false)
-    }
-  }, [])
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setIsOpen(false);
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, []);
 
-  /* -------------------------------------------------
-     5. Close mobile menu on route change
-     ------------------------------------------------- */
-  useEffect(() => setIsOpen(false), [pathname])
-
-  /* -------------------------------------------------
-     6. Close on Escape key
-     ------------------------------------------------- */
-  useEffect(() => {
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setIsOpen(false)
-    window.addEventListener("keydown", esc)
-    return () => window.removeEventListener("keydown", esc)
-  }, [])
-
-  /* -------------------------------------------------
-     7. Logout – clear all session data
-     ------------------------------------------------- */
   const handleLogout = () => {
-    localStorage.removeItem("access_token")
-    localStorage.removeItem("refresh_token")
-    localStorage.removeItem("account_type")
-    localStorage.removeItem("user_session")
-    localStorage.removeItem(ACTIVE_ACCOUNT_KEY)
-    localStorage.removeItem("login_type")
-    router.push("/login")
-  }
+    localStorage.clear();
+    router.push("/login");
+  };
 
-  /* -------------------------------------------------
-     8. Switch account – update state, storage, dispatch event
-     ------------------------------------------------- */
   const switchAccount = (account: Account) => {
-    setActiveAccount(account)
-    localStorage.setItem(ACTIVE_ACCOUNT_KEY, String(account.id))
-    onSwitchAccount?.(account)
-    window.dispatchEvent(new CustomEvent("account-switch", { detail: { account } }))
-  }
+    setActiveAccount(account);
+    localStorage.setItem(ACTIVE_ACCOUNT_KEY, String(account.id));
+    onSwitchAccount?.(account);
+    window.dispatchEvent(new CustomEvent("account-switch", { detail: { account } }));
+  };
 
   /* -------------------------------------------------
-     9. Build navigation items based on account type
+     6. Filter accounts for display
+     FIXED: previously demo mode only matched account_type === "demo" AND
+     platform === "traderiser", which silently hid MT5 Demo from this
+     switcher even though it's meant to be visible in demo mode. And the
+     "real" branch only excluded "demo", letting "mt5-demo" leak in.
      ------------------------------------------------- */
-  const navItems =
-    loginType === "real" && activeAccount
-      ? activeAccount.account_type === "pro-fx"
-        ? [
-            { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-            //{ href: "/forex-trading", label: "Forex Trading", icon: Zap },
-            { href: "/fx-pro-trading", label: "Pro-FX Trading", icon: Zap },
-            { href: "/fx-pro-robots", label: "Pro-Robots", icon: Bot },            
-            { href: "/wallet", label: "Wallet", icon: WalletIcon },
-            { href: "/profile", label: "Profile", icon: User },
-            { href: "/copy-trading", label: "Copy Trading", icon: Copy },
-            { href: "/customercare", label: "Customer Care", icon: MessageSquare },
-            { href: "/agents", label: "Agent Services", icon: Headset },
-            
-            { href: "/management", label: "Account Management", icon: Briefcase },
-          ]
-        : [
-            { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-            { href: "/trading", label: "Trading", icon: TrendingUp },
-            //{ href: "/forex-trading", label: "Forex Trading", icon: Zap },
-            { href: "/digits-trading", label: "Digits Trading", icon: Hash },
-            { href: "/robots", label: "Robots", icon: Bot },
-            { href: "/wallet", label: "Wallet", icon: WalletIcon },
-            { href: "/profile", label: "Profile", icon: User },
-            { href: "/copy-trading", label: "Copy Trading", icon: Copy },
-            { href: "/customercare", label: "Customer Care", icon: MessageSquare },
-            { href: "/agents", label: "Agent Services", icon: Headset },
-            { href: "/management", label: "Account Management", icon: Briefcase },
-          ]
-      : [
-          { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-          { href: "/trading", label: "Trading", icon: TrendingUp },
-          //...(hasProFxAccount && loginType === "real"
-          //  ? [{ href: "/fx-pro-trading", label: "Pro-FX Trading", icon: Zap }]
-          //  : []),
-          //{ href: "/forex-trading", label: "Forex Trading", icon: Zap },
-          { href: "/digits-trading", label: "Digits Trading", icon: Hash },
-          { href: "/robots", label: "Robots", icon: Bot },
-          { href: "/wallet", label: "Wallet", icon: WalletIcon },
-          { href: "/profile", label: "Profile", icon: User },
-           { href: "/copy-trading", label: "Copy Trading", icon: Copy },
-          { href: "/customercare", label: "Customer Care", icon: MessageSquare },
-          { href: "/agents", label: "Agent Services", icon: Headset },
-          { href: "/management", label: "Account Management", icon: Briefcase },
-        ]
+  const displayedAccounts = loginType === "demo"
+    ? accounts.filter((acc) => acc.account_type === "demo" || acc.account_type === "mt5-demo")
+    : accounts.filter((acc) => acc.account_type !== "demo" && acc.account_type !== "mt5-demo");
+
+  /* -------------------------------------------------
+     7. Navigation Items (Platform Aware)
+     ------------------------------------------------- */
+  const navItems = (() => {
+    if (!activeAccount) {
+      return [
+        { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+        { href: "/trading", label: "Trading", icon: TrendingUp },
+      ];
+    }
+
+    // FIXED: broadened to catch MT5 Demo too, not just the standard "demo" type.
+    const isDemo = activeAccount.account_type === "demo" || activeAccount.account_type === "mt5-demo";
+    const isMt5 = activeAccount.platform === "mt5";
+    const isProFx = activeAccount.account_type === "pro-fx";
+
+    let items;
+
+    if (isProFx) {
+      items = [
+        { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+        { href: "/fx-pro-trading", label: "Pro-FX Trading", icon: Zap },
+        { href: "/fx-pro-robots", label: "Pro-Robots", icon: Bot },
+        { href: "/wallet", label: "Wallet", icon: WalletIcon },
+        { href: "/profile", label: "Profile", icon: User },
+        { href: "/copy-trading", label: "Copy Trading", icon: Copy },
+        { href: "/customercare", label: "Customer Care", icon: MessageSquare },
+        { href: "/agents", label: "Agent Services", icon: Headset },
+        { href: "/management", label: "Account Management", icon: Briefcase },
+      ];
+    } else if (isMt5) {
+      items = [
+        { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+        { href: "/mt5", label: "MT5 Trading", icon: TrendingUp },
+        { href: "/fx-pro-robots", label: "Pro-Robots", icon: Bot },
+        { href: "/wallet", label: "Wallet", icon: WalletIcon },
+        { href: "/profile", label: "Profile", icon: User },
+        { href: "/customercare", label: "Customer Care", icon: MessageSquare },
+        { href: "/agents", label: "Agent Services", icon: Headset },
+      ];
+    } else {
+      // Default Traderiser (Real or Demo)
+      items = [
+        { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+        { href: "/trading", label: "Trading", icon: TrendingUp },
+        { href: "/digits-trading", label: "Digits Trading", icon: Hash },
+        { href: "/robots", label: "Robots", icon: Bot },
+        { href: "/wallet", label: "Wallet", icon: WalletIcon },
+        { href: "/profile", label: "Profile", icon: User },
+        { href: "/copy-trading", label: "Copy Trading", icon: Copy },
+        { href: "/customercare", label: "Customer Care", icon: MessageSquare },
+        { href: "/agents", label: "Agent Services", icon: Headset },
+        { href: "/management", label: "Account Management", icon: Briefcase },
+      ];
+    }
+
+    // NEW: demo accounts (standard demo or MT5 demo) should never expose the
+    // Wallet page — it's where deposits/withdrawals happen, and withdrawing
+    // fake demo money makes no sense and shouldn't be possible.
+    if (isDemo) {
+      items = items.filter((item) => item.href !== "/wallet");
+    }
+
+    return items;
+  })();
 
   return (
     <>
@@ -196,28 +213,16 @@ export function Sidebar({
           isOpen ? "translate-x-0" : "-translate-x-full"
         } md:translate-x-0`}
       >
-        {/* VIDEO HEADER - replaced image with video */}
+        {/* Video Header */}
         <div className="relative h-40 sm:h-36 md:h-48 w-full overflow-hidden flex-shrink-0">
-          <video
-            autoPlay
-            muted
-            loop
-            playsInline
-            className="absolute inset-0 w-full h-full object-cover"
-          >
-            {/* Replace '/sidebg.mp4' with your actual video file path */}
+          <video autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-cover">
             <source src="/sidebg.mp4" type="video/mp4" />
-            {/* Optional fallback for browsers that don't support video */}
-            <div className="absolute inset-0 bg-gradient-to-b from-black to-slate-900" />
           </video>
-
-          {/* Dark overlay gradient to keep text readable */}
           <div className="absolute inset-0 bg-gradient-to-b from-black/60 to-transparent" />
         </div>
 
-        {/* Content wrapper - scrollable */}
+        {/* Content */}
         <div className="flex flex-col gap-4 p-3 sm:p-3 md:p-4 flex-1 overflow-y-auto">
-          {/* Current Account Pill */}
           {activeAccount && (
             <div className="flex items-center gap-3 px-4 py-2 bg-white/5 rounded-lg flex-shrink-0">
               <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-orange-500 rounded-full flex items-center justify-center flex-shrink-0">
@@ -225,42 +230,40 @@ export function Sidebar({
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-medium text-white truncate">
+                  {activeAccount.platform === "mt5" ? "MT5" : "Traderiser"} -{" "}
                   {activeAccount.account_type.charAt(0).toUpperCase() + activeAccount.account_type.slice(1)}
                 </p>
                 <p className="text-xs text-white/70">
-                  ${(() => {
-                    const bal = Number(activeAccount.balance ?? 0)
-                    return isNaN(bal) ? "0.00" : bal.toFixed(2)
-                  })()}
+                  ${Number(activeAccount.balance ?? 0).toFixed(2)}
                 </p>
               </div>
             </div>
           )}
 
-          {/* Account Switcher Dropdown (only if >1 account) */}
-          {Array.isArray(accounts) && accounts.length > 1 && (
+          {/* Account Switcher */}
+          {Array.isArray(displayedAccounts) && displayedAccounts.length > 1 && (
             <select
               value={activeAccount?.id ?? ""}
               onChange={(e) => {
-                const acc = accounts.find((a) => a.id === Number(e.target.value))
-                if (acc) switchAccount(acc)
+                const acc = displayedAccounts.find((a) => a.id === Number(e.target.value));
+                if (acc) switchAccount(acc);
               }}
               className="bg-slate-700 text-white px-3 py-2 rounded-lg w-full text-sm flex-shrink-0"
             >
-              {accounts.map((acc) => (
+              {displayedAccounts.map((acc) => (
                 <option key={acc.id} value={acc.id}>
-                  {acc.account_type.charAt(0).toUpperCase() + acc.account_type.slice(1)} ( $
+                  {acc.platform === "mt5" ? "MT5" : "Traderiser"} -{" "}
+                  {acc.account_type.charAt(0).toUpperCase() + acc.account_type.slice(1)} ($
                   {Number(acc.balance).toFixed(2)})
                 </option>
               ))}
             </select>
           )}
 
-          {/* Navigation */}
           <nav className="flex flex-col gap-2 min-h-0">
             {navItems.map((item) => {
-              const Icon = item.icon
-              const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
+              const Icon = item.icon;
+              const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
               return (
                 <Link
                   key={item.href}
@@ -274,27 +277,25 @@ export function Sidebar({
                 >
                   <Icon
                     size={20}
-                    className={
-                      isActive ? "text-pink-300 flex-shrink-0" : "text-white/70 group-hover:text-white flex-shrink-0"
-                    }
+                    className={isActive ? "text-pink-300 flex-shrink-0" : "text-white/70 group-hover:text-white flex-shrink-0"}
                   />
                   <span className="font-medium text-sm sm:text-sm md:text-base truncate">{item.label}</span>
                   {isActive && (
                     <div className="ml-auto w-1 h-8 bg-gradient-to-b from-pink-400 to-pink-600 rounded-full flex-shrink-0" />
                   )}
                 </Link>
-              )
+              );
             })}
           </nav>
         </div>
 
-        {/* Footer - sticky at bottom */}
+        {/* Footer */}
         <div className="flex flex-col gap-3 p-3 sm:p-3 md:p-4 border-t border-white/10 flex-shrink-0 bg-gradient-to-t from-black/50 to-transparent">
           <div className="bg-black/60 backdrop-blur-md border border-white/20 rounded-lg px-3 py-2">
             <p className="text-xs font-semibold text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-pink-500">
-              Trade Riser v3.0
+              Trade Riser v4.0
             </p>
-            <p className="text-xs text-white/70">Deriv Intergration</p>
+            <p className="text-xs text-white/70">Advanced Multi-Broker</p>
           </div>
           <button
             onClick={handleLogout}
@@ -306,16 +307,12 @@ export function Sidebar({
         </div>
       </aside>
 
-      {/* Mobile backdrop */}
       {isOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 md:hidden"
           onClick={() => setIsOpen(false)}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => e.key === "Escape" && setIsOpen(false)}
         />
       )}
     </>
-  )
+  );
 }

@@ -1,6 +1,23 @@
 # urls.py
 from django.urls import path
-from .views import ResendOTPView, SignupView, LoginView, SashiToggleView, AccountDetailView, ResetDemoBalanceView, CreateAdditionalAccountView, SwitchWalletView, VerifyEmailView, password_reset_request, password_reset_verify, password_reset_confirm,AppealSuspensionView
+from .views import (
+    ResendOTPView, 
+    SignupView, 
+    LoginView, 
+    SashiToggleView, 
+    AccountDetailView, 
+    ResetDemoBalanceView, 
+    CreateAdditionalAccountView, 
+    SwitchWalletView, 
+    VerifyEmailView, 
+    password_reset_request, 
+    password_reset_verify, 
+    password_reset_confirm,
+    AppealSuspensionView,
+    KYCSubmitView
+
+
+)
 from rest_framework_simplejwt.views import TokenRefreshView
 
 urlpatterns = [
@@ -18,4 +35,5 @@ urlpatterns = [
     path('password-reset/verify/', password_reset_verify),
     path('password-reset/confirm/', password_reset_confirm),
     path('appeal-suspension/', AppealSuspensionView.as_view(), name='appeal_suspension'),
+    path('kyc/submit/', KYCSubmitView.as_view(), name='kyc_submit'),
 ]

@@ -6,7 +6,7 @@ import { useState, useEffect } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { TopNavbar } from "@/components/top-navbar";
 import { toast } from "sonner";
-import type { Account } from "@/types/account";   // ← Import the shared type
+import type { Account } from "@/types/account";
 
 interface User {
   username: string;
@@ -14,7 +14,7 @@ interface User {
   phone: string;
   is_sashi: boolean;
   is_email_verified: boolean;
-  accounts: Account[];           // ← Now uses the shared Account
+  accounts: Account[];
 }
 
 interface DashboardLayoutProps {
@@ -25,7 +25,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [user, setUser] = useState<User | null>(null);
   const [activeAccount, setActiveAccount] = useState<Account | null>(null);
-  const [loginType, setLoginType] = useState<string>("real");
+  const [loginType, setLoginType] = useState<"real" | "demo">("real");
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,10 +50,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         const data = JSON.parse(raw) as User;
 
         if (!data || !data.accounts || !Array.isArray(data.accounts)) {
-          throw new Error("Invalid session data: accounts missing or not an array");
+          throw new Error("Invalid session data");
         }
 
-        // Normalize balances
         const normalizedUser: User = {
           ...data,
           accounts: data.accounts.map((acc) => ({
@@ -66,23 +65,24 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         setUser(normalizedUser);
 
         const activeId = localStorage.getItem("active_account_id");
-        const account =
-          normalizedUser.accounts.find((acc) => String(acc.id) === String(activeId)) ||
-          normalizedUser.accounts.find((acc) => acc.account_type === "standard") ||
-          normalizedUser.accounts[0];
+        let account = normalizedUser.accounts.find((acc) => String(acc.id) === String(activeId));
 
         if (!account) {
-          throw new Error("No valid account found in session data");
+          // Default: prefer standard > mt5 real > first account
+          account = normalizedUser.accounts.find((a) => a.account_type === "standard") ||
+                    normalizedUser.accounts.find((a) => a.account_type === "mt5") ||
+                    normalizedUser.accounts[0];
         }
 
-        setActiveAccount(account);
-        setLoginType(account.account_type === "demo" ? "demo" : "real");
+        if (account) {
+          setActiveAccount(account);
+          setLoginType(
+            account.account_type === "demo" || account.account_type === "mt5-demo" ? "demo" : "real"
+          );
+        }
       } catch (err) {
         console.error("Error parsing user_session:", err);
-        setIsLoggedIn(false);
-        setUser(null);
-        setActiveAccount(null);
-        setError("Failed to load session. Please log in again.");
+        setError("Failed to load session.");
         toast.error("Failed to load session. Please log in again.");
         window.location.href = "/login";
       } finally {
@@ -98,44 +98,40 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const handleSwitchAccount = (account: Account) => {
     if (!account || !user) return;
 
-    try {
-      localStorage.setItem("active_account_id", String(account.id));
-      localStorage.setItem("account_type", account.account_type);
-      localStorage.setItem("login_type", account.account_type === "demo" ? "demo" : "real");
+    localStorage.setItem("active_account_id", String(account.id));
+    localStorage.setItem("account_type", account.account_type);
+    localStorage.setItem("login_type", 
+      account.account_type === "demo" || account.account_type === "mt5-demo" ? "demo" : "real"
+    );
 
-      const updatedUser: User = {
-        ...user,
-        accounts: user.accounts.map((acc) =>
-          String(acc.id) === String(account.id)
-            ? { ...acc, balance: Number(account.balance) || 0 }
-            : acc
-        ),
-      };
+    const updatedUser: User = {
+      ...user,
+      accounts: user.accounts.map((acc) =>
+        String(acc.id) === String(account.id)
+          ? { ...acc, balance: Number(account.balance) || 0 }
+          : acc
+      ),
+    };
 
-      setUser(updatedUser);
-      setActiveAccount(account);
-      setLoginType(account.account_type === "demo" ? "demo" : "real");
-      localStorage.setItem("user_session", JSON.stringify(updatedUser));
-      window.dispatchEvent(new Event("session-updated"));
-    } catch (error) {
-      console.error("Error switching account:", error);
-      toast.error("Failed to switch account. Please try again.");
-    }
+    setUser(updatedUser);
+    setActiveAccount(account);
+    setLoginType(
+      account.account_type === "demo" || account.account_type === "mt5-demo" ? "demo" : "real"
+    );
+    localStorage.setItem("user_session", JSON.stringify(updatedUser));
+    window.dispatchEvent(new Event("session-updated"));
   };
 
-  const handleLogout = () => {
-    localStorage.clear();
-    setIsLoggedIn(false);
-    setUser(null);
-    setActiveAccount(null);
-    setLoginType("real");
-    window.location.href = "/login";
-  };
+  // ====================== PROPER ACCOUNT FILTERING ======================
+  const realAccounts = (user?.accounts || []).filter((acc) => 
+    acc.account_type !== "demo" && acc.account_type !== "mt5-demo"
+  );
 
-  const availableAccounts =
-    loginType === "real"
-      ? (user?.accounts || []).filter((acc) => acc.account_type !== "demo")
-      : (user?.accounts || []).filter((acc) => acc.account_type === "demo");
+  const demoAccounts = (user?.accounts || []).filter((acc) => 
+    acc.account_type === "demo" || acc.account_type === "mt5-demo"
+  );
+
+  const availableAccounts = loginType === "real" ? realAccounts : demoAccounts;
 
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center text-white">Loading...</div>;
@@ -163,10 +159,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           loginType={loginType}
           activeAccount={activeAccount}
           accounts={availableAccounts}
-          // onSwitchAccount={handleSwitchAccount}   // Uncomment when Sidebar is updated
         />
         <main className="flex-1 w-full overflow-auto md:pl-64">{children}</main>
       </div>
     </div>
   );
 }
+
+// Add this logout function if missing
+const handleLogout = () => {
+  localStorage.clear();
+  window.location.href = "/login";
+};

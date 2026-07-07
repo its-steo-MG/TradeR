@@ -1,5 +1,8 @@
-// components/dashboard/dashboard-header.tsx
+"use client";
+
 import Image from "next/image";
+import { useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
 
 interface DashboardHeaderProps {
   username: string;
@@ -16,6 +19,38 @@ export function DashboardHeader({
 }: DashboardHeaderProps) {
   const displayAccountType =
     accountType.charAt(0).toUpperCase() + accountType.slice(1);
+
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const platforms = [
+    {
+      name: "MT5",
+      logo: "/mt5.png", 
+      color: "from-orange-500 to-red-600",
+      fill: true,
+    },
+    {
+      name: "Traderiser",
+      logo: "/images/traderiser-logo-192.png",
+      color: "from-blue-500 to-purple-600",
+      fill: false,
+    },
+    {
+      name: "Deriv",
+      logo: "/deriv-account-icon.png",
+      color: "from-emerald-500 to-teal-600",
+      fill: true,
+    },
+  ];
+
+  // Auto-scroll effect
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveIndex((prev) => (prev + 1) % platforms.length);
+    }, 2800);
+
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 mb-8">
@@ -35,7 +70,6 @@ export function DashboardHeader({
           </h1>
         </div>
         
-        {/* Info Pills */}
         <div className="flex items-center gap-3 flex-wrap">
           <span className="px-4 py-2 rounded-full glass border border-white/15 text-xs sm:text-sm font-semibold uppercase tracking-widest bg-gradient-to-r from-purple-500/10 to-pink-500/10 hover:from-purple-500/20 hover:to-pink-500/20 transition-all duration-300">
             {displayAccountType}
@@ -45,50 +79,61 @@ export function DashboardHeader({
         </div>
       </div>
 
-      {/* Integrated Platforms - Further Reduced Height */}
-      <div className="glass rounded-3xl px-8 py-3 border border-white/10 backdrop-blur-2xl shadow-xl">
-        <div className="flex flex-col items-center gap-2">
-          {/* Icons Row */}
-          <div className="flex items-center gap-7">
-            {/* Traderiser Icon (Blue £) */}
-            <div className="w-14 h-14 rounded-2xl overflow-hidden shadow-md ring-1 ring-white/20">
-              <Image
-                src="/images/traderiser-logo-192.png"
-                alt="Traderiser"
-                width={56}
-                height={56}
-                className="w-full h-full object-cover"
-              />
-            </div>
+      {/* Scrolling Platforms Banner */}
+      <div className="glass rounded-3xl px-8 py-6 border border-white/10 backdrop-blur-2xl shadow-xl overflow-hidden">
+        <div className="flex items-center justify-center gap-6 relative"> {/* Reduced gap */}
+          {platforms.map((plat, index) => {
+            const isActive = index === activeIndex;
+            
+            // Increased logo sizes
+            const logoSize = plat.fill ? 110 : 82;
 
-            {/* X Icon */}
-            <div className="w-14 h-14 flex items-center justify-center">
-              <span className="text-5xl font-black bg-gradient-to-br from-purple-400 via-pink-400 to-violet-400 bg-clip-text text-transparent leading-none tracking-tighter">
-                X
-              </span>
-            </div>
+            return (
+              <div
+                key={plat.name}
+                className={cn(
+                  "flex flex-col items-center transition-all duration-700 ease-out",
+                  isActive ? "scale-125 opacity-100 z-10" : "scale-75 opacity-60"
+                )}
+              >
+                {/* Clean logo - No card */}
+                <div className="relative flex items-center justify-center">
+                  <Image
+                    src={plat.logo}
+                    alt={plat.name}
+                    width={logoSize}
+                    height={logoSize}
+                    className={cn(
+                      "transition-all drop-shadow-md",
+                      plat.fill 
+                        ? "object-cover scale-110" 
+                        : "object-contain"
+                    )}
+                  />
+                </div>
 
-            {/* Deriv Icon */}
-            {isRealAccount && (
-              <div className="w-14 h-14 rounded-2xl overflow-hidden shadow-md ring-1 ring-white/20">
-                <Image
-                  src="/deriv-account-icon.png"
-                  alt="Deriv"
-                  width={56}
-                  height={56}
-                  className="w-full h-full object-cover"
-                />
+                <p className={cn(
+                  "text-xs font-medium mt-3 transition-colors",
+                  isActive ? "text-white" : "text-white/50"
+                )}>
+                  {plat.name}
+                </p>
               </div>
-            )}
-          </div>
+            );
+          })}
+        </div>
 
-          {/* Traderiser V3.0 Text - Even tighter */}
-          <div className="text-center -mt-1">
-            <p className="text-lg font-bold text-white tracking-tight">
-              Traderiser <span className="text-white/70">V3.0</span>
-            </p>
-            <p className="text-[9px] text-white/50 tracking-widest">INTEGRATED PLATFORMS</p>
-          </div>
+        {/* Subtle indicator */}
+        <div className="flex justify-center gap-1 mt-5">
+          {platforms.map((_, i) => (
+            <div
+              key={i}
+              className={cn(
+                "w-1.5 h-1.5 rounded-full transition-all",
+                i === activeIndex ? "bg-white scale-125" : "bg-white/30"
+              )}
+            />
+          ))}
         </div>
       </div>
     </div>

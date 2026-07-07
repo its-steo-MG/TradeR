@@ -1,4 +1,3 @@
-// app/(auth)/signup/page.tsx
 "use client";
 
 import type React from "react";
@@ -13,7 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ArrowLeft, Eye, EyeOff, Clock } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, Clock, AlertCircle } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { api } from "@/lib/api";
@@ -59,7 +58,7 @@ export default function SignupPage() {
   const accountDescription = isDerivAccount
     ? "Coming soon - Trade synthetic indices & more"
     : isRealAccount
-    ? "Trade with real money and earn real profits"
+    ? "Trade with real money • KYC (Proof of Identity) required to enable withdrawals & full features"
     : "Practice trading with $10,000 virtual balance";
 
   const iconPath = isDerivAccount 
@@ -67,12 +66,6 @@ export default function SignupPage() {
     : isRealAccount 
     ? "/real-account-icon.png" 
     : "/demo-account-icon.png";
-
-  const gradientColor = isDerivAccount 
-    ? "" 
-    : isRealAccount 
-    ? "" 
-    : "";
 
   useEffect(() => {
     const typeFromUrl = searchParams.get("type") as "standard" | "demo" | "deriv" | null;
@@ -176,7 +169,17 @@ export default function SignupPage() {
         toast.error(res.error);
         return;
       }
-      toast.success("Email verified!");
+      toast.success("Email verified successfully!");
+
+      // KYC Notice for Real accounts
+      if (isRealAccount) {
+        toast.info(
+          "KYC Required: Please submit your Proof of Identity (National ID/Passport + Selfie) to unlock withdrawals and full trading features.",
+          { duration: 8000 }
+        );
+        // Optional: router.push("/kyc"); // uncomment when KYC page is ready
+      }
+
       router.push("/dashboard");
     } catch {
       toast.error("Verification failed. Try again.");
@@ -212,7 +215,6 @@ export default function SignupPage() {
         <div className="absolute inset-0 bg-black/70 z-0" />
         
         <Card className="w-full max-w-md border-white/20 bg-white/5 backdrop-blur-sm relative z-10">
-          {/* OTP content remains the same */}
           <CardHeader className="text-center space-y-2">
             <CardTitle className="text-2xl text-white">Verify Your Email</CardTitle>
             <CardDescription className="text-white/70">
@@ -336,10 +338,20 @@ export default function SignupPage() {
             </button>
           </div>
 
+          {/* KYC Info Banner for Real Accounts */}
+          {isRealAccount && (
+            <div className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-sm">
+              <AlertCircle className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
+              <div className="text-amber-200">
+                <strong>Real Account Notice:</strong> After creating your account and verifying your email, you will need to submit Proof of Identity (KYC) to enable withdrawals and full platform features.
+              </div>
+            </div>
+          )}
+
           {/* Account Info */}
           <div className="flex items-center gap-4 bg-white/5 rounded-xl p-4 border border-white/10">
             <div className="flex-shrink-0">
-              <div className={`w-14 h-14 rounded-full flex items-center justify-center overflow-hidden shadow-md bg-gradient-to-br ${gradientColor}`}>
+              <div className="w-14 h-14 rounded-full flex items-center justify-center overflow-hidden shadow-md bg-gradient-to-br from-white/10 to-white/5">
                 <Image
                   src={iconPath}
                   alt={accountLabel}

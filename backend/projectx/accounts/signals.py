@@ -42,8 +42,8 @@ def send_verification_email(sender, instance, created, **kwargs):
 
         send_mail(
             subject=subject,
-            message=f"Click to verify your account: {verify_link}",  # plain text fallback
-            from_email=None,                    # Uses DEFAULT_FROM_EMAIL from settings.py
+            message=f"Click to verify your account: {verify_link}",
+            from_email=None,
             recipient_list=[instance.email],
             html_message=html_message,
             fail_silently=False,
@@ -63,7 +63,15 @@ def sync_account_to_wallet(sender, instance, **kwargs):
         # Create wallet for new accounts
         Currency = apps.get_model('wallet', 'Currency')
         usd = Currency.objects.get_or_create(code='USD', defaults={'name': 'US Dollar', 'symbol': '$'})[0]
-        initial_balance = Decimal('10000.00') if instance.account_type == 'demo' else Decimal('0.00')
+        
+        # Platform-aware initial balance
+        if instance.account_type == 'mt5-demo':
+            initial_balance = Decimal('100000.00')
+        elif instance.account_type in ['demo', 'deriv-demo']:
+            initial_balance = Decimal('10000.00')
+        else:
+            initial_balance = Decimal('0.00')
+        
         Wallet.objects.create(
             account=instance,
             wallet_type='main',

@@ -1,11 +1,14 @@
 // src/types/account.ts
 export interface Account {
-  id?: string | number;
+  id?: number;
   account_type: string;
-  login?: string;
+  platform?: string;           // "traderiser", "mt5", "deriv", etc.
+  login: string;
   balance?: number;
-  currency?: string;
-  // Add more fields as needed from your API
+  activeAccount: boolean;
+  leverage?: number;
+  mt5_login?: string;
+  mt5_server?: string;
 }
 
 interface SidebarProps {

@@ -1,0 +1,1 @@
+default_app_config = 'mt5.apps.Mt5Config'

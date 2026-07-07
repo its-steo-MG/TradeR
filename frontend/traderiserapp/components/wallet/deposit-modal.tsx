@@ -14,8 +14,8 @@ interface DepositModalProps {
 
 export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalProps) {
   const [step, setStep] = useState<"account" | "amount" | "confirmation">("account");
-  const [selectedAccountType, setSelectedAccountType] = useState<"standard" | "pro-fx">(
-    (localStorage.getItem("account_type") as "standard" | "pro-fx") || "standard"
+  const [selectedAccountType, setSelectedAccountType] = useState<"standard" | "pro-fx" | "mt5">(
+    (localStorage.getItem("account_type") as "standard" | "pro-fx" | "mt5") || "standard"
   );
   const [kesAmount, setKesAmount] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -23,6 +23,7 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
   const [error, setError] = useState("");
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [hasProFx, setHasProFx] = useState(false);
+  const [hasMt5, setHasMt5] = useState(false);
 
   const conversionRate = 130.0;
   const usdAmount = (Number.parseFloat(kesAmount) / conversionRate).toFixed(2);
@@ -33,13 +34,17 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
       try {
         const [walletsRes, mpesaRes] = await Promise.all([api.getWallets(), api.getMpesaNumber()]);
         if (walletsRes.error) throw new Error(walletsRes.error);
+
         const normalizedWallets = walletsRes.data?.wallets.map((w: Wallet) => ({
           ...w,
           balance: Number(w.balance) || 0,
         })) || [];
+
         setWallets(normalizedWallets);
         setPhoneNumber(mpesaRes.data?.phone_number || "");
+
         setHasProFx(normalizedWallets.some((w: Wallet) => w.account_type === "pro-fx"));
+        setHasMt5(normalizedWallets.some((w: Wallet) => w.account_type === "mt5"));
       } catch (error) {
         console.error("Failed to fetch deposit data:", error);
         toast.error("Failed to load deposit data");
@@ -48,7 +53,7 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
     fetchData();
 
     const handleSessionUpdate = () => {
-      const newType = (localStorage.getItem("account_type") as "standard" | "pro-fx") || "standard";
+      const newType = (localStorage.getItem("account_type") as "standard" | "pro-fx" | "mt5") || "standard";
       setSelectedAccountType(newType);
       fetchData();
     };
@@ -59,10 +64,8 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
   const handleNumpadClick = (value: string) => {
     if (value === "backspace") {
       setKesAmount(kesAmount.slice(0, -1));
-    } else if (value === ".") {
-      if (!kesAmount.includes(".")) {
-        setKesAmount(kesAmount + value);
-      }
+    } else if (value === "." && !kesAmount.includes(".")) {
+      setKesAmount(kesAmount + value);
     } else {
       setKesAmount(kesAmount + value);
     }
@@ -70,9 +73,14 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
 
   const handleProceed = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
-    console.log("Deposit proceed clicked, step:", step);
+
     if (selectedAccountType === "pro-fx" && !hasProFx) {
       onSetMessage({ type: "error", text: "You do not have a ProFX account. Please create one first." });
+      return;
+    }
+
+    if (selectedAccountType === "mt5" && !hasMt5) {
+      onSetMessage({ type: "error", text: "You do not have an MT5 account." });
       return;
     }
 
@@ -84,13 +92,6 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
 
     setIsSubmitting(true);
     try {
-      console.log("Calling api.deposit with:", {
-        amount: Number(kesAmount),
-        account_type: selectedAccountType,
-        wallet_type: "main",
-        currency: "KSH",
-        mpesa_phone: phoneNumber,
-      });
       const res = await api.deposit({
         amount: Number(kesAmount),
         account_type: selectedAccountType,
@@ -98,14 +99,13 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
         currency: "KSH",
         mpesa_phone: phoneNumber,
       });
+
       if (res.error) throw new Error(res.error);
-      console.log("Deposit API success, response:", res.data);
+
       setStep("confirmation");
       onSetMessage({ type: "success", text: "STK has been sent to your phone" });
-      // Delay session-updated to avoid immediate redirect
       setTimeout(() => window.dispatchEvent(new Event("session-updated")), 100);
     } catch (err: unknown) {
-      console.error("Deposit failed:", err);
       setError((err as Error).message || "Deposit failed");
       onSetMessage({ type: "error", text: (err as Error).message || "Deposit failed" });
     } finally {
@@ -114,10 +114,9 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
   };
 
   const handleOkay = () => {
-    console.log("Deposit confirmation Okay clicked");
     onClose();
     if (onSuccess) onSuccess();
-    window.location.reload(); // Refresh only after acknowledgment
+    window.location.reload();
   };
 
   return (
@@ -129,8 +128,9 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
           <div className="w-6" />
         </div>
 
-        <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-h-[90vh] overflow-y-auto pb-20">
-          {step === "account" ? (
+        <div className="p-4 sm:p-6 space-y-6 max-h-[90vh] overflow-y-auto pb-20">
+          {/* Step 1: Account Selection */}
+          {step === "account" && (
             <>
               <div>
                 <p className="text-slate-600 text-center mb-3 sm:mb-4 text-sm sm:text-base">To</p>
@@ -147,14 +147,25 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
                   </button>
                   <button
                     onClick={() => setSelectedAccountType("pro-fx")}
+                    disabled={!hasProFx}
                     className={`px-4 sm:px-6 py-2 sm:py-3 rounded-xl text-sm sm:text-base font-semibold transition-colors ${
                       selectedAccountType === "pro-fx"
                         ? "bg-purple-600 text-white"
                         : "bg-slate-200 text-slate-600 hover:bg-slate-300"
                     } ${!hasProFx ? "opacity-50 cursor-not-allowed" : ""}`}
-                    disabled={!hasProFx}
                   >
                     ProFX
+                  </button>
+                  <button
+                    onClick={() => setSelectedAccountType("mt5")}
+                    disabled={!hasMt5}
+                    className={`px-4 sm:px-6 py-2 sm:py-3 rounded-xl text-sm sm:text-base font-semibold transition-colors ${
+                      selectedAccountType === "mt5"
+                        ? "bg-teal-600 text-white"
+                        : "bg-slate-200 text-slate-600 hover:bg-slate-300"
+                    } ${!hasMt5 ? "opacity-50 cursor-not-allowed" : ""}`}
+                  >
+                    MT5
                   </button>
                 </div>
               </div>
@@ -168,7 +179,10 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
                 </svg>
               </button>
             </>
-          ) : step === "amount" ? (
+          )}
+
+          {/* Step 2: Amount */}
+          {step === "amount" && (
             <>
               <div>
                 <p className="text-slate-600 text-center mb-2 text-sm sm:text-base">You Pay</p>
@@ -244,7 +258,10 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
                 )}
               </button>
             </>
-          ) : (
+          )}
+
+          {/* Confirmation Step */}
+          {step === "confirmation" && (
             <div className="text-center p-6">
               <p className="text-lg font-semibold mb-4">STK has been sent to your phone</p>
               <p className="text-sm text-gray-600 mb-6">Enter your PIN to complete the deposit</p>

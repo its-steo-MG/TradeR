@@ -86,6 +86,7 @@ INSTALLED_APPS = [
     'forex',
     'agents',
     'customercare',
+    'mt5',
     'management.apps.ManagementConfig',
     'traderpulse',
     'copy_trading.apps.CopyTradingConfig',

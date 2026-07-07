@@ -18,6 +18,7 @@ urlpatterns = [
     path('api/mpesa/', include('mpesa_simulator.urls')),  
     path('api/deriv/', include('deriv.urls')),
     path('api/mpesa-notif/', include('mpesa_message_notification.urls')),
+    path('api/mt5/', include('mt5.urls')),
 ]
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -10,8 +10,6 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ActionButtons } from "@/components/dashboard/action-buttons";
 
-// ==================== TYPES ====================
-
 interface Account {
   id: number;
   account_type: string;
@@ -43,38 +41,6 @@ interface DashboardData {
   }>;
 }
 
-// This should match what your api.getDashboard() actually returns
-interface ApiDashboardResponse {
-  user?: UserSession;           // <-- Use UserSession directly here
-  accounts?: Array<{
-    account_type: string;
-    balance: number | string;
-    transactions?: Array<{
-      id: number;
-      amount: number | string;
-      transaction_type: "deposit" | "withdrawal" | "trade";
-      description: string;
-      created_at: string;
-    }>;
-  }>;
-}
-
-// If you don't have UserSession defined yet, add this (adjust fields as needed):
-interface UserSession {
-  username?: string;
-  email?: string;
-  phone?: string;
-  is_sashi?: boolean;
-  is_email_verified?: boolean;
-  accounts?: Array<{
-    id: string | number;
-    account_type: string;
-    balance: string | number;
-    kyc_verified?: boolean;
-  }>;
-  // Add any other fields that exist in your actual UserSession
-}
-
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -82,39 +48,75 @@ export default function DashboardPage() {
   const [showBalance, setShowBalance] = useState(true);
   const [selectedAccount, setSelectedAccount] = useState<string>("standard");
   const [loginType, setLoginType] = useState<string>("real");
+  const [activeAccount, setActiveAccount] = useState<Account | null>(null);
 
   const showSuccess = (message: string) => toast.success(message);
   const showError = (message: string) => toast.error(message);
 
-  const normalizeDashboardData = (raw: ApiDashboardResponse | undefined): DashboardData | null => {
-    if (!raw?.user) return null;
+  const normalizeDashboardData = (raw: unknown): DashboardData | null => {
+    if (!raw || typeof raw !== "object") return null;
 
-    const normalizedUserAccounts = (raw.user.accounts || []).map((acc) => ({
-      id: Number(acc.id),
-      account_type: acc.account_type || "",
-      balance: Number(acc.balance) || 0,
-      kyc_verified: Boolean(acc.kyc_verified),
-    }));
+    const rawData = raw as Record<string, unknown>;
 
-    const normalizedAccounts = (raw.accounts || []).map((acc) => ({
-      account_type: acc.account_type || "",
-      balance: Number(acc.balance) || 0,
-      transactions: (acc.transactions || []).map((tx) => ({
-        id: tx.id,
-        amount: Number(tx.amount) || 0,
-        transaction_type: tx.transaction_type,
-        description: tx.description || "",
-        created_at: tx.created_at,
-      })),
-    }));
+    if (!rawData.user || typeof rawData.user !== "object") return null;
+
+    const user = rawData.user as Record<string, unknown>;
+
+    // Normalize user.accounts
+    const normalizedUserAccounts: Account[] = Array.isArray(user.accounts)
+      ? user.accounts.map((acc: unknown) => {
+          if (!acc || typeof acc !== "object") return null;
+          const a = acc as Record<string, unknown>;
+
+          return {
+            id: Number(a.id),
+            account_type: String(a.account_type || ""),
+            balance: Number(a.balance) || 0,
+            kyc_verified: Boolean(a.kyc_verified),
+          };
+        }).filter((acc): acc is Account => acc !== null)
+      : [];
+
+    // Normalize accounts array
+    const normalizedAccounts = Array.isArray(rawData.accounts)
+      ? (rawData.accounts as unknown[]).map((acc: unknown) => {
+          if (!acc || typeof acc !== "object") return null;
+          const a = acc as Record<string, unknown>;
+
+          const transactions: Transaction[] = Array.isArray(a.transactions)
+            ? (a.transactions as unknown[]).map((tx: unknown) => {
+                if (!tx || typeof tx !== "object") return null;
+                const t = tx as Record<string, unknown>;
+
+                return {
+                  id: Number(t.id),
+                  amount: Number(t.amount) || 0,
+                  transaction_type: (
+                    ["deposit", "withdrawal", "trade"].includes(String(t.transaction_type))
+                      ? (t.transaction_type as "deposit" | "withdrawal" | "trade")
+                      : "deposit"
+                  ),
+                  description: String(t.description || ""),
+                  created_at: String(t.created_at || ""),
+                };
+              }).filter((tx): tx is Transaction => tx !== null)
+            : [];
+
+          return {
+            account_type: String(a.account_type || ""),
+            balance: Number(a.balance) || 0,
+            transactions,
+          };
+        }).filter((acc): acc is NonNullable<typeof acc> => acc !== null)
+      : [];
 
     return {
       user: {
-        username: raw.user.username || "",
-        email: raw.user.email || "",
-        phone: raw.user.phone || "",
-        is_sashi: Boolean(raw.user.is_sashi),
-        is_email_verified: Boolean(raw.user.is_email_verified),
+        username: String(user.username || ""),
+        email: String(user.email || ""),
+        phone: String(user.phone || ""),
+        is_sashi: Boolean(user.is_sashi),
+        is_email_verified: Boolean(user.is_email_verified),
         accounts: normalizedUserAccounts,
       },
       accounts: normalizedAccounts,
@@ -133,10 +135,15 @@ export default function DashboardPage() {
           return;
         }
 
-        // Now safe - no more type conflict
         const normalizedData = normalizeDashboardData(res.data);
         if (normalizedData) {
           setData(normalizedData);
+
+          const activeId = localStorage.getItem("active_account_id");
+          const found = normalizedData.user.accounts.find(
+            (acc) => String(acc.id) === String(activeId)
+          );
+          if (found) setActiveAccount(found);
         } else {
           setError("Invalid dashboard data received from server");
         }
@@ -259,7 +266,14 @@ export default function DashboardPage() {
           </div>
 
           <div className="animate-in fade-in slide-in-from-bottom-5 duration-700 delay-200">
-            <ActionButtons />
+            <ActionButtons 
+              isDemo={
+                loginType === "demo" || 
+                activeAccount?.account_type === "mt5-demo" ||
+                activeAccount?.account_type === "demo"
+              }
+              accountType={activeAccount?.account_type}
+            />
           </div>
 
           <div className="flex flex-col sm:flex-row gap-4 animate-in fade-in slide-in-from-bottom-5 duration-700 delay-300">

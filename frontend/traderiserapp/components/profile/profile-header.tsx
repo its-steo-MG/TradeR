@@ -12,6 +12,7 @@ interface UserData {
   email: string
   is_email_verified: boolean
   phone?: string
+  kyc_status?: "pending" | "approved" | "rejected"   // ← Added
 }
 
 export default function ProfileHeader() {
@@ -63,15 +64,25 @@ export default function ProfileHeader() {
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-white">{user.username}</h1>
             <p className="text-slate-400">{user.email}</p>
-            <div className="flex gap-2 mt-2">
+
+            {/* Verification Badges */}
+            <div className="flex flex-wrap gap-2 mt-2">
               {user.is_email_verified && (
                 <Badge variant="outline" className="bg-green-500/10 text-green-400 border-green-500/30">
                   Email Verified
                 </Badge>
               )}
+
+              {/* KYC Verification Badge - Only shows when approved */}
+              {user.kyc_status === "approved" && (
+                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">
+                  KYC Verified
+                </Badge>
+              )}
             </div>
           </div>
         </div>
+
         <div className="flex gap-3">
           <Button variant="outline" size="sm" className="border-slate-700/50 hover:bg-slate-800/50 bg-transparent">
             <Settings className="w-4 h-4 mr-2" />

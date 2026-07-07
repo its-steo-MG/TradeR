@@ -15,8 +15,8 @@ interface WithdrawModalProps {
 
 export function WithdrawModal({ onClose, onSuccess, onSetMessage }: WithdrawModalProps) {
   const [step, setStep] = useState<"account" | "mpesa" | "amount">("account");
-  const [selectedAccountType, setSelectedAccountType] = useState<"standard" | "pro-fx">(
-    (localStorage.getItem("account_type") as "standard" | "pro-fx") || "standard"
+  const [selectedAccountType, setSelectedAccountType] = useState<"standard" | "pro-fx" | "mt5">(
+    (localStorage.getItem("account_type") as "standard" | "pro-fx" | "mt5") || "standard"
   );
   const [mpesaNumber, setMpesaNumber] = useState("");
   const [usdAmount, setUsdAmount] = useState("");
@@ -27,6 +27,7 @@ export function WithdrawModal({ onClose, onSuccess, onSetMessage }: WithdrawModa
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [selectedWallet, setSelectedWallet] = useState<Wallet | null>(null);
   const [hasProFx, setHasProFx] = useState(false);
+  const [hasMt5, setHasMt5] = useState(false);
 
   const conversionRate = 125.0;
   const kesAmount = (Number.parseFloat(usdAmount) * conversionRate).toFixed(2);
@@ -36,13 +37,18 @@ export function WithdrawModal({ onClose, onSuccess, onSetMessage }: WithdrawModa
       try {
         const [walletsRes, mpesaRes] = await Promise.all([api.getWallets(), api.getMpesaNumber()]);
         if (walletsRes.error) throw new Error(walletsRes.error);
+
         const normalizedWallets = walletsRes.data?.wallets.map((w: Wallet) => ({
           ...w,
           balance: Number(w.balance) || 0,
         })) || [];
+
         setWallets(normalizedWallets);
         setMpesaNumber(mpesaRes.data?.phone_number || "");
+
         setHasProFx(normalizedWallets.some((w: Wallet) => w.account_type === "pro-fx"));
+        setHasMt5(normalizedWallets.some((w: Wallet) => w.account_type === "mt5"));
+
         const currentAccountType = localStorage.getItem("account_type") || "standard";
         const mainWallet = normalizedWallets.find(
           (w: Wallet) => w.wallet_type === "main" && w.account_type === currentAccountType
@@ -74,7 +80,7 @@ export function WithdrawModal({ onClose, onSuccess, onSetMessage }: WithdrawModa
 
   const handleInitiateWithdrawal = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
-    console.log("Withdraw button clicked, step:", step);
+
     if (!usdAmount) {
       setError("Please enter an amount");
       return;
@@ -92,22 +98,20 @@ export function WithdrawModal({ onClose, onSuccess, onSetMessage }: WithdrawModa
     setError("");
 
     try {
-      console.log("Calling api.withdraw with:", { amount, wallet_type: "main", account_type: selectedAccountType });
       const res = await api.withdrawOTP({
         amount,
         wallet_type: "main",
         account_type: selectedAccountType,
       });
+
       if (res.error) throw new Error(res.error);
-      console.log("Withdraw API success, response:", res.data);
+
       const data = res.data as { transaction_id?: string } | undefined;
       setTransactionId(data?.transaction_id || "");
       setShowOTPModal(true);
       onSetMessage({ type: "success", text: `OTP sent to your email! Transaction ID: ${data?.transaction_id || ""}` });
-      // Delay session-updated to avoid immediate redirect
       setTimeout(() => window.dispatchEvent(new Event("session-updated")), 100);
     } catch (err) {
-      console.error("Withdrawal initiation failed:", err);
       setError((err as Error).message || "Failed to process withdrawal");
       onSetMessage({ type: "error", text: (err as Error).message || "Failed to process withdrawal" });
     } finally {
@@ -117,7 +121,6 @@ export function WithdrawModal({ onClose, onSuccess, onSetMessage }: WithdrawModa
 
   const handleSaveMpesa = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
-    console.log("Save M-Pesa clicked");
     if (!mpesaNumber.trim()) {
       setError("Please enter M-Pesa number");
       return;
@@ -129,10 +132,8 @@ export function WithdrawModal({ onClose, onSuccess, onSetMessage }: WithdrawModa
     try {
       const res = await api.setMpesaNumber({ phone_number: mpesaNumber });
       if (res.error) throw new Error(res.error);
-      console.log("M-Pesa number saved, moving to amount step");
       setStep("amount");
     } catch (err) {
-      console.error("Failed to save M-Pesa number:", err);
       setError((err as Error).message || "Failed to save M-Pesa number");
       onSetMessage({ type: "error", text: (err as Error).message || "Failed to save M-Pesa number" });
     } finally {
@@ -163,8 +164,9 @@ export function WithdrawModal({ onClose, onSuccess, onSetMessage }: WithdrawModa
           <div className="w-6" />
         </div>
 
-        <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-h-[90vh] overflow-y-auto pb-20">
-          {step === "account" ? (
+        <div className="p-4 sm:p-6 space-y-6 max-h-[90vh] overflow-y-auto pb-20">
+          {/* Step 1: Account Selection */}
+          {step === "account" && (
             <>
               <div>
                 <p className="text-slate-600 text-center mb-3 sm:mb-4 text-sm sm:text-base">From</p>
@@ -181,14 +183,25 @@ export function WithdrawModal({ onClose, onSuccess, onSetMessage }: WithdrawModa
                   </button>
                   <button
                     onClick={() => setSelectedAccountType("pro-fx")}
+                    disabled={!hasProFx}
                     className={`px-4 sm:px-6 py-2 sm:py-3 rounded-xl text-sm sm:text-base font-semibold transition-colors ${
                       selectedAccountType === "pro-fx"
                         ? "bg-purple-600 text-white"
                         : "bg-slate-200 text-slate-600 hover:bg-slate-300"
                     } ${!hasProFx ? "opacity-50 cursor-not-allowed" : ""}`}
-                    disabled={!hasProFx}
                   >
                     ProFX
+                  </button>
+                  <button
+                    onClick={() => setSelectedAccountType("mt5")}
+                    disabled={!hasMt5}
+                    className={`px-4 sm:px-6 py-2 sm:py-3 rounded-xl text-sm sm:text-base font-semibold transition-colors ${
+                      selectedAccountType === "mt5"
+                        ? "bg-teal-600 text-white"
+                        : "bg-slate-200 text-slate-600 hover:bg-slate-300"
+                    } ${!hasMt5 ? "opacity-50 cursor-not-allowed" : ""}`}
+                  >
+                    MT5
                   </button>
                 </div>
               </div>
@@ -199,7 +212,10 @@ export function WithdrawModal({ onClose, onSuccess, onSetMessage }: WithdrawModa
                 Next
               </button>
             </>
-          ) : step === "mpesa" ? (
+          )}
+
+          {/* Step 2: M-Pesa Number */}
+          {step === "mpesa" && (
             <>
               <div className="mb-4 sm:mb-6">
                 <label className="block text-slate-600 text-sm mb-2">M-Pesa Phone Number</label>
@@ -222,7 +238,10 @@ export function WithdrawModal({ onClose, onSuccess, onSetMessage }: WithdrawModa
                 {isSubmitting ? "Saving..." : "Save and Continue"}
               </button>
             </>
-          ) : (
+          )}
+
+          {/* Step 3: Amount */}
+          {step === "amount" && (
             <>
               <div>
                 <p className="text-slate-600 text-center mb-2 text-sm sm:text-base">You Send</p>

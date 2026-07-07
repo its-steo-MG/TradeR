@@ -32,6 +32,16 @@ export interface Wallet {
 }
 
 export interface Account {
+  id?: number;
+  account_type: string;
+  platform?: string;           // "traderiser", "mt5", "deriv", etc.
+  login: string;
+  balance?: number;
+  activeAccount: boolean;
+  leverage?: number;
+  mt5_login?: string;
+  mt5_server?: string;
+}export interface Account {
   account_type: string
   login: string
   balance?: number
@@ -1257,6 +1267,49 @@ export const placeSRobotTrade = (data: {
     method: "POST",
     body: JSON.stringify(data),
   });
+
+  // ====================== KYC ======================
+export const submitKYC = (formData: FormData) =>
+  apiRequestWithFile<{ 
+    message: string; 
+    status: string 
+  }>("/accounts/kyc/submit/", formData);
+
+  // ====================== MT5 ENDPOINTS ======================
+export const createMT5Account = (data: { account_type: "mt5" | "demo" }) =>
+  apiRequest("/mt5/create-account/", { 
+    method: "POST", 
+    body: JSON.stringify(data) 
+  });
+
+export const getMT5Accounts = () => apiRequest("/mt5/my-accounts/");
+
+export const switchMT5Account = (data: { account_id: number }) =>
+  apiRequest("/mt5/switch/", { 
+    method: "POST", 
+    body: JSON.stringify(data) 
+  });
+
+export const getMT5Positions = () => apiRequest("/mt5/positions/");
+
+export const openMT5Position = (data: {
+  symbol: string;
+  side: "buy" | "sell";
+  volume: number;
+  open_price?: number;
+  account_type?: "mt5" | "mt5-demo";
+}) => apiRequest("/mt5/positions/open/", { 
+  method: "POST", 
+  body: JSON.stringify(data) 
+});
+
+export const closeMT5Position = (data: {
+  position_id: string | number;
+  close_price?: number;
+}) => apiRequest("/mt5/positions/close/", { 
+  method: "POST", 
+  body: JSON.stringify(data) 
+});
 /* ------------------------------------------------------------------ */
 /*  EXPORT API OBJECT                                                 */
 /* ------------------------------------------------------------------ */
@@ -1339,4 +1392,11 @@ export const api = {
   closeEAPositions,
   listMpesaNotifications,
   markMpesaRead,
+  submitKYC,
+  createMT5Account,
+  getMT5Accounts,
+  switchMT5Account,
+  getMT5Positions,
+  openMT5Position,
+  closeMT5Position,
 }

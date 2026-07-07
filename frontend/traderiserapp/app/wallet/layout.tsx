@@ -103,7 +103,9 @@ export default function WalletLayout({ children }: WalletLayoutProps) {
         }
 
         setActiveAccount(account);
-        setLoginType(account.account_type === "demo" ? "demo" : "real");
+        setLoginType(
+          account.account_type === "demo" || account.account_type === "mt5-demo" ? "demo" : "real"
+        );
 
         if (!isModalActive) {
           const walletRes: ApiResponse<{ wallets: Wallet[] }> = await api.getWallets();
@@ -201,7 +203,10 @@ export default function WalletLayout({ children }: WalletLayoutProps) {
       setActiveAccount(updatedAccount);
       localStorage.setItem("active_account_id", String(account.id));
       localStorage.setItem("account_type", account.account_type);
-      localStorage.setItem("login_type", account.account_type === "demo" ? "demo" : "real");
+      localStorage.setItem(
+        "login_type",
+        account.account_type === "demo" || account.account_type === "mt5-demo" ? "demo" : "real"
+      );
 
       const updatedUser: User = {
         ...user,
@@ -272,10 +277,17 @@ export default function WalletLayout({ children }: WalletLayoutProps) {
     window.location.href = "/login";
   };
 
+  // FIXED: "real" must exclude BOTH "demo" and "mt5-demo" — previously only
+  // "demo" was excluded, so MT5 Demo leaked into the real-account switcher
+  // on the Wallet page (top navbar + sidebar select).
   const availableAccounts: Account[] =
     loginType === "real"
-      ? (user?.accounts || []).filter((acc) => acc.account_type !== "demo")
-      : (user?.accounts || []).filter((acc) => acc.account_type === "demo");
+      ? (user?.accounts || []).filter(
+          (acc) => acc.account_type !== "demo" && acc.account_type !== "mt5-demo"
+        )
+      : (user?.accounts || []).filter(
+          (acc) => acc.account_type === "demo" || acc.account_type === "mt5-demo"
+        );
 
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center text-black">Loading...</div>;
