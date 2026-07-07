@@ -12,8 +12,10 @@ User = get_user_model()
 def generate_reference_id():
     return f"WT-{uuid.uuid4().hex[:12].upper()}"
 
+
 def generate_otp():
     return ''.join([str(random.randint(0, 9)) for _ in range(6)])
+
 
 # --------------------------------------------------------------
 # 1. Currency
@@ -107,13 +109,13 @@ class OTPCode(models.Model):
         'WalletTransaction', on_delete=models.CASCADE, null=True, blank=True
     )
     created_at = models.DateTimeField(auto_now_add=True)
-    expires_at = models.DateTimeField(null=True, blank=True)  # Explicit expiration time
+    expires_at = models.DateTimeField(null=True, blank=True)
     is_used = models.BooleanField(default=False)
 
     def is_expired(self):
         if self.expires_at:
             return timezone.now() > self.expires_at
-        # Fallback to 5 minutes if expires_at not set
+        # Fallback to 5 minutes
         return timezone.now() > self.created_at + timezone.timedelta(minutes=5)
 
     def __str__(self):
@@ -155,7 +157,6 @@ class WalletTransaction(models.Model):
     reference_id = models.CharField(
         max_length=50,
         default=generate_reference_id
-        # unique=True REMOVED → allows transfer_in/out to share same reference_id
     )
     description = models.TextField(blank=True)
     mpesa_phone = models.CharField(max_length=15, blank=True, null=True)
@@ -169,4 +170,4 @@ class WalletTransaction(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.get_transaction_type_display()} - {self.amount} {self.currency}"
+        return f"{self.get_transaction_type_display() or self.transaction_type} - {self.amount} {self.currency}"

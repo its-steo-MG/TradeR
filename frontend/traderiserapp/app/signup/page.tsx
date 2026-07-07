@@ -13,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ArrowLeft, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, Clock } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { api } from "@/lib/api";
@@ -22,7 +22,11 @@ import { toast } from "sonner";
 export default function SignupPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const accountType = searchParams.get("type") === "demo" ? "demo" : "standard";
+
+  const [accountType, setAccountType] = useState<"standard" | "demo" | "deriv">(
+    (searchParams.get("type") as "standard" | "demo" | "deriv") || "standard"
+  );
+
   const referralCode = searchParams.get("ref") || "";
 
   const [isLoading, setIsLoading] = useState(false);
@@ -43,15 +47,41 @@ export default function SignupPage() {
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const isRealAccount = accountType === "standard";
-  const accountLabel = isRealAccount ? "Real Account" : "Demo Account";
-  const accountDescription = isRealAccount
+  const isDemoAccount = accountType === "demo";
+  const isDerivAccount = accountType === "deriv";
+
+  const accountLabel = isDerivAccount 
+    ? "Deriv Account" 
+    : isRealAccount 
+    ? "Real Account" 
+    : "Demo Account";
+
+  const accountDescription = isDerivAccount
+    ? "Coming soon - Trade synthetic indices & more"
+    : isRealAccount
     ? "Trade with real money and earn real profits"
     : "Practice trading with $10,000 virtual balance";
-  const iconPath = isRealAccount ? "/real-account-icon.png" : "/demo-account-icon.png";
+
+  const iconPath = isDerivAccount 
+    ? "/deriv-account-icon.png" 
+    : isRealAccount 
+    ? "/real-account-icon.png" 
+    : "/demo-account-icon.png";
+
+  const gradientColor = isDerivAccount 
+    ? "" 
+    : isRealAccount 
+    ? "" 
+    : "";
+
+  useEffect(() => {
+    const typeFromUrl = searchParams.get("type") as "standard" | "demo" | "deriv" | null;
+    if (typeFromUrl) setAccountType(typeFromUrl);
+  }, [searchParams]);
 
   useEffect(() => {
     if (showOtpScreen && secondsLeft > 0) {
-      const timer = setTimeout(() => setSecondsLeft((s) => s - 1), 1_000);
+      const timer = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
       return () => clearTimeout(timer);
     } else if (secondsLeft === 0) {
       setCanResend(true);
@@ -174,10 +204,15 @@ export default function SignupPage() {
     }
   };
 
+  // OTP Screen
   if (showOtpScreen) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4">
-        <Card className="w-full max-w-md border-white/20 bg-white/5 backdrop-blur-sm">
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-cover bg-center bg-no-repeat relative"
+           style={{ backgroundImage: "url('/background.jpg')" }}>
+        <div className="absolute inset-0 bg-black/70 z-0" />
+        
+        <Card className="w-full max-w-md border-white/20 bg-white/5 backdrop-blur-sm relative z-10">
+          {/* OTP content remains the same */}
           <CardHeader className="text-center space-y-2">
             <CardTitle className="text-2xl text-white">Verify Your Email</CardTitle>
             <CardDescription className="text-white/70">
@@ -196,9 +231,7 @@ export default function SignupPage() {
                   value={digit}
                   onChange={(e) => handleOtpChange(i, e)}
                   onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                  ref={(el) => {
-                    otpRefs.current[i] = el;
-                  }}
+                  ref={(el) => { otpRefs.current[i] = el; }}
                   className="w-12 h-12 text-center text-lg font-semibold bg-white/10 border-white/20 text-white"
                   disabled={isLoading}
                 />
@@ -247,9 +280,15 @@ export default function SignupPage() {
     );
   }
 
+  // Main Signup Page
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4">
-      <Card className="w-full max-w-md border-white/20 bg-white/5 backdrop-blur-sm">
+    <div 
+      className="min-h-screen flex flex-col items-center justify-center p-4 bg-cover bg-center bg-no-repeat relative"
+      style={{ backgroundImage: "url('/background.jpg')" }}
+    >
+      <div className="absolute inset-0 bg-black/70 z-0" />
+
+      <Card className="w-full max-w-md border-white/20 bg-white/5 backdrop-blur-sm relative z-10">
         <CardHeader className="space-y-2">
           <Link href="/" className="inline-flex items-center text-white/70 hover:text-white">
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -259,118 +298,189 @@ export default function SignupPage() {
           <CardDescription className="text-white/70">{accountDescription}</CardDescription>
         </CardHeader>
 
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="flex-shrink-0">
-                <div className="w-14 h-14 rounded-full overflow-hidden">
-                  <Image src={iconPath} alt={accountLabel} width={48} height={48} className="object-cover" />
+        <CardContent className="space-y-6">
+          {/* Account Type Selector */}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setAccountType("standard")}
+              className={`flex-1 py-2.5 px-4 rounded-lg font-medium transition-all ${
+                accountType === "standard"
+                  ? "bg-white text-black shadow"
+                  : "bg-white/10 text-white border border-white/20 hover:bg-white/20"
+              }`}
+            >
+              Real
+            </button>
+            <button
+              type="button"
+              onClick={() => setAccountType("demo")}
+              className={`flex-1 py-2.5 px-4 rounded-lg font-medium transition-all ${
+                accountType === "demo"
+                  ? "bg-white text-black shadow"
+                  : "bg-white/10 text-white border border-white/20 hover:bg-white/20"
+              }`}
+            >
+              Demo
+            </button>
+            <button
+              type="button"
+              onClick={() => setAccountType("deriv")}
+              className={`flex-1 py-2.5 px-4 rounded-lg font-medium transition-all ${
+                accountType === "deriv"
+                  ? "bg-white text-black shadow"
+                  : "bg-white/10 text-white border border-white/20 hover:bg-white/20"
+              }`}
+            >
+              Deriv
+            </button>
+          </div>
+
+          {/* Account Info */}
+          <div className="flex items-center gap-4 bg-white/5 rounded-xl p-4 border border-white/10">
+            <div className="flex-shrink-0">
+              <div className={`w-14 h-14 rounded-full flex items-center justify-center overflow-hidden shadow-md bg-gradient-to-br ${gradientColor}`}>
+                <Image
+                  src={iconPath}
+                  alt={accountLabel}
+                  width={64}
+                  height={64}
+                  className="w-12 h-12 object-cover"
+                />
+              </div>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-white">{accountLabel}</h3>
+              <p className="text-sm text-white/70">{accountDescription}</p>
+            </div>
+          </div>
+
+          {/* Deriv Coming Soon Section */}
+          {isDerivAccount ? (
+            <div className="bg-white/10 border border-white/20 rounded-2xl p-8 text-center">
+              <div className="flex justify-center mb-4">
+                <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center">
+                  <Clock className="w-8 h-8 text-emerald-400" />
                 </div>
               </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white">{accountLabel}</h3>
-                <p className="text-sm text-white/70">{accountDescription}</p>
-              </div>
+              <h3 className="text-xl font-semibold text-white mb-2">Deriv Account</h3>
+              <p className="text-white/70 mb-6">
+                Deriv account registration is coming soon.<br />
+                We are working hard to bring you seamless Deriv integration.
+              </p>
+              <Button
+                variant="outline"
+                className="border-white/30 text-white hover:bg-white/10"
+                disabled
+              >
+                Coming Soon
+              </Button>
             </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-white">Username</label>
-              <Input
-                type="text"
-                name="username"
-                placeholder="john_doe"
-                value={formData.username}
-                onChange={handleChange}
-                className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                disabled={isLoading}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-white">Email</label>
-              <Input
-                type="email"
-                name="email"
-                placeholder="john@example.com"
-                value={formData.email}
-                onChange={handleChange}
-                className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                disabled={isLoading}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-white">Phone</label>
-              <Input
-                type="tel"
-                name="phone"
-                placeholder="+1 (555) 000-0000"
-                value={formData.phone}
-                onChange={handleChange}
-                className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                disabled={isLoading}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-white">Password</label>
-              <div className="relative">
+          ) : (
+            /* Real & Demo Signup Form */
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-white">Username</label>
                 <Input
-                  type={showPassword ? "text" : "password"}
-                  name="password"
-                  placeholder="••••••••"
-                  value={formData.password}
+                  type="text"
+                  name="username"
+                  placeholder="john_doe"
+                  value={formData.username}
                   onChange={handleChange}
-                  className="bg-white/10 border-white/20 text-white placeholder:text-white/50 pr-10"
+                  className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
                   disabled={isLoading}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/70 hover:text-white"
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-white">Confirm Password</label>
-              <div className="relative">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-white">Email</label>
                 <Input
-                  type={showConfirmPassword ? "text" : "password"}
-                  name="confirmPassword"
-                  placeholder="••••••••"
-                  value={formData.confirmPassword}
+                  type="email"
+                  name="email"
+                  placeholder="john@example.com"
+                  value={formData.email}
                   onChange={handleChange}
-                  className="bg-white/10 border-white/20 text-white placeholder:text-white/50 pr-10"
+                  className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
                   disabled={isLoading}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/70 hover:text-white"
-                >
-                  {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
               </div>
-            </div>
 
-            <Button
-              type="submit"
-              className="w-full bg-white text-black hover:bg-white/90 font-semibold"
-              disabled={isLoading}
-            >
-              {isLoading ? "Creating Account…" : "Create Account"}
-            </Button>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-white">Phone</label>
+                <Input
+                  type="tel"
+                  name="phone"
+                  placeholder="+254 700 000000"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                  disabled={isLoading}
+                />
+              </div>
 
-            <p className="text-center text-sm text-white/70">
-              Already have an account?{" "}
-              <Link href={`/login?type=${accountType}`} className="text-white hover:underline font-semibold">
-                Log in
-              </Link>
-            </p>
-          </form>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-white">Password</label>
+                <div className="relative">
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    name="password"
+                    placeholder="••••••••"
+                    value={formData.password}
+                    onChange={handleChange}
+                    className="bg-white/10 border-white/20 text-white placeholder:text-white/50 pr-10"
+                    disabled={isLoading}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/70 hover:text-white"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-white">Confirm Password</label>
+                <div className="relative">
+                  <Input
+                    type={showConfirmPassword ? "text" : "password"}
+                    name="confirmPassword"
+                    placeholder="••••••••"
+                    value={formData.confirmPassword}
+                    onChange={handleChange}
+                    className="bg-white/10 border-white/20 text-white placeholder:text-white/50 pr-10"
+                    disabled={isLoading}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/70 hover:text-white"
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full bg-white text-black hover:bg-white/90 font-semibold py-6"
+                disabled={isLoading}
+              >
+                {isLoading ? "Creating Account…" : "Create Account"}
+              </Button>
+
+              <p className="text-center text-sm text-white/70">
+                Already have an account?{" "}
+                <Link 
+                  href={`/login?type=${accountType}`} 
+                  className="text-white hover:underline font-semibold"
+                >
+                  Log in
+                </Link>
+              </p>
+            </form>
+          )}
         </CardContent>
       </Card>
     </div>

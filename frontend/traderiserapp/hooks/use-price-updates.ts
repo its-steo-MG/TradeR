@@ -7,15 +7,20 @@ import { toast } from 'sonner';
 class PriceSimulator {
   private basePrice: number;
   private volatility: number;
-  private entryTime: Date | null;
+  private entryTime: Date | null = null;
   private isSashi: boolean;
   private direction: string;
   private timeFrame: string;
 
-  constructor(basePrice: number, isSashi: boolean, direction: string = 'buy', volatility: number = 0.0005, timeFrame: string = 'M1') {
+  constructor(
+    basePrice: number,
+    isSashi: boolean,
+    direction: string = 'buy',
+    volatility: number = 0.0005,
+    timeFrame: string = 'M1'
+  ) {
     this.basePrice = basePrice;
     this.volatility = volatility;
-    this.entryTime = null;
     this.isSashi = isSashi;
     this.direction = direction;
     this.timeFrame = timeFrame;
@@ -33,6 +38,7 @@ class PriceSimulator {
 
     const timeElapsed = (Date.now() - this.entryTime.getTime()) / 1000 / 60;
     const multiplier = this.getTimeFrameMultiplier();
+
     if (this.isSashi) {
       if (timeElapsed >= 30 * multiplier) {
         return Math.max(this.basePrice + (this.direction === 'buy' ? 0.0020 : -0.0020), 0.0001);
@@ -59,18 +65,14 @@ class PriceSimulator {
 export const usePriceUpdates = () => {
   const { pairs, isLoading: pairsLoading, error: pairsError } = useForexPairs();
   const { positions, isLoading: positionsLoading, error: positionsError } = usePositions();
+
   const [prices, setPrices] = useState<Record<number, number>>({});
-  const [simulators, setSimulators] = useState<Record<number, PriceSimulator>>({});
-  const [pairIds, setPairIds] = useState<number[]>([]);
   const [isSashi, setIsSashi] = useState<boolean>(false);
 
   const simulatorsRef = useRef<Record<number, PriceSimulator>>({});
+  const pairIdsRef = useRef<number[]>([]);
 
-  // Keep ref in sync
-  useEffect(() => {
-    simulatorsRef.current = simulators;
-  }, [simulators]);
-
+  // Fetch Sashi status once
   useEffect(() => {
     const fetchSashiStatus = async () => {
       try {
@@ -79,15 +81,15 @@ export const usePriceUpdates = () => {
           toast.error('Pro-FX account required to trade');
           return;
         }
-        setIsSashi(((response.data as any)?.user?.is_sashi) ?? false);
+        setIsSashi(!!(response.data as any)?.user?.is_sashi);
       } catch (error) {
         console.error('Error fetching Sashi status:', error);
-        toast.error('Failed to fetch user status');
       }
     };
     fetchSashiStatus();
   }, []);
 
+  // Initialize / update simulators when pairs or positions change
   useEffect(() => {
     if (pairsLoading || positionsLoading) return;
 
@@ -97,33 +99,49 @@ export const usePriceUpdates = () => {
         ...pairs.map((p) => p.id),
       ]),
     ];
-    setPairIds(relevantPairIds);
 
-    const newSimulators: Record<number, PriceSimulator> = {};
+    pairIdsRef.current = relevantPairIds;
+
+    const newSimulators: Record<number, PriceSimulator> = { ...simulatorsRef.current };
+
     relevantPairIds.forEach((pairId) => {
       const pair = pairs.find((p) => p.id === pairId);
       const position = positions.find((pos) => pos.pair.id === pairId);
-      newSimulators[pairId] = new PriceSimulator(
-        Number(pair?.base_simulation_price) || 1.1000,
-        isSashi,
-        position ? position.direction : 'buy',
-        0.0005,
-        position ? position.time_frame : 'M1'
-      );
-      if (position) {
+
+      const basePrice = Number(pair?.base_simulation_price) || 1.1000;
+
+      // Create or update simulator if base price changed
+      if (!newSimulators[pairId] || (newSimulators[pairId] as any).basePrice !== basePrice) {
+        newSimulators[pairId] = new PriceSimulator(
+          basePrice,
+          isSashi,
+          position ? position.direction : 'buy',
+          0.0005,
+          position ? position.time_frame : 'M1'
+        );
+      }
+
+      if (position?.entry_time) {
         newSimulators[pairId].setEntryTime(position.entry_time);
       }
     });
-    setSimulators(newSimulators);
 
+    simulatorsRef.current = newSimulators;
+
+    // FIXED: Set initial prices (basePrice is now properly scoped)
     const initialPrices: Record<number, number> = {};
     relevantPairIds.forEach((pairId) => {
-      initialPrices[pairId] = newSimulators[pairId]?.getCurrentPrice() || Number(pairs.find((p) => p.id === pairId)?.base_simulation_price) || 0;
+      const pair = pairs.find((p) => p.id === pairId);
+      const basePrice = Number(pair?.base_simulation_price) || 1.1000;
+
+      initialPrices[pairId] = 
+        newSimulators[pairId]?.getCurrentPrice() ?? basePrice;
     });
+
     setPrices(initialPrices);
   }, [pairs, positions, pairsLoading, positionsLoading, isSashi]);
 
-  // Price update loop — runs once, uses ref
+  // Continuous price simulation loop (runs every 1s)
   useEffect(() => {
     if (Object.keys(simulatorsRef.current).length === 0) return;
 
@@ -136,62 +154,70 @@ export const usePriceUpdates = () => {
       setPrices(newPrices);
     };
 
-    updatePrices();
     const interval = setInterval(updatePrices, 1000);
+    updatePrices(); // immediate first update
 
     return () => clearInterval(interval);
-  }, []); // Runs only once
+  }, []);
 
+  // Periodic sync with backend (every 30s)
   useEffect(() => {
-    if (pairIds.length === 0) return;
+    if (pairIdsRef.current.length === 0) return;
 
     const syncWithBackend = async () => {
       try {
-        const response = await api.getForexCurrentPrices(pairIds);
+        const response = await api.getForexCurrentPrices(pairIdsRef.current);
         if (response.status === 403 && response.error === 'Pro-FX account required') {
           toast.error('Pro-FX account required to fetch prices');
           return;
         }
+
         const data = response.data as any;
         if (data?.prices) {
           setPrices((prev) => ({ ...prev, ...data.prices }));
 
-          const newSimulators: Record<number, PriceSimulator> = { ...simulatorsRef.current };
+          // Update simulators with real backend prices
+          const updatedSimulators: Record<number, PriceSimulator> = { ...simulatorsRef.current };
+
           Object.keys(data.prices).forEach((pairIdStr) => {
             const pairId = Number(pairIdStr);
             const position = positions.find((pos) => pos.pair.id === pairId);
-            newSimulators[pairId] = new PriceSimulator(
+
+            updatedSimulators[pairId] = new PriceSimulator(
               data.prices[pairId],
               isSashi,
               position ? position.direction : 'buy',
               0.0005,
               position ? position.time_frame : 'M1'
             );
-            if (position) {
-              newSimulators[pairId].setEntryTime(position.entry_time);
+
+            if (position?.entry_time) {
+              updatedSimulators[pairId].setEntryTime(position.entry_time);
             }
           });
-          setSimulators(newSimulators);
+
+          simulatorsRef.current = updatedSimulators;
         }
       } catch (error) {
-        console.error('Error syncing prices:', error);
-        toast.error('Failed to sync prices with server');
+        console.error('Error syncing prices with server:', error);
       }
     };
 
     syncWithBackend();
     const syncInterval = setInterval(syncWithBackend, 30000);
     return () => clearInterval(syncInterval);
-  }, [pairIds, positions, isSashi]);
+  }, [positions, isSashi]);
 
+  // Error handling
   useEffect(() => {
-    if (pairsError) {
-      toast.error(`Failed to load pairs: ${pairsError.message || 'Unknown error'}`);
-    }
-    if (positionsError) {
-      toast.error(`Failed to load positions: ${positionsError.message || 'Unknown error'}`);
-    }
+    if (pairsError) toast.error(`Failed to load pairs: ${pairsError}`);
+    if (positionsError) toast.error(`Failed to load positions: ${positionsError}`);
   }, [pairsError, positionsError]);
 
-  return { prices, pairIds, isLoading: pairsLoading || positionsLoading, isSashi };
+  return { 
+    prices, 
+    pairIds: pairIdsRef.current, 
+    isLoading: pairsLoading || positionsLoading, 
+    isSashi 
+  };
 };

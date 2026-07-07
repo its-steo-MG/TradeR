@@ -23,11 +23,11 @@ class ForexTradeSerializer(serializers.ModelSerializer):
 class ForexRobotSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
     effective_price = serializers.SerializerMethodField()
-    original_price = serializers.ReadOnlyField(source='price')  # For strike-through on frontend
+    original_price = serializers.ReadOnlyField(source='price')
 
     class Meta:
         model = ForexRobot
-        fields = '__all__'  # Or explicitly list with 'effective_price', 'original_price'
+        fields = '__all__'
 
     def get_image_url(self, obj):
         return obj.image_url
@@ -42,12 +42,12 @@ class UserRobotSerializer(serializers.ModelSerializer):
     selected_pair_id = serializers.PrimaryKeyRelatedField(
         queryset=ForexPair.objects.all(), source='selected_pair', write_only=True, required=False
     )
-    timeframe = serializers.ChoiceField(choices=TIME_FRAMES, required=False)  # ← Fixed
+    timeframe = serializers.ChoiceField(choices=TIME_FRAMES, required=False)
 
     class Meta:
         model = UserRobot
-        fields = '__all__'
-        read_only_fields = ('user', 'purchased_at', 'is_running', 'last_trade_time')
+        fields = '__all__'   # This now includes the new EA fields
+        read_only_fields = ('user', 'purchased_at', 'is_running', 'last_trade_time', 'is_ea')
         
 class BotLogSerializer(serializers.ModelSerializer):
     class Meta:

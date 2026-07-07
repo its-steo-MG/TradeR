@@ -4,7 +4,7 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { CheckCircle2, Users, TrendingUp, Shield } from "lucide-react"
+import { CheckCircle2, Users, TrendingUp, Shield, DollarSign } from "lucide-react"
 import { useState } from "react"
 import { TraderDetailDialog } from "./trader-detail-dialog"
 
@@ -18,6 +18,7 @@ interface TraderCardProps {
     average_return: number
     subscriber_count: number
     min_allocation: number
+    max_allocation?: number          // ← NEW
     performance_fee_percent: number
     is_verified?: boolean
   }
@@ -39,6 +40,8 @@ export function TraderCard({ trader }: TraderCardProps) {
   const winRate = Number(trader.win_rate) || 0
   const avgReturn = Number(trader.average_return) || 0
   const subCount = Number(trader.subscriber_count) || 0
+  const minAlloc = Number(trader.min_allocation) || 10
+  const maxAlloc = Number(trader.max_allocation) || 1000
 
   return (
     <>
@@ -67,7 +70,7 @@ export function TraderCard({ trader }: TraderCardProps) {
             </div>
           </div>
 
-          {/* Bio - Now clearly visible */}
+          {/* Bio */}
           <p className="text-sm text-white/80 line-clamp-2 leading-relaxed">
             {trader.bio}
           </p>
@@ -88,7 +91,18 @@ export function TraderCard({ trader }: TraderCardProps) {
             </div>
           </div>
 
-          {/* Equity Sparkline - Slightly more visible */}
+          {/* Allocation Range */}
+          <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-white/70 text-xs">
+              <DollarSign size={14} />
+              <span>Allocation Range</span>
+            </div>
+            <div className="text-sm font-medium text-white">
+              ${minAlloc} — ${maxAlloc}
+            </div>
+          </div>
+
+          {/* Equity Sparkline */}
           <div className="h-12 w-full flex items-end gap-[2px] pt-2 opacity-70">
             {Array.from({ length: 20 }).map((_, i) => (
               <div
@@ -102,7 +116,7 @@ export function TraderCard({ trader }: TraderCardProps) {
 
         <CardFooter className="p-6 pt-0 mt-auto">
           <div className="w-full space-y-4">
-            {/* Subs & Fee Row - Now readable without hover */}
+            {/* Subscribers & Fee */}
             <div className="flex items-center justify-between w-full text-sm text-white/80 font-medium">
               <span className="flex items-center gap-1.5">
                 <Users size={14} className="flex-shrink-0" />
@@ -116,7 +130,7 @@ export function TraderCard({ trader }: TraderCardProps) {
               onClick={() => setDetailsOpen(true)}
               className="w-full bg-gradient-to-r from-pink-600/20 to-purple-600/20 hover:from-pink-600 hover:to-purple-600 backdrop-blur-sm border border-white/20 hover:border-pink-500 text-white font-semibold rounded-xl transition-all duration-300 py-6 text-base shadow-lg hover:shadow-pink-500/30"
             >
-              <span className="hidden xs:inline">View Full Profile</span>
+              <span className="hidden xs:inline">View Full Profile & Copy</span>
               <span className="xs:hidden">View Profile</span>
             </Button>
           </div>

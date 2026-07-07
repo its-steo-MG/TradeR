@@ -48,16 +48,29 @@ class CopySubscriptionView(APIView):
             return Response({'error': 'Missing required fields'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            allocated_amount = Decimal(str(allocated_amount))  # Safe conversion
+            allocated_amount = Decimal(str(allocated_amount))
             trader = Trader.objects.get(id=trader_id, is_active=True)
-            account = Account.objects.get(id=account_id, user=request.user, account_type__in=['standard', 'pro-fx'])
+            account = Account.objects.get(
+                id=account_id, 
+                user=request.user, 
+                account_type__in=['standard', 'pro-fx']
+            )
 
-            # Balance check
-            if allocated_amount > Decimal(str(account.balance)):
-                return Response({'error': 'Insufficient balance'}, status=status.HTTP_400_BAD_REQUEST)
-
+            # === Flexible Allocation Validation ===
             if allocated_amount < trader.min_allocation:
-                return Response({'error': f'Minimum allocation is ${trader.min_allocation}'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({
+                    'error': f'Minimum allocation for this trader is ${trader.min_allocation}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if allocated_amount > trader.max_allocation:
+                return Response({
+                    'error': f'Maximum allocation for this trader is ${trader.max_allocation}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if allocated_amount > Decimal(str(account.balance)):
+                return Response({
+                    'error': 'Insufficient balance in selected account'
+                }, status=status.HTTP_400_BAD_REQUEST)
 
             with transaction.atomic():
                 subscription, created = CopySubscription.objects.get_or_create(
@@ -70,24 +83,33 @@ class CopySubscriptionView(APIView):
                     }
                 )
                 if not created:
-                    # Resume or update existing
+                    # Update existing subscription
                     subscription.allocated_amount = allocated_amount
                     subscription.is_active = True
                     subscription.save()
 
-            return Response(CopySubscriptionSerializer(subscription).data, status=status.HTTP_201_CREATED)
+            return Response(
+                CopySubscriptionSerializer(subscription).data, 
+                status=status.HTTP_201_CREATED
+            )
 
         except (Trader.DoesNotExist, Account.DoesNotExist):
             return Response({'error': 'Trader or Account not found'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-    def delete(self, request, subscription_id):
+    def delete(self, request, subscription_id=None):
+        """Pause / Deactivate subscription"""
         try:
-            subscription = CopySubscription.objects.get(id=subscription_id, user=request.user)
+            subscription = CopySubscription.objects.get(
+                id=subscription_id, 
+                user=request.user
+            )
             subscription.is_active = False
             subscription.save()
-            return Response({'message': 'Subscription paused successfully'}, status=status.HTTP_200_OK)
+            return Response({
+                'message': 'Subscription paused successfully'
+            }, status=status.HTTP_200_OK)
         except CopySubscription.DoesNotExist:
             return Response({'error': 'Subscription not found'}, status=status.HTTP_404_NOT_FOUND)
 

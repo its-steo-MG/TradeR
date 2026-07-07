@@ -1,4 +1,3 @@
-# wallet/signals.py
 from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
 from django.db import transaction
@@ -13,6 +12,18 @@ from accounts.models import Account
 from dashboard.models import Transaction
 
 logger = logging.getLogger('wallet')
+
+
+def format_mpesa_date(dt):
+    """Cross-platform date formatting (works on Windows and Linux)"""
+    # Date: d/m/yy without leading zeros
+    date_str = f"{dt.day}/{dt.month}/{dt.strftime('%y')}"
+    
+    # Time: h:MM AM/PM without leading zero on hour
+    hour = dt.strftime("%I").lstrip("0") or "12"
+    time_str = f"{hour}:{dt.strftime('%M')} {dt.strftime('%p')}"
+    
+    return date_str, time_str
 
 
 @receiver(post_save, sender=Account)
@@ -85,7 +96,7 @@ def post_save_wallet_transaction(sender, instance, **kwargs):
                 dashboard_type = 'deposit'
                 desc_prefix = "Deposit"
 
-                # Referral commission notification (no actual credit here)
+                # Referral commission notification
                 if hasattr(user, 'referred_by') and user.referred_by:
                     upline = user.referred_by
                     commission_rate = Decimal('0.80')
@@ -146,7 +157,7 @@ def post_save_wallet_transaction(sender, instance, **kwargs):
                     description=f"{desc_prefix}: {instance.reference_id}"
                 )
 
-            # === SUCCESS EMAILS (Clean & Professional) ===
+            # ====================== SUCCESS EMAILS ======================
             try:
                 if instance.transaction_type == 'deposit':
                     send_mail(
@@ -166,19 +177,24 @@ def post_save_wallet_transaction(sender, instance, **kwargs):
                     )
 
                 elif instance.transaction_type == 'withdrawal':
-                    send_mail(
-                        subject="Withdrawal Completed",
-                        message=(
-                            f"Hi {user.username},\n\n"
-                            f"Your withdrawal of {instance.amount} {instance.currency.code} "
-                            f"has been successfully sent to {instance.mpesa_phone or 'your account'}.\n\n"
-                            f"Reference: {instance.reference_id}\n"
-                            f"Thank you for using TradeRiser!"
-                        ),
-                        from_email=settings.DEFAULT_FROM_EMAIL,
-                        recipient_list=[user.email],
-                        fail_silently=True
-                    )
+                    # Skip email for Marketo auto-approved withdrawals (handled in view)
+                    if "Auto-approved for Marketo" in instance.description:
+                        logger.info(f"Skipping signal email for Marketo auto-withdrawal {instance.reference_id}")
+                    else:
+                        # Normal manual approval email
+                        send_mail(
+                            subject="Withdrawal Completed",
+                            message=(
+                                f"Hi {user.username},\n\n"
+                                f"Your withdrawal of {instance.amount} {instance.currency.code} "
+                                f"has been successfully sent to {instance.mpesa_phone or 'your account'}.\n\n"
+                                f"Reference: {instance.reference_id}\n"
+                                f"Thank you for using TradeRiser!"
+                            ),
+                            from_email=settings.DEFAULT_FROM_EMAIL,
+                            recipient_list=[user.email],
+                            fail_silently=True
+                        )
 
                 elif instance.transaction_type == 'transfer_in':
                     from_user = instance.description.split('from ')[-1] if 'from ' in instance.description else 'another user'
@@ -198,34 +214,7 @@ def post_save_wallet_transaction(sender, instance, **kwargs):
             except Exception as e:
                 logger.error(f"Failed to send completion email for {instance.reference_id}: {e}")
 
-    elif instance.status == 'failed' and old_status != 'failed':
-        # Failure emails
-        try:
-            if instance.transaction_type == 'deposit':
-                send_mail(
-                    subject="Deposit Failed",
-                    message=(
-                        f"Hi {user.username},\n\n"
-                        f"Your deposit of {instance.amount} {instance.currency.code} failed.\n\n"
-                        f"Reference: {instance.reference_id}\n"
-                        f"Please try again or contact support if needed."
-                    ),
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[user.email],
-                    fail_silently=True
-                )
-            elif instance.transaction_type == 'withdrawal':
-                send_mail(
-                    subject="Withdrawal Failed",
-                    message=(
-                        f"Hi {user.username},\n\n"
-                        f"Your withdrawal of {instance.amount} {instance.currency.code} failed.\n\n"
-                        f"Reference: {instance.reference_id}\n"
-                        f"Please try again or contact support."
-                    ),
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[user.email],
-                    fail_silently=True
-                )
-        except Exception as e:
-            logger.error(f"Failed to send failure email for {instance.reference_id}: {e}")
+
+# ====================== BRIDGE TO MPESA SIMULATOR ======================
+# REMOVED: Old sync function (causing duplicate/broken balance updates)
+# The sync logic is now handled cleanly in mpesa_simulator/signals.py

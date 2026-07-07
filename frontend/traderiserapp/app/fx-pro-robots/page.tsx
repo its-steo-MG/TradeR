@@ -5,12 +5,12 @@ import { useState, useEffect, useCallback } from "react"
 import { Sidebar } from "@/components/sidebar"
 import type { Account } from "@/types/account"
 import { api } from "@/lib/api"
-import { Zap, ShoppingCart, Play, Pause, RefreshCw, Sparkles, Gift } from "lucide-react"
+import { Zap, ShoppingCart, Play, Pause, RefreshCw, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 
 export type LoginType = "real" | "demo"
 
-/* ----------  Domain types ---------- */
+/* ----------  Domain types with EA support ---------- */
 interface ForexRobot {
   id: number
   name: string
@@ -22,6 +22,8 @@ interface ForexRobot {
   effective_price: number
   win_rate_normal: number
   win_rate_sashi: number
+  is_ea?: boolean
+  max_open_positions?: number
 }
 
 interface UserRobot {
@@ -31,6 +33,8 @@ interface UserRobot {
   is_running: boolean
   purchased_at: string
   last_trade_time?: string
+  is_ea?: boolean
+  max_open_positions?: number
 }
 
 /* ----------  API response shapes ---------- */
@@ -47,6 +51,8 @@ interface ForexRobotsResponse {
     effective_price?: string | number
     win_rate_normal?: string | number
     win_rate_sashi?: string | number
+    is_ea?: boolean
+    max_open_positions?: number
   }>
 }
 
@@ -66,10 +72,14 @@ interface MyForexRobotsResponse {
       effective_price?: string | number
       win_rate_normal?: string | number
       win_rate_sashi?: string | number
+      is_ea?: boolean
+      max_open_positions?: number
     }
     is_running: boolean
     purchased_at: string
     last_trade_time?: string
+    is_ea?: boolean
+    max_open_positions?: number
   }>
 }
 
@@ -113,7 +123,10 @@ export default function FxProRobotsPage() {
   /* ----------  Fetch robots ---------- */
   const fetchRobots = useCallback(async () => {
     try {
-      const [availableRes, purchasedRes] = await Promise.all([api.getForexRobots(), api.getMyForexRobots()])
+      const [availableRes, purchasedRes] = await Promise.all([
+        api.getForexRobots(),
+        api.getMyForexRobots()
+      ])
 
       /* ---- Available robots ---- */
       if (availableRes.data?.robots) {
@@ -128,6 +141,8 @@ export default function FxProRobotsPage() {
           effective_price: r.effective_price ? Number(r.effective_price) : Number(r.price),
           win_rate_normal: Number(r.win_rate_normal ?? 0),
           win_rate_sashi: Number(r.win_rate_sashi ?? 0),
+          is_ea: r.is_ea || false,
+          max_open_positions: r.max_open_positions || 2,
         }))
         setRobots(normalized)
       }
@@ -148,10 +163,14 @@ export default function FxProRobotsPage() {
           effective_price: ur.robot.effective_price ? Number(ur.robot.effective_price) : Number(ur.robot.price),
           win_rate_normal: Number(ur.robot.win_rate_normal ?? 0),
           win_rate_sashi: Number(ur.robot.win_rate_sashi ?? 0),
+          is_ea: ur.robot.is_ea || ur.is_ea || false,
+          max_open_positions: ur.robot.max_open_positions || ur.max_open_positions || 2,
         },
         is_running: ur.is_running,
         purchased_at: ur.purchased_at,
         last_trade_time: ur.last_trade_time,
+        is_ea: ur.robot.is_ea || ur.is_ea || false,
+        max_open_positions: ur.robot.max_open_positions || ur.max_open_positions || 2,
       }))
 
       setMyRobots(normalizedMyRobots)
@@ -181,19 +200,56 @@ export default function FxProRobotsPage() {
     }
   }
 
-  const handleToggleRobot = async (userRobotId: number, currentState: boolean) => {
+  const handleToggleRobot = async (userRobotId: number) => {
     try {
-      const response = await api.toggleForexRobot(userRobotId)
-      if (response.error) {
-        toast.error(`Toggle failed: ${response.error}`)
+      const userRobot = myRobots.find(ur => ur.id === userRobotId)
+      if (!userRobot) {
+        toast.error("Robot not found")
         return
       }
-      toast.success(currentState ? "Robot stopped" : "Robot started")
-      await fetchRobots()
+
+      const isEA = userRobot.robot.is_ea || userRobot.is_ea
+      const wasRunning = userRobot.is_running
+
+      // Call toggle
+      const toggleResponse = await api.toggleForexRobot(userRobotId)
+      if (toggleResponse.error) {
+        toast.error(`Toggle failed: ${toggleResponse.error}`)
+        return
+      }
+
+      const isNowRunning = toggleResponse.data?.is_running ?? false
+
+      if (!isNowRunning && isEA && wasRunning) {
+        // EA was just stopped
+        const toastId = toast.loading("Stopping EA and closing all its positions...")
+
+        try {
+          const closeResponse = await api.closeEAPositions(userRobotId)
+          const closedCount = closeResponse.data?.closed_count || 0
+
+          toast.success(
+            `✅ EA Robot stopped. Closed ${closedCount} open position(s).`,
+            { id: toastId }
+          )
+        } catch (closeErr) {
+          console.error("Close EA positions failed:", closeErr)
+          toast.error(
+            "EA stopped, but failed to close positions. Please close them manually from Positions page.", 
+            { id: toastId }
+          )
+        }
+      } else {
+        toast.success(isNowRunning 
+          ? (isEA ? "🚀 EA Bot Activated" : "Robot started") 
+          : "Robot stopped"
+        )
+      }
+
+      await fetchRobots() // Refresh UI
     } catch (error) {
-      const err = error as Error
-      console.error("Toggle error:", err)
-      toast.error(`Failed to toggle robot: ${err.message}`)
+      console.error("Toggle error:", error)
+      toast.error("Failed to toggle robot")
     }
   }
 
@@ -278,11 +334,16 @@ export default function FxProRobotsPage() {
                       key={robot.id}
                       className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-lg border border-white/10 overflow-hidden relative"
                     >
+                      {robot.is_ea && (
+                        <div className="absolute top-3 left-3 z-20 bg-emerald-500 text-white text-xs px-3 py-1 rounded-full font-bold flex items-center gap-1">
+                          <Zap className="w-3 h-3" /> EA BOT
+                        </div>
+                      )}
+
                       {hasDiscount && (
-                        <div className="absolute top-3 right-3 z-10 bg-gradient-to-r from-rose-500 to-pink-600 text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-lg animate-pulse">
-                          <span className="text-base">💕</span>
-                          <span>Valentine Deal {discountPercent}% OFF</span>
-                          <span className="text-base">💕</span>
+                        <div className="absolute top-3 right-3 z-10 bg-gradient-to-r from-amber-500 to-orange-600 text-white px-4 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-lg">
+                          <Sparkles className="w-4 h-4" />
+                          SPECIAL OFFER - {discountPercent}% OFF
                         </div>
                       )}
 
@@ -293,6 +354,7 @@ export default function FxProRobotsPage() {
                           className="w-full h-40 object-cover"
                         />
                       )}
+
                       <div className="p-6">
                         <h3 className="text-xl font-bold mb-2">{robot.name}</h3>
                         <p className="text-white/70 text-sm mb-4 line-clamp-2">{robot.description}</p>
@@ -315,6 +377,12 @@ export default function FxProRobotsPage() {
                             <span className="text-white/60">Win Rate:</span>
                             <span className="font-bold text-green-400">{winRate}%</span>
                           </div>
+                          {robot.is_ea && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-white/60">Max Positions:</span>
+                              <span className="font-bold text-emerald-400">{robot.max_open_positions}</span>
+                            </div>
+                          )}
                         </div>
 
                         <button
@@ -359,16 +427,23 @@ export default function FxProRobotsPage() {
                     loginType === "demo" ? userRobot.robot.win_rate_normal : userRobot.robot.win_rate_sashi
                   const wasPurchasedOnSale =
                     userRobot.robot.discounted_price != null && userRobot.robot.discounted_price > 0
+                  const isEA = userRobot.robot.is_ea
 
                   return (
                     <div
                       key={userRobot.id}
                       className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-lg border border-white/10 overflow-hidden relative"
                     >
+                      {isEA && (
+                        <div className="absolute top-3 left-3 z-20 bg-emerald-500 text-white text-xs px-3 py-1 rounded-full font-bold flex items-center gap-1">
+                          <Zap className="w-3 h-3" /> EA BOT
+                        </div>
+                      )}
+
                       {wasPurchasedOnSale && (
-                        <div className="absolute top-3 right-3 z-10 bg-gradient-to-r from-rose-500/80 to-pink-600/80 text-white px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1">
-                          <span>💕</span>
-                          <span>Valentine Deal</span>
+                        <div className="absolute top-3 right-3 z-10 bg-gradient-to-r from-amber-500/80 to-orange-600/80 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                          <Sparkles className="w-4 h-4" />
+                          SPECIAL OFFER
                         </div>
                       )}
 
@@ -379,10 +454,14 @@ export default function FxProRobotsPage() {
                           className="w-full h-40 object-cover"
                         />
                       )}
+
                       <div className="p-6">
                         <div className="flex items-start justify-between mb-4">
                           <div>
-                            <h3 className="text-xl font-bold">{userRobot.robot.name}</h3>
+                            <h3 className="text-xl font-bold flex items-center gap-2">
+                              {userRobot.robot.name}
+                              {isEA && <span className="text-emerald-400 text-xs">• EA</span>}
+                            </h3>
                             <p className="text-white/60 text-sm">
                               Purchased: {new Date(userRobot.purchased_at).toLocaleDateString()}
                             </p>
@@ -403,6 +482,12 @@ export default function FxProRobotsPage() {
                             <span className="text-white/60">Win Rate:</span>
                             <span className="font-bold text-green-400">{winRate}%</span>
                           </div>
+                          {isEA && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-white/60">Max Positions:</span>
+                              <span className="font-bold text-emerald-400">{userRobot.robot.max_open_positions}</span>
+                            </div>
+                          )}
                           {userRobot.last_trade_time && (
                             <div className="flex justify-between items-center">
                               <span className="text-white/60">Last Trade:</span>
@@ -412,7 +497,7 @@ export default function FxProRobotsPage() {
                         </div>
 
                         <button
-                          onClick={() => handleToggleRobot(userRobot.id, userRobot.is_running)}
+                          onClick={() => handleToggleRobot(userRobot.id)}
                           className={`w-full py-2 rounded-lg font-medium flex items-center justify-center gap-2 transition-all ${
                             userRobot.is_running
                               ? "bg-red-500/20 hover:bg-red-500/30 text-red-400"

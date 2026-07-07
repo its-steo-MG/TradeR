@@ -1,25 +1,40 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import ForexPair, Position, ForexTrade,ForexRobot, UserRobot, BotLog
+from .models import ForexPair, Position, ForexTrade, ForexRobot, UserRobot, BotLog
 
 @admin.register(ForexPair)
 class ForexPairAdmin(admin.ModelAdmin):
     list_display = ('name', 'base_currency', 'quote_currency', 'pip_value')
+
 
 @admin.register(Position)
 class PositionAdmin(admin.ModelAdmin):
     list_display = ('user', 'pair', 'direction', 'volume_lots', 'entry_price', 'floating_p_l', 'status')
     list_filter = ('status', 'direction')
 
+
 @admin.register(ForexTrade)
 class ForexTradeAdmin(admin.ModelAdmin):
     list_display = ('position', 'close_price', 'realized_p_l', 'close_time')
 
+
 @admin.register(ForexRobot)
 class ForexRobotAdmin(admin.ModelAdmin):
-    list_display = ('name', 'price', 'discounted_price', 'effective_price', 'stake_per_trade', 'profit_multiplier', 'best_markets', 'is_active', 'image_preview')
-    list_editable = ('profit_multiplier', 'discounted_price')  # Edit inline
-    list_filter = ('best_markets', 'is_active')
+    list_display = (
+        'name', 
+        'is_ea', 
+        'max_open_positions', 
+        'price', 
+        'discounted_price', 
+        'effective_price', 
+        'stake_per_trade', 
+        'profit_multiplier', 
+        'best_markets', 
+        'is_active', 
+        'image_preview'
+    )
+    list_editable = ('profit_multiplier', 'discounted_price', 'is_ea', 'max_open_positions')
+    list_filter = ('best_markets', 'is_active', 'is_ea')
     search_fields = ('name',)
     readonly_fields = ('image_preview', 'effective_price')
 
@@ -31,14 +46,26 @@ class ForexRobotAdmin(admin.ModelAdmin):
             )
         return "(No image)"
     image_preview.short_description = "Image"
+
     def effective_price(self, obj):
         return obj.effective_price
     effective_price.short_description = "Effective Price"
 
+
 @admin.register(UserRobot)
 class UserRobotAdmin(admin.ModelAdmin):
-    list_display = ('user', 'robot', 'is_running', 'purchased_at')
-    list_filter = ('robot', 'is_running')
+    list_display = (
+        'user', 
+        'robot', 
+        'is_ea', 
+        'max_open_positions', 
+        'target_profit',
+        'is_running', 
+        'purchased_at'
+    )
+    list_filter = ('robot', 'is_running', 'is_ea')
+    list_editable = ('target_profit',)  # Allow editing target profit directly
+
 
 @admin.register(BotLog)
 class BotLogAdmin(admin.ModelAdmin):

@@ -34,6 +34,17 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+    {
+      protocol: 'https',
+      hostname: 'grandview-storage.s3.amazonaws.com',
+      pathname: '/mpesa_avatars/**',
+    },
+    {
+      protocol: 'https',
+      hostname: 'grandview-storage.s3.eu-north-1.amazonaws.com',
+      pathname: '/mpesa_avatars/**',
+    },
+
     ],
   },
   // Optional: helps with service worker headers if you keep custom sw.js

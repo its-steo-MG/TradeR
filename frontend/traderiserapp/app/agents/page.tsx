@@ -9,19 +9,13 @@ import AgentGrid from "@/components/agents/agent-grid"
 import { Sidebar } from "@/components/sidebar"
 import { TopNavbar } from "@/components/top-navbar"
 import { toast } from "sonner"
-
-interface Account {
-  id: number
-  account_type: string
-  balance: number
-  kyc_verified?: boolean
-}
+import type { Account } from "@/types/account"   // ← Import shared type
 
 interface User {
   username: string
   email: string
   image?: string
-  accounts: Account[]
+  accounts: Account[]          // ← Use imported Account
 }
 
 interface Agent {
@@ -60,14 +54,14 @@ export default function AgentsPage() {
     const raw = localStorage.getItem("user_session")
     if (raw) {
       try {
-        const data: User = JSON.parse(raw)
+        const data = JSON.parse(raw) as User
         setUser(data)
         setIsLoggedIn(true)
 
         const activeId = localStorage.getItem("active_account_id")
-        const account = data.accounts.find((acc: Account) => acc.id === Number(activeId)) || data.accounts[0]
+        const account = data.accounts.find((acc) => acc.id === Number(activeId)) || data.accounts[0]
         setActiveAccount(account)
-        setLoginType(account.account_type === "demo" ? "demo" : "real")
+        setLoginType(account?.account_type === "demo" ? "demo" : "real")
       } catch (err) {
         console.error("Failed to parse user session:", err)
       }
@@ -82,9 +76,6 @@ export default function AgentsPage() {
         if (res.error) throw new Error(res.error)
 
         const agentsData = Array.isArray(res.data) ? res.data : res.data?.agents || []
-
-        console.log("Fetched agents data:", agentsData)
-
         setAgents(agentsData)
         setFilteredAgents(agentsData)
       } catch (error) {
@@ -99,7 +90,7 @@ export default function AgentsPage() {
   }, [])
 
   useEffect(() => {
-    let filtered = agents
+    let filtered = [...agents]
 
     if (selectedMethod) {
       filtered = filtered.filter((agent) => agent.method.toLowerCase() === selectedMethod.toLowerCase())
@@ -108,7 +99,9 @@ export default function AgentsPage() {
     if (searchQuery) {
       const query = searchQuery.toLowerCase()
       filtered = filtered.filter(
-        (agent) => agent.name.toLowerCase().includes(query) || agent.location?.toLowerCase().includes(query) || false,
+        (agent) =>
+          agent.name.toLowerCase().includes(query) ||
+          agent.location?.toLowerCase().includes(query)
       )
     }
 
@@ -123,18 +116,22 @@ export default function AgentsPage() {
     setFilteredAgents(filtered)
   }, [agents, selectedMethod, searchQuery, sortBy])
 
-  const handleSwitchAccount = async (account: Account) => {
+  // Updated handler - now properly typed
+  const handleSwitchAccount = (account: Account) => {
     try {
-      localStorage.setItem("active_account_id", account.id.toString())
+      localStorage.setItem("active_account_id", String(account.id))
       localStorage.setItem("account_type", account.account_type)
       localStorage.setItem("login_type", account.account_type === "demo" ? "demo" : "real")
 
       const updatedUser: User = {
         ...user!,
-        accounts: user!.accounts.map((acc: Account) =>
-          acc.id === account.id ? { ...acc, balance: Number(account.balance) || 0 } : acc,
+        accounts: user!.accounts.map((acc) =>
+          String(acc.id) === String(account.id) 
+            ? { ...acc, balance: Number(account.balance) || 0 }
+            : acc
         ),
       }
+
       setUser(updatedUser)
       setActiveAccount(account)
       setLoginType(account.account_type === "demo" ? "demo" : "real")
@@ -155,10 +152,9 @@ export default function AgentsPage() {
     router.push("/login")
   }
 
-  const availableAccounts =
-    loginType === "real"
-      ? (user?.accounts || []).filter((acc: Account) => acc.account_type !== "demo")
-      : (user?.accounts || []).filter((acc: Account) => acc.account_type === "demo")
+  const availableAccounts = loginType === "real"
+    ? (user?.accounts || []).filter((acc) => acc.account_type !== "demo")
+    : (user?.accounts || []).filter((acc) => acc.account_type === "demo")
 
   return (
     <div className="min-h-screen flex flex-col bg-black text-white">
@@ -169,16 +165,18 @@ export default function AgentsPage() {
         showBalance={true}
         activeAccount={activeAccount}
         accounts={availableAccounts}
-        onSwitchAccount={handleSwitchAccount}
+        onSwitchAccount={handleSwitchAccount}     // ← Now matches
         onLogout={handleLogout}
       />
+
       <div className="flex flex-1">
         <Sidebar
           loginType={loginType}
           activeAccount={activeAccount}
           accounts={availableAccounts}
-          //onSwitchAccount={handleSwitchAccount}
+          // onSwitchAccount={handleSwitchAccount}   // Uncomment when Sidebar expects the same type
         />
+
         <main className="flex-1 w-full overflow-auto md:pl-64 bg-white">
           <AgentHeader />
 

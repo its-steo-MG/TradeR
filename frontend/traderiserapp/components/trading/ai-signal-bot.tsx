@@ -1,3 +1,4 @@
+// components/trading/ai-signal-bot.tsx
 "use client"
 
 import { useEffect, useState } from "react"
@@ -149,8 +150,17 @@ export default function AISignalBot() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-black to-gray-900 flex items-center justify-center">
-        <p className="text-white text-xl">Loading AI Signal Bot...</p>
+      <div className="relative min-h-screen text-white overflow-hidden">
+        <div className="fixed inset-0 z-0">
+          <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950 to-black" />
+          <div className="absolute inset-0 bg-gradient-to-br from-transparent via-purple-950/30 to-pink-950/20" />
+          <div className="absolute top-1/4 -left-40 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl animate-float" />
+          <div className="absolute bottom-1/4 -right-40 w-96 h-96 bg-pink-600/8 rounded-full blur-3xl animate-float delay-1000" />
+          <div className="absolute top-1/2 left-1/3 w-96 h-96 bg-purple-700/8 rounded-full blur-3xl animate-float delay-500" />
+        </div>
+        <div className="relative z-10 flex items-center justify-center min-h-screen">
+          <p className="text-white text-xl">Loading AI Signal Bot...</p>
+        </div>
       </div>
     )
   }
@@ -158,14 +168,23 @@ export default function AISignalBot() {
   // Not purchased → show purchase card
   if (!isActivated) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-black to-gray-900 flex items-center justify-center p-4">
-        <SignalPurchaseCard
-          onPurchaseSuccess={() => {
-            setIsActivated(true)
-            toast.success("AI Signal Bot activated!")
-          }}
-          aiBotId={aiBotId}
-        />
+      <div className="relative min-h-screen text-white overflow-hidden">
+        <div className="fixed inset-0 z-0">
+          <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950 to-black" />
+          <div className="absolute inset-0 bg-gradient-to-br from-transparent via-purple-950/30 to-pink-950/20" />
+          <div className="absolute top-1/4 -left-40 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl animate-float" />
+          <div className="absolute bottom-1/4 -right-40 w-96 h-96 bg-pink-600/8 rounded-full blur-3xl animate-float delay-1000" />
+          <div className="absolute top-1/2 left-1/3 w-96 h-96 bg-purple-700/8 rounded-full blur-3xl animate-float delay-500" />
+        </div>
+        <div className="relative z-10 flex items-center justify-center min-h-screen p-4">
+          <SignalPurchaseCard
+            onPurchaseSuccess={() => {
+              setIsActivated(true)
+              toast.success("AI Signal Bot activated!")
+            }}
+            aiBotId={aiBotId}
+          />
+        </div>
       </div>
     )
   }
@@ -174,6 +193,11 @@ export default function AISignalBot() {
   if (isScanning) {
     return (
       <div className="relative min-h-screen bg-black flex flex-col items-center justify-center overflow-hidden">
+        {/* Background layers for consistency */}
+        <div className="fixed inset-0 z-0">
+          <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950 to-black" />
+          <div className="absolute inset-0 bg-gradient-to-br from-transparent via-purple-950/30 to-pink-950/20" />
+        </div>
         <SignalScannerAnimation />
         <div className="relative z-10 text-center space-y-6">
           <h2 className="text-4xl font-bold text-green-400 animate-pulse">
@@ -188,16 +212,33 @@ export default function AISignalBot() {
   // Signal result
   if (signal) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-black to-gray-900 p-4 md:p-8">
-        <SignalResultCard signal={signal} onScanAgain={handleScanSignal} />
+      <div className="relative min-h-screen text-white overflow-hidden p-4 md:p-8">
+        <div className="fixed inset-0 z-0">
+          <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950 to-black" />
+          <div className="absolute inset-0 bg-gradient-to-br from-transparent via-purple-950/30 to-pink-950/20" />
+          <div className="absolute top-1/4 -left-40 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl animate-float" />
+          <div className="absolute bottom-1/4 -right-40 w-96 h-96 bg-pink-600/8 rounded-full blur-3xl animate-float delay-1000" />
+          <div className="absolute top-1/2 left-1/3 w-96 h-96 bg-purple-700/8 rounded-full blur-3xl animate-float delay-500" />
+        </div>
+        <div className="relative z-10">
+          <SignalResultCard signal={signal} onScanAgain={handleScanSignal} />
+        </div>
       </div>
     )
   }
 
   // Default: Ready to scan
   return (
-    <div className="min-h-screen bg-gradient-to-b from-black to-gray-900 p-8">
-      <div className="w-full max-w-2xl mx-auto space-y-8">
+    <div className="relative min-h-screen text-white overflow-hidden p-8">
+      <div className="fixed inset-0 z-0">
+        <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950 to-black" />
+        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-purple-950/30 to-pink-950/20" />
+        <div className="absolute top-1/4 -left-40 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl animate-float" />
+        <div className="absolute bottom-1/4 -right-40 w-96 h-96 bg-pink-600/8 rounded-full blur-3xl animate-float delay-1000" />
+        <div className="absolute top-1/2 left-1/3 w-96 h-96 bg-purple-700/8 rounded-full blur-3xl animate-float delay-500" />
+      </div>
+
+      <div className="relative z-10 w-full max-w-2xl mx-auto space-y-8">
         <div className="text-center space-y-4 mb-12">
           <h1 className="text-5xl font-bold text-white">AI Signal Bot</h1>
           <p className="text-xl text-gray-400">

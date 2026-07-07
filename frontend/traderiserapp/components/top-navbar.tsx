@@ -1,18 +1,12 @@
-// components/top-navbar.tsx
 "use client";
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { TrendingUp, LogOut, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { Account } from "@/types/account";   // ← Import the shared type
 
-interface Account {
-  id: number;
-  account_type: string;
-  balance: number;
-  kyc_verified?: boolean;
-}
-
+// Use the imported Account type
 interface User {
   username: string;
   email: string;
@@ -27,20 +21,11 @@ interface TopNavbarProps {
   showBalance?: boolean;
   activeAccount: Account | null;
   accounts: Account[];
-  onSwitchAccount: (account: Account) => void;
+  onSwitchAccount: (account: Account) => void;        // ← Now consistent
   onLogout?: () => void;
 }
 
-/* -------------------------------------------------
-   Helper: keep active account in sync with the rest
-   of the app via a custom event.
-   ------------------------------------------------- */
 const ACTIVE_ACCOUNT_KEY = "active_account_id";
-
-function getStoredAccountId(): number | null {
-  const raw = localStorage.getItem(ACTIVE_ACCOUNT_KEY);
-  return raw ? Number(raw) : null;
-}
 
 export function TopNavbar({
   isLoggedIn = false,
@@ -55,10 +40,7 @@ export function TopNavbar({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeAccount, setActiveAccount] = useState<Account | null>(propActiveAccount);
 
-  /* -------------------------------------------------
-     Keep local state in sync with any external switch
-     (e.g. Sidebar) – listen to a custom event.
-     ------------------------------------------------- */
+  // Sync with account-switch event
   useEffect(() => {
     const handler = (e: Event) => {
       const ev = e as CustomEvent<{ account: Account }>;
@@ -68,10 +50,7 @@ export function TopNavbar({
     return () => window.removeEventListener("account-switch", handler);
   }, []);
 
-  /* -------------------------------------------------
-     When the parent passes a new activeAccount (first
-     render) make sure we store it.
-     ------------------------------------------------- */
+  // Sync prop changes
   useEffect(() => {
     if (propActiveAccount) {
       setActiveAccount(propActiveAccount);
@@ -80,7 +59,7 @@ export function TopNavbar({
   }, [propActiveAccount]);
 
   const handleAccountChange = (accountId: string) => {
-    const selected = accounts.find((a) => a.id === Number(accountId));
+    const selected = accounts.find((a) => String(a.id) === accountId);
     if (selected) {
       setActiveAccount(selected);
       localStorage.setItem(ACTIVE_ACCOUNT_KEY, String(selected.id));
@@ -131,7 +110,7 @@ export function TopNavbar({
                 className="bg-slate-700 text-white px-3 py-2 rounded-lg"
               >
                 {accounts.map((account) => (
-                  <option key={account.id} value={account.id}>
+                  <option key={String(account.id)} value={String(account.id)}>
                     {formatAccountType(account.account_type)} (${Number(account.balance).toFixed(2)})
                   </option>
                 ))}
@@ -171,15 +150,12 @@ export function TopNavbar({
                     <LogOut className="w-4 h-4" />
                   </Button>
                 </div>
+
                 <button
                   onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                   className="sm:hidden p-2 hover:bg-white/10 rounded-lg transition-colors"
                 >
-                  {isMobileMenuOpen ? (
-                    <X className="w-5 h-5 text-white" />
-                  ) : (
-                    <Menu className="w-5 h-5 text-white" />
-                  )}
+                  {isMobileMenuOpen ? <X className="w-5 h-5 text-white" /> : <Menu className="w-5 h-5 text-white" />}
                 </button>
               </>
             ) : (
@@ -190,6 +166,7 @@ export function TopNavbar({
           </div>
         </div>
 
+        {/* Mobile Menu */}
         {isMobileMenuOpen && isLoggedIn && user && (
           <div className="sm:hidden mt-4 pt-4 border-t border-white/20 space-y-3">
             <div className="flex items-center gap-3 pb-3">
@@ -207,6 +184,7 @@ export function TopNavbar({
                 </p>
               </div>
             </div>
+
             {showBalance && activeAccount && (
               <div className="bg-white/10 rounded-lg p-3">
                 <p className="text-xs text-white/70 mb-1">Account Balance</p>
@@ -217,13 +195,14 @@ export function TopNavbar({
                   className="mt-2 w-full bg-slate-700 text-white px-3 py-2 rounded-lg"
                 >
                   {accounts.map((account) => (
-                    <option key={account.id} value={account.id}>
+                    <option key={String(account.id)} value={String(account.id)}>
                       {formatAccountType(account.account_type)} (${Number(account.balance).toFixed(2)})
                     </option>
                   ))}
                 </select>
               </div>
             )}
+
             <Button
               onClick={handleLogout}
               className="w-full bg-red-600 hover:bg-red-700 text-white"

@@ -65,11 +65,11 @@ export default function RobotTradingLogs({
   const [isNearTop, setIsNearTop] = useState(true)
   const prevLogsLength = useRef(logs.length)
 
-  // Reverse logs: newest at top, oldest at bottom
+  // Reverse logs: newest at top
   const reversedLogs = [...logs].reverse()
 
   /* --------------------------------------------------------------
-   *  AUTO-SCROLL: Always scroll to TOP (newest) when new log arrives
+   *  AUTO-SCROLL: Scroll to top when new logs arrive
    * -------------------------------------------------------------- */
   useEffect(() => {
     const container = logsContainerRef.current
@@ -88,7 +88,7 @@ export default function RobotTradingLogs({
   }, [logs.length, isNearTop, forceAutoScroll])
 
   /* --------------------------------------------------------------
-   *  TRACK IF USER IS NEAR TOP (within 100px)
+   *  Track scroll position (near top?)
    * -------------------------------------------------------------- */
   useEffect(() => {
     const container = logsContainerRef.current
@@ -96,33 +96,23 @@ export default function RobotTradingLogs({
 
     const checkNearTop = () => {
       const threshold = 100
-      const distanceFromTop = container.scrollTop
-      setIsNearTop(distanceFromTop <= threshold)
+      setIsNearTop(container.scrollTop <= threshold)
     }
 
-    // Initial check
     checkNearTop()
+    container.addEventListener("scroll", checkNearTop)
 
-    const handleScroll = () => {
-      if (forceAutoScroll) {
-        setIsNearTop(true)
-        return
-      }
-      checkNearTop()
-    }
-
-    container.addEventListener("scroll", handleScroll)
-    return () => container.removeEventListener("scroll", handleScroll)
-  }, [forceAutoScroll, logs])
+    return () => container.removeEventListener("scroll", checkNearTop)
+  }, [forceAutoScroll])
 
   const getLogStyles = (level: BotLog["level"]) => {
     switch (level) {
-      case "success": return "text-emerald-500 bg-emerald-500/10"
-      case "analysis": return "text-blue-500 bg-blue-500/10"
-      case "entry": return "text-amber-500 bg-amber-500/10"
-      case "warning": return "text-orange-500 bg-orange-500/10"
-      case "error": return "text-red-500 bg-red-500/10"
-      default: return "text-slate-400 bg-slate-500/10"
+      case "success": return "text-emerald-500 bg-emerald-500/10 border-emerald-500/20"
+      case "analysis": return "text-blue-500 bg-blue-500/10 border-blue-500/20"
+      case "entry": return "text-amber-500 bg-amber-500/10 border-amber-500/20"
+      case "warning": return "text-orange-500 bg-orange-500/10 border-orange-500/20"
+      case "error": return "text-red-500 bg-red-500/10 border-red-500/20"
+      default: return "text-slate-400 bg-slate-500/10 border-slate-500/20"
     }
   }
 
@@ -148,12 +138,16 @@ export default function RobotTradingLogs({
       initial={{ opacity: 0, y: 50 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 50 }}
-      className="fixed bottom-0 left-0 right-0 sm:bottom-6 sm:left-auto sm:right-6 sm:max-w-md z-40 bg-gradient-to-br from-gray-800/40 to-gray-900/40 rounded-t-3xl sm:rounded-3xl shadow-2xl border border-white/10 backdrop-blur-2xl"
+      className="fixed bottom-0 left-0 right-0 sm:bottom-6 sm:left-auto sm:right-6 sm:max-w-md z-40 
+                 bg-gradient-to-br from-gray-800/40 to-gray-900/40 rounded-t-3xl sm:rounded-3xl 
+                 shadow-2xl border border-white/10 backdrop-blur-2xl"
     >
       <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-white/5">
         <div className="flex items-center gap-3">
           {isRunning ? <AnimatedLoadingDots /> : <div className="w-2 h-2 rounded-full bg-slate-500" />}
-          <span className="text-sm font-semibold text-white">Trading Logs {isRunning ? "(Running)" : "(Paused)"}</span>
+          <span className="text-sm font-semibold text-white">
+            Trading Logs {isRunning ? "(Running)" : "(Paused)"}
+          </span>
           <span className="text-xs text-white/60 ml-2">({logs.length} events)</span>
         </div>
         <button onClick={onClose} className="text-white/60 hover:text-white transition-colors">
@@ -162,16 +156,45 @@ export default function RobotTradingLogs({
       </div>
 
       <div className="flex items-center justify-end gap-2 px-4 sm:px-6 py-3 border-b border-white/5 bg-white/5 flex-wrap">
-        <Button size="sm" variant="outline" onClick={onTogglePause} className="h-8 px-3 text-xs bg-transparent border-white/10 text-white hover:bg-white/10">
-          {isRunning ? <><Pause className="w-3 h-3 mr-1" /> Pause</> : <><Play className="w-3 h-3 mr-1" /> Resume</>}
+        <Button 
+          size="sm" 
+          variant="outline" 
+          onClick={onTogglePause} 
+          className="h-8 px-3 text-xs bg-transparent border-white/10 text-white hover:bg-white/10"
+        >
+          {isRunning ? (
+            <><Pause className="w-3 h-3 mr-1" /> Pause</>
+          ) : (
+            <><Play className="w-3 h-3 mr-1" /> Resume</>
+          )}
         </Button>
-        <Button size="sm" variant="outline" onClick={onRefreshLogs} disabled={isRunning} className="h-8 px-3 text-xs bg-transparent border-white/10 text-white hover:bg-white/10 disabled:opacity-50">
+
+        <Button 
+          size="sm" 
+          variant="outline" 
+          onClick={onRefreshLogs} 
+          disabled={isRunning} 
+          className="h-8 px-3 text-xs bg-transparent border-white/10 text-white hover:bg-white/10 disabled:opacity-50"
+        >
           <RefreshCw className="w-3 h-3" />
         </Button>
-        <Button size="sm" variant="outline" onClick={onClearLogs} className="h-8 px-3 text-xs text-red-400 border-white/10 hover:bg-red-500/10 bg-transparent">
+
+        <Button 
+          size="sm" 
+          variant="outline" 
+          onClick={onClearLogs} 
+          className="h-8 px-3 text-xs text-red-400 border-white/10 hover:bg-red-500/10 bg-transparent"
+        >
           <Trash2 className="w-3 h-3" />
         </Button>
-        <Button size="sm" variant="outline" onClick={onStopTrading} disabled={!isRunning} className="h-8 px-3 text-xs text-red-500 border-red-500/50 hover:bg-red-500/10 bg-transparent font-bold disabled:opacity-50">
+
+        <Button 
+          size="sm" 
+          variant="outline" 
+          onClick={onStopTrading} 
+          disabled={!isRunning} 
+          className="h-8 px-3 text-xs text-red-500 border-red-500/50 hover:bg-red-500/10 bg-transparent font-bold disabled:opacity-50"
+        >
           Stop Bot
         </Button>
       </div>
@@ -184,7 +207,7 @@ export default function RobotTradingLogs({
           <div className="flex items-center justify-center h-40 text-white/60 text-center">
             <div>
               <p className="mb-2">No trading logs yet</p>
-              <p className="text-xs">Configure and run a bot to see live trading activity</p>
+              <p className="text-xs">Configure and run a robot to see activity</p>
             </div>
           </div>
         ) : (
@@ -199,22 +222,20 @@ export default function RobotTradingLogs({
                 className={cn("px-3 py-2 rounded border border-white/10", getLogStyles(log.level))}
               >
                 <div className="flex items-start gap-2">
-                  <span className="font-semibold text-xs mt-0.5 uppercase opacity-75">{getLevelBadge(log.level)}</span>
+                  <span className="font-semibold text-xs mt-0.5 uppercase opacity-75">
+                    {getLevelBadge(log.level)}
+                  </span>
                   <div className="flex-1">
                     <div className="flex justify-between items-start gap-2">
                       <span className="text-white/80 flex-1">{log.message}</span>
                       <span className="text-white/40 whitespace-nowrap text-xs">{log.timestamp}</span>
                     </div>
-                    {log.data && (
+                    {log.data && log.data.profit !== undefined && (
                       <div className="mt-2 text-xs space-y-1 opacity-80">
-                        {log.data.pair && <div>Pair: <span className="font-semibold">{log.data.pair}</span></div>}
-                        {log.data.entry && <div>Entry: <span className="font-semibold">{log.data.entry.toFixed(5)}</span></div>}
-                        {log.data.profit !== undefined && (
-                          <div className="font-semibold text-emerald-400">
-                            Profit: ${log.data.profit.toFixed(2)}
-                            {log.data.profitPercentage && ` (+${log.data.profitPercentage.toFixed(2)}%)`}
-                          </div>
-                        )}
+                        <div className="font-semibold text-emerald-400">
+                          Profit: ${log.data.profit.toFixed(2)}
+                          {log.data.profitPercentage && ` (+${log.data.profitPercentage.toFixed(2)}%)`}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -256,7 +277,7 @@ export default function RobotTradingLogs({
           <div className="flex items-center justify-center h-40 text-muted-foreground">
             <div className="text-center">
               <p className="mb-2">No trading logs yet</p>
-              <p className="text-xs">Configure and run a bot to see live trading activity</p>
+              <p className="text-xs">Configure and run a robot to see activity</p>
             </div>
           </div>
         ) : (
@@ -271,22 +292,20 @@ export default function RobotTradingLogs({
                 className={cn("px-3 py-2 rounded border border-border", getLogStyles(log.level))}
               >
                 <div className="flex items-start gap-2">
-                  <span className="font-semibold text-xs mt-0.5 uppercase opacity-75">{getLevelBadge(log.level)}</span>
+                  <span className="font-semibold text-xs mt-0.5 uppercase opacity-75">
+                    {getLevelBadge(log.level)}
+                  </span>
                   <div className="flex-1">
                     <div className="flex justify-between items-start gap-2">
                       <span className="flex-1">{log.message}</span>
                       <span className="whitespace-nowrap text-xs">{log.timestamp}</span>
                     </div>
-                    {log.data && (
+                    {log.data && log.data.profit !== undefined && (
                       <div className="mt-2 text-xs space-y-1 opacity-80">
-                        {log.data.pair && <div>Pair: <span className="font-semibold">{log.data.pair}</span></div>}
-                        {log.data.entry && <div>Entry: <span className="font-semibold">{log.data.entry.toFixed(5)}</span></div>}
-                        {log.data.profit !== undefined && (
-                          <div className="font-semibold text-emerald-400">
-                            Profit: ${log.data.profit.toFixed(2)}
-                            {log.data.profitPercentage && ` (+${log.data.profitPercentage.toFixed(2)}%)`}
-                          </div>
-                        )}
+                        <div className="font-semibold text-emerald-400">
+                          Profit: ${log.data.profit.toFixed(2)}
+                          {log.data.profitPercentage && ` (+${log.data.profitPercentage.toFixed(2)}%)`}
+                        </div>
                       </div>
                     )}
                   </div>

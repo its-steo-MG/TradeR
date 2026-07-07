@@ -1,5 +1,4 @@
 # agents/models.py
-import uuid
 from decimal import Decimal
 from django.db import models
 from django.contrib.auth import get_user_model
@@ -29,13 +28,13 @@ class Agent(models.Model):
         ('mpesa', 'M-Pesa'),
         ('paypal', 'PayPal'),
         ('bank_transfer', 'Bank Transfer'),
+        ('binance', 'Binance'),
     ]
 
     name = models.CharField(max_length=100)
     phone = models.CharField(max_length=30, blank=True)
     email = models.EmailField(blank=True)
 
-    # RESTORED: profile_picture (matches your working version)
     profile_picture = models.ImageField(
         upload_to=agent_profile_upload_to,
         storage=S3Boto3Storage(),
@@ -67,6 +66,14 @@ class Agent(models.Model):
     bank_account_name = models.CharField(max_length=100, blank=True, null=True)
     bank_account_number = models.CharField(max_length=50, blank=True, null=True)
     bank_swift = models.CharField(max_length=11, blank=True, null=True)
+
+    # Binance specific
+    binance_address = models.CharField(
+        max_length=100, 
+        blank=True, 
+        null=True,
+        help_text="Binance wallet address (USDT, BEP20, etc.)"
+    )
 
     deposit_rate_kes_to_usd = models.DecimalField(
         max_digits=10, decimal_places=2, default=130.0,
@@ -106,6 +113,15 @@ class AgentDeposit(models.Model):
     transaction_code = models.CharField(max_length=50, blank=True, null=True, validators=[MaxLengthValidator(50)])
     paypal_transaction_id = models.CharField(max_length=50, blank=True, null=True, validators=[MaxLengthValidator(50)])
     bank_reference = models.CharField(max_length=100, blank=True, null=True, validators=[MaxLengthValidator(100)])
+    
+    # Binance specific
+    binance_tx_hash = models.CharField(
+        max_length=100, 
+        blank=True, 
+        null=True,
+        verbose_name="Binance Transaction Hash",
+        help_text="Transaction ID / Tx Hash from Binance"
+    )
 
     screenshot = models.ImageField(
         upload_to=payment_screenshot_upload_to,
@@ -168,6 +184,14 @@ class AgentWithdrawal(models.Model):
     user_bank_account_name = models.CharField(max_length=100, blank=True, null=True)
     user_bank_account_number = models.CharField(max_length=50, blank=True, null=True)
     user_bank_swift = models.CharField(max_length=11, blank=True, null=True)
+
+    # === NEW: Binance withdrawal address ===
+    user_binance_address = models.CharField(
+        max_length=100, 
+        blank=True, 
+        null=True,
+        help_text="User's Binance wallet address to receive withdrawal (USDT BEP20 recommended)"
+    )
 
     otp_code = models.CharField(max_length=6, blank=True)
     otp_sent_at = models.DateTimeField(null=True, blank=True)

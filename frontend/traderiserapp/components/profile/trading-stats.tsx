@@ -1,62 +1,73 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
-import { TrendingUp, TrendingDown, Target, Zap } from "lucide-react"
-import { api } from "@/lib/api"
+import { useEffect, useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { TrendingUp, TrendingDown, Target, Zap } from "lucide-react";
+import { api } from "@/lib/api";
 
 interface TradeData {
-  pair: unknown; // Assuming pair can be string or object; refine if possible
+  pair: unknown;
   direction: string;
   volume_lots: number;
   entry_price: number;
-  floating_p_l: number;
+  floating_p_l: number | string | null | undefined;
   status: string;
 }
 
 export default function TradingStats() {
-  const [positions, setPositions] = useState<TradeData[]>([])
-  const [loading, setLoading] = useState(true)
+  const [positions, setPositions] = useState<TradeData[]>([]);
+  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalTrades: 0,
     winRate: 0,
     avgReturn: 0,
     drawdown: 0,
-  })
+  });
+
+  // Safe helper functions with proper types
+  const formatFloatingPL = (value: number | string | null | undefined): string => {
+    const num = Number(value || 0);
+    const sign = num > 0 ? "+" : "";
+    return `${sign}${num.toFixed(2)}`;
+  };
+
+  const getPLColor = (value: number | string | null | undefined): string => {
+    const num = Number(value || 0);
+    return num >= 0 ? "text-green-400" : "text-red-400";
+  };
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await api.getForexPositions()
+        const response = await api.getForexPositions();
         if (response.data?.positions) {
-          setPositions(response.data.positions)
+          setPositions(response.data.positions);
 
-          // Calculate stats from positions
-          const closedPositions = response.data.positions.filter((p: TradeData) => p.status === "closed")
+          const closedPositions = response.data.positions.filter((p: TradeData) => p.status === "closed");
 
-          const winningTrades = closedPositions.filter((p: TradeData) => p.floating_p_l > 0).length
-          const winRate = closedPositions.length > 0 ? (winningTrades / closedPositions.length) * 100 : 0
+          const winningTrades = closedPositions.filter((p: TradeData) => Number(p.floating_p_l) > 0).length;
+          const winRate = closedPositions.length > 0 ? (winningTrades / closedPositions.length) * 100 : 0;
 
-          const totalPL = closedPositions.reduce((sum: number, p: TradeData) => sum + p.floating_p_l, 0)
-          const avgReturn = closedPositions.length > 0 ? totalPL / closedPositions.length : 0
+          const totalPL = closedPositions.reduce((sum: number, p: TradeData) => sum + Number(p.floating_p_l || 0), 0);
+          const avgReturn = closedPositions.length > 0 ? totalPL / closedPositions.length : 0;
 
           setStats({
             totalTrades: response.data.positions.length,
             winRate: Math.round(winRate * 10) / 10,
             avgReturn: Math.round(avgReturn * 100) / 100,
-            drawdown: -8.3, // Would need historical data for accurate drawdown
-          })
+            drawdown: -8.3,
+          });
         }
       } catch (error) {
-        console.error("[v0] Failed to fetch trading data:", error)
+        console.error("[v0] Failed to fetch trading data:", error);
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
+    };
 
-    fetchData()
-  }, [])
+    fetchData();
+  }, []);
 
   const STATS_DISPLAY = [
     { label: "Total Trades", value: stats.totalTrades.toString(), icon: Target, color: "text-blue-400" },
@@ -68,7 +79,7 @@ export default function TradingStats() {
       color: "text-amber-400",
     },
     { label: "Drawdown", value: `${stats.drawdown}%`, icon: TrendingDown, color: "text-red-400" },
-  ]
+  ];
 
   const CHART_DATA = [
     { month: "Jan", balance: 10000, trades: 45 },
@@ -77,7 +88,7 @@ export default function TradingStats() {
     { month: "Apr", balance: 14200, trades: 61 },
     { month: "May", balance: 16500, trades: 73 },
     { month: "Jun", balance: 15250, trades: 68 },
-  ]
+  ];
 
   if (loading) {
     return (
@@ -92,7 +103,7 @@ export default function TradingStats() {
           ))}
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -100,7 +111,7 @@ export default function TradingStats() {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {STATS_DISPLAY.map((stat, i) => {
-          const Icon = stat.icon
+          const Icon = stat.icon;
           return (
             <Card key={i} className="bg-slate-800/30 border-slate-700/50">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -111,7 +122,7 @@ export default function TradingStats() {
                 <div className="text-2xl font-bold text-white">{stat.value}</div>
               </CardContent>
             </Card>
-          )
+          );
         })}
       </div>
 
@@ -188,9 +199,8 @@ export default function TradingStats() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className={`font-semibold ${trade.floating_p_l > 0 ? "text-green-400" : "text-red-400"}`}>
-                    {trade.floating_p_l > 0 ? "+" : ""}
-                    {trade.floating_p_l.toFixed(2)}
+                  <p className={`font-semibold ${getPLColor(trade.floating_p_l)}`}>
+                    {formatFloatingPL(trade.floating_p_l)}
                   </p>
                   <p className="text-xs text-slate-400">{trade.status}</p>
                 </div>
@@ -201,5 +211,5 @@ export default function TradingStats() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

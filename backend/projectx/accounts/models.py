@@ -6,7 +6,6 @@ from django.apps import apps
 from django.utils import timezone
 from django.core.mail import send_mail
 import uuid
-from django.conf import settings
 
 
 class User(AbstractUser):
@@ -31,7 +30,8 @@ class User(AbstractUser):
         blank=True,
         related_name='referred_users'
     )
-    # New suspension fields
+    
+    # Suspension fields
     is_suspended = models.BooleanField(default=False, verbose_name="Account Suspended")
     suspension_type = models.CharField(
         max_length=20,
@@ -69,15 +69,14 @@ class User(AbstractUser):
             return has_standard and 'pro-fx' not in existing_types
         if account_type == 'standard' and 'standard' in existing_types:
             return False
-        if account_type != 'standard' and account_type != 'demo' and account_type != 'pro-fx':
+        if account_type not in ['standard', 'demo', 'pro-fx']:
             return False
         return True
 
-    # ====================== UPDATED SUSPENSION EMAIL METHODS ======================
+    # ====================== SUSPENSION METHODS ======================
     def suspend(self, suspension_type: str, reason: str, duration_days: int = None, suspended_by=None):
-        """Suspend account – temporary (with duration) or permanent."""
         if self.is_suspended:
-            return  # Already suspended
+            return
 
         self.is_suspended = True
         self.suspension_type = suspension_type
@@ -101,9 +100,8 @@ class User(AbstractUser):
             'suspended_at', 'suspended_until', 'suspension_history'
         ])
 
-        # Send email using Resend (via django-anymail)
+        # Send suspension email (unchanged)
         subject = f"TradeRiser Account {'Temporarily' if suspension_type == 'temporary' else 'Permanently'} Suspended"
-
         html_message = f"""
         <h2>Account Suspension Notice</h2>
         <p>Dear {self.username},</p>
@@ -113,22 +111,7 @@ class User(AbstractUser):
         <p>If you believe this is a mistake, please contact support.</p>
         <p>Best regards,<br>TradeRiser Team</p>
         """
-
-        plain_message = (
-            f"Your TradeRiser account ({self.email}) has been {suspension_type}ly suspended.\n\n"
-            f"Reason: {reason}\n"
-            f"{'Until: ' + self.suspended_until.strftime('%Y-%m-%d %H:%M') if self.suspended_until else 'Indefinite – contact support for review.'}\n\n"
-            f"Contact support@traderiser.com for questions."
-        )
-
-        send_mail(
-            subject=subject,
-            message=plain_message,
-            from_email=None,                    # Uses DEFAULT_FROM_EMAIL from settings
-            recipient_list=[self.email],
-            html_message=html_message,
-            fail_silently=False,
-        )
+        send_mail(subject=subject, message=html_message, from_email=None, recipient_list=[self.email], html_message=html_message, fail_silently=False)
 
     def unsuspend(self, unsuspended_by=None):
         if not self.is_suspended:
@@ -146,28 +129,8 @@ class User(AbstractUser):
                 "type": "unsuspended",
                 "by": unsuspended_by.username
             })
-            self.save(update_fields=['suspension_history'])
 
-        self.save(update_fields=['is_suspended', 'suspension_type', 'suspension_reason', 'suspended_at', 'suspended_until'])
-
-        # Send reactivation email using Resend
-        subject = "TradeRiser Account Reactivated"
-        html_message = f"""
-        <h2>Welcome Back!</h2>
-        <p>Dear {self.username},</p>
-        <p>Your TradeRiser account (<strong>{self.email}</strong>) has been successfully reactivated.</p>
-        <p>You can now log in and continue trading.</p>
-        <p>Best regards,<br>TradeRiser Team</p>
-        """
-
-        send_mail(
-            subject=subject,
-            message=f"Your TradeRiser account ({self.email}) has been reactivated.",
-            from_email=None,
-            recipient_list=[self.email],
-            html_message=html_message,
-            fail_silently=False,
-        )
+        self.save(update_fields=['is_suspended', 'suspension_type', 'suspension_reason', 'suspended_at', 'suspended_until', 'suspension_history'])
 
     @property
     def is_permanently_suspended(self):
@@ -185,7 +148,6 @@ class User(AbstractUser):
 
 
 class SuspensionEvidence(models.Model):
-    """Evidence for permanent suspensions (e.g., screenshots, logs)"""
     STATUS_CHOICES = [
         ('pending', 'Pending Review'),
         ('approved', 'Approved'),
@@ -193,7 +155,7 @@ class SuspensionEvidence(models.Model):
     ]
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='suspension_evidence')
     evidence_file = models.FileField(upload_to='suspension_evidence/%Y/%m/%d/', blank=True)
-    description = models.TextField(blank=True, help_text="Details of violation/evidence")
+    description = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_evidence')
     reviewed_at = models.DateTimeField(null=True, blank=True)
@@ -213,39 +175,70 @@ class Account(models.Model):
         ('demo', 'TradeRiser Demo'),
         ('pro-fx', 'TradeRiser Pro-FX'),
     ]
+    
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='accounts')
     account_type = models.CharField(max_length=50, choices=ACCOUNT_TYPES)
+    
+    is_wallet_verified = models.BooleanField(
+        default=True,
+        verbose_name="Wallet Verified",
+        help_text="Uncheck this to block withdrawals and internal transfers."
+    )
 
     class Meta:
         unique_together = ('user', 'account_type')
+        verbose_name = "Account"
+        verbose_name_plural = "Accounts"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Cache original balance for admin change detection
+        self._original_balance = self.balance if self.pk else None
 
     @property
     def balance(self):
+        """Read balance from Wallet model"""
         try:
             Wallet = apps.get_model('wallet', 'Wallet')
             Currency = apps.get_model('wallet', 'Currency')
             usd = Currency.objects.get(code='USD')
             wallet = Wallet.objects.get(account=self, wallet_type='main', currency=usd)
             return wallet.balance
-        except (Currency.DoesNotExist, Wallet.DoesNotExist):
+        except Exception:
             return Decimal('10000.00') if self.account_type == 'demo' else Decimal('0.00')
 
     @balance.setter
     def balance(self, value):
-        Wallet = apps.get_model('wallet', 'Wallet')
-        Currency = apps.get_model('wallet', 'Currency')
-        usd = Currency.objects.get_or_create(code='USD', defaults={'name': 'US Dollar', 'symbol': '$'})[0]
-        wallet, created = Wallet.objects.get_or_create(
-            account=self, wallet_type='main', currency=usd,
-            defaults={'balance': value}
-        )
-        if not created:
-            wallet.balance = value
-            wallet.save()
+        """Write balance to Wallet model - Made more robust"""
+        if value is None:
+            return
+
+        try:
+            Wallet = apps.get_model('wallet', 'Wallet')
+            Currency = apps.get_model('wallet', 'Currency')
+            
+            usd = Currency.objects.get_or_create(
+                code='USD', 
+                defaults={'name': 'US Dollar', 'symbol': '$'}
+            )[0]
+
+            wallet, created = Wallet.objects.get_or_create(
+                account=self,
+                wallet_type='main',
+                currency=usd,
+                defaults={'balance': Decimal(value)}
+            )
+            if not created:
+                wallet.balance = Decimal(value)
+                wallet.save(update_fields=['balance'])
+        except Exception as e:
+            # Fallback logging
+            print(f"[Account.balance setter] Error updating wallet: {e}")
 
     def save(self, *args, **kwargs):
         is_new = not self.pk
         super().save(*args, **kwargs)
+        
         if is_new:
             initial_balance = Decimal('10000.00') if self.account_type == 'demo' else Decimal('0.00')
             self.balance = initial_balance

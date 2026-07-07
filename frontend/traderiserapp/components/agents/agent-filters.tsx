@@ -23,6 +23,7 @@ export default function AgentFilters({
     { id: "mpesa", label: "M-Pesa" },
     { id: "paypal", label: "PayPal" },
     { id: "bank", label: "Bank Transfer" },
+    { id: "binance", label: "Binance" },        // ← NEW
   ]
 
   return (
@@ -39,7 +40,7 @@ export default function AgentFilters({
         />
       </div>
 
-      {/* Payment Method Filter - Responsive Grid */}
+      {/* Payment Method Filter */}
       <div>
         <p className="text-xs sm:text-sm font-semibold text-slate-900 mb-2 sm:mb-3">Payment Method</p>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">

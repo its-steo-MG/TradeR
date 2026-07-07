@@ -29,18 +29,25 @@ class DerivClient:
     async def _ensure_public_ws(self):
         if self.public_ws and not self.public_ws.closed:
             return
-
+    
         try:
-            url = "wss://api.derivws.com/trading/v1/options/ws/public"
+            # Better & more stable public endpoint for ticks
+            url = f"wss://ws.derivws.com/websockets/v3?app_id={self.app_id}"
+            
             self.public_ws = await websockets.connect(
-                url, ping_interval=20, ping_timeout=30
+                url,
+                ping_interval=20,
+                ping_timeout=30,
+                close_timeout=10,
+                max_size=2**20,        # optional: prevent large message issues
             )
-            logger.info("✅ Connected to Deriv Public WebSocket")
+            logger.info(f"✅ Connected to Deriv Public WebSocket ({url})")
             
             if not self._listener_task or self._listener_task.done():
                 self._listener_task = asyncio.create_task(self._public_ticks_listener())
+                
         except Exception as e:
-            logger.error(f"Public WS connection failed: {e}")
+            logger.error(f"❌ Public WS connection failed: {type(e).__name__}: {e}")
             raise
 
     async def _public_ticks_listener(self):

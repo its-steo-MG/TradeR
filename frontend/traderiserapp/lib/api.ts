@@ -2,6 +2,8 @@
 //const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://traderiserproapp.onrender.com/api"
 
+
+
 interface ApiResponse<T> {
   data?: T
   error?: string
@@ -11,10 +13,14 @@ interface Number {
   replace?: number
 }
 
+export { updateBalanceAfterTrade } from "./balance-utils";
+
+
 export interface Currency {
   code: string
   name: string
 }
+
 
 export interface Wallet {
   id: number
@@ -75,6 +81,8 @@ export interface ForexRobot {
   discounted_price?: number
   effective_price?: number
   original_price?: number
+  max_open_positions?:number
+  is_ea?:boolean
 }
 export interface RobotRaw {
   price?: number
@@ -87,6 +95,8 @@ export interface UserRobot {
   is_running: boolean
   stake_amount: number
   interval_seconds: number
+  is_ea?:boolean
+  max_open_positions?:number
   created_at: string
   updated_at: string
   purchased_at: string
@@ -162,9 +172,15 @@ export interface AgentDeposit {
   agent: number
   amount_kes: number
   amount_usd: number
+  payment_method?: string
   status: "pending" | "verified" | "rejected"
   screenshot_url?: string
+  binance_tx_hash?: string          // ← Added for Binance
+  transaction_code?: string
+  paypal_transaction_id?: string
+  bank_reference?: string
   created_at: string
+  updated_at?: string
 }
 
 export interface AgentWithdrawal {
@@ -172,10 +188,18 @@ export interface AgentWithdrawal {
   agent: number
   amount_usd: number
   amount_kes: number
-  phone_number: string
-  status: "pending" | "otp_sent" | "verified" | "completed" | "cancelled"
+  payment_method?: string
+  status: "pending_otp" | "otp_verified" | "completed" | "rejected"
   otp_code?: string
+  user_binance_address?: string          // ← For Binance withdrawals
+  user_paypal_email?: string
+  user_bank_name?: string
+  user_bank_account_name?: string
+  user_bank_account_number?: string
+  user_bank_swift?: string
   created_at: string
+  updated_at?: string
+  completed_at?: string
 }
 
 interface Transaction {
@@ -245,6 +269,7 @@ export interface Trader {
   bio: string
   risk_level: "low" | "medium" | "high"
   min_allocation: number
+  max_allocation: number
   performance_fee_percent: number
   is_active: boolean
   win_rate: number
@@ -279,6 +304,7 @@ export interface BecomeTraderPayload {
   bio: string
   risk_level: "low" | "medium" | "high"
   min_allocation: number
+  max_allocation: number
   performance_fee_percent: number
 }
 
@@ -314,6 +340,20 @@ export interface SuspensionInfo {
   code: "suspended_temporary" | "suspended_permanent";
   details: SuspensionDetails;
 }
+
+/* ------------------------------------------------------------------ */
+/*  MPESA NOTIFICATION TYPE                                            */
+/* ------------------------------------------------------------------ */
+export type MpesaNotification = {
+  id: number;
+  mpesa_id: string | null;
+  notification_type: "received" | "sent";
+  message: string;
+  caller_id: string;
+  is_read: boolean;
+  created_at: string;
+  transaction_type: string | null;
+};
 
 export type LoginResponseData = {
   access: string;
@@ -672,7 +712,17 @@ export const getWallets = async () => {
   return response
 }
 
-export const getWalletTransactions = () => apiRequest<{ transactions: WalletTransaction[] }>("/wallet/transactions/")
+export const getWalletTransactions = () => 
+  apiRequest<
+    WalletTransaction[] | 
+    { 
+      results?: WalletTransaction[]; 
+      transactions?: WalletTransaction[]; 
+      count?: number; 
+      next?: string | null; 
+      previous?: string | null;
+    }
+  >("/wallet/transactions/");
 
 export const deposit = (data: {
   amount: number
@@ -740,24 +790,58 @@ export const closeAllPositions = () =>
   apiRequest<{ message: string }>("/forex/positions/close-all/", { method: "POST" })
 export const getForexHistory = () => apiRequest<{ trades: ForexTrade[] }>("/forex/history/")
 
-export const getForexRobots = () => apiRequest<{ robots: ForexRobot[] }>("/forex/robots/")
-export const getMyForexRobots = () => apiRequest<{ user_robots: UserRobot[] }>("/forex/my-robots/")
+/* --------------------- FOREX ROBOTS --------------------- */
+
+export const getForexRobots = () => 
+  apiRequest<{ robots: ForexRobot[] }>("/forex/robots/")
+
+export const getMyForexRobots = () => 
+  apiRequest<{ user_robots: UserRobot[] }>("/forex/my-robots/")
+
 export const purchaseForexRobot = (robotId: number) =>
-  apiRequest<{ user_robot: UserRobot }>(`/forex/robots/${robotId}/purchase/`, { method: "POST" })
+  apiRequest<{ 
+    message: string; 
+    user_robot: UserRobot;
+    purchased_price?: number;
+    discounted?: boolean;
+  }>(`/forex/robots/${robotId}/purchase/`, { 
+    method: "POST" 
+  })
 
 export const toggleForexRobot = (
   userRobotId: number,
-  config?: { stake?: number; pair_id?: number; timeframe?: string },
+  config?: { stake?: number; pair_id?: number; timeframe?: string }
 ) =>
-  apiRequest<{ is_running: boolean; message?: string }>(
+  apiRequest<{ 
+    is_running: boolean; 
+    message?: string;
+    is_ea?: boolean;
+    closed_positions?: number;        // from backend when stopping EA
+  }>(
     `/forex/robots/${userRobotId}/toggle/`,
-    config ? { method: "POST", body: JSON.stringify(config) } : { method: "POST" },
+    {
+      method: "POST",
+      body: config ? JSON.stringify(config) : undefined,
+    }
   )
 
-export const getForexBotLogs = () => apiRequest<{ bot_logs: BotLog[] }>("/forex/robot-logs/")
+// ✅ Improved: Close all EA positions for a specific UserRobot
+export const closeEAPositions = (userRobotId: number) =>
+  apiRequest<{ 
+    success: boolean;
+    message: string;
+    closed_count: number;
+  }>(
+    `/forex/positions/close-ea/${userRobotId}/`, 
+    { method: "POST" }
+  )
+
+/* --------------------- BOT LOGS --------------------- */
+export const getForexBotLogs = () => 
+  apiRequest<{ bot_logs: BotLog[] }>("/forex/robot-logs/")
+
 export const getForexBotLogsByRobot = (userRobotId: number) =>
   apiRequest<{ bot_logs: BotLog[] }>(`/forex/robot-logs/?user_robot_id=${userRobotId}`)
-
 /* ------------------------------------------------------------------ */
 /*  AGENTS                                                            */
 /* ------------------------------------------------------------------ */
@@ -767,28 +851,45 @@ export const getAgentById = (agentId: number) => apiRequest<{ agent: Agent }>(`/
 export const createAgentDeposit = async (data: {
   agent_id: number
   account: number
-  amount_kes: number
-  transaction_code: string
+  amount_kes?: number
+  amount_usd_input?: number
+  transaction_code?: string
+  binance_tx_hash?: string
   screenshot?: File
   method: string
 }) => {
   const fd = new FormData()
+
   fd.append("agent", data.agent_id.toString())
   fd.append("account", data.account.toString())
-  fd.append("amount_kes", data.amount_kes.toString())
+  fd.append("method", data.method)
 
-  const method = data.method.toLowerCase()
+  const methodLower = data.method.toLowerCase()
 
-  if (method === "mpesa") {
-    fd.append("transaction_code", data.transaction_code)
-    if (!data.screenshot) return { error: "Screenshot required for M-Pesa" } as ApiResponse<AgentDeposit>
-    fd.append("screenshot", data.screenshot)
-  } else if (method === "paypal") {
-    fd.append("paypal_transaction_id", data.transaction_code)
-  } else if (method === "bank_transfer") {
-    fd.append("bank_reference", data.transaction_code)
-    if (!data.screenshot) return { error: "Screenshot required for Bank Transfer" } as ApiResponse<AgentDeposit>
-    fd.append("screenshot", data.screenshot)
+  if (methodLower === "binance") {
+    // Binance → Use USD amount
+    if (data.amount_usd_input !== undefined) {
+      fd.append("amount_usd_input", data.amount_usd_input.toString())
+    }
+    if (data.binance_tx_hash) {
+      fd.append("binance_tx_hash", data.binance_tx_hash)
+    }
+    if (data.screenshot) {
+      fd.append("screenshot", data.screenshot)
+    }
+  } else {
+    // Other methods → Use KES
+    if (data.amount_kes !== undefined) {
+      fd.append("amount_kes", data.amount_kes.toString())
+    }
+
+    if (methodLower === "mpesa" || methodLower === "bank_transfer") {
+      if (data.transaction_code) fd.append("transaction_code", data.transaction_code)
+      if (data.screenshot) fd.append("screenshot", data.screenshot)
+    } 
+    else if (methodLower === "paypal") {
+      if (data.transaction_code) fd.append("paypal_transaction_id", data.transaction_code)
+    }
   }
 
   return apiRequestWithFile<AgentDeposit>("/agents/deposit/", fd)
@@ -804,12 +905,13 @@ export const requestAgentWithdrawal = (data: {
   agent: number
   account: number
   amount_usd: number
-  phone_number?: string // Optional for M-Pesa
-  user_paypal_email?: string // For PayPal
-  user_bank_name?: string // For bank
+  user_binance_address?: string          // ← NEW
+  user_paypal_email?: string
+  user_bank_name?: string
   user_bank_account_name?: string
   user_bank_account_number?: string
   user_bank_swift?: string
+  phone_number?: string
 }) =>
   apiRequest<{ id: number }>("/agents/withdraw/request/", {
     method: "POST",
@@ -817,13 +919,13 @@ export const requestAgentWithdrawal = (data: {
       agent: data.agent,
       account: data.account,
       amount_usd: data.amount_usd,
-      // Conditionally include fields to avoid sending unexpected ones
-      ...(data.phone_number && { phone_number: data.phone_number }),
+      ...(data.user_binance_address && { user_binance_address: data.user_binance_address }),
       ...(data.user_paypal_email && { user_paypal_email: data.user_paypal_email }),
       ...(data.user_bank_name && { user_bank_name: data.user_bank_name }),
       ...(data.user_bank_account_name && { user_bank_account_name: data.user_bank_account_name }),
       ...(data.user_bank_account_number && { user_bank_account_number: data.user_bank_account_number }),
       ...(data.user_bank_swift && { user_bank_swift: data.user_bank_swift }),
+      ...(data.phone_number && { phone_number: data.phone_number }),
     }),
   })
 
@@ -1020,6 +1122,54 @@ export async function resumeSubscription(subscriptionId: number, allocatedAmount
   })
 }
 
+// ====================== AUDIO CALL API FUNCTIONS ======================
+
+export interface InitiateCallResponse {
+  call_id: number
+  status?: string
+  message?: string
+}
+
+export interface AnswerCallResponse {
+  success: boolean
+  message?: string
+  call_id?: number
+  voice_preset?: string
+}
+
+export interface EndCallResponse {
+  success: boolean
+  message?: string
+  call_id?: number
+}
+
+export interface MissedCallsResponse {
+  missed_calls: number
+  has_unread: boolean
+}
+
+// Call Initiation
+export const initiateAudioCall = () =>
+  apiRequest<InitiateCallResponse>("/customercare/call/initiate/", {
+    method: "POST",
+  })
+
+// Answer Call
+export const answerAudioCall = (callId: number, voicePreset: string = "default") =>
+  apiRequest<AnswerCallResponse>(`/customercare/call/answer/${callId}/`, {
+    method: "POST",
+    body: JSON.stringify({ voice_preset: voicePreset }),
+  })
+
+// End Call
+export const endAudioCall = (callId: number) =>
+  apiRequest<EndCallResponse>(`/customercare/call/end/${callId}/`, {
+    method: "POST",
+  })
+
+// Get Missed Calls
+export const getMissedCalls = () =>
+  apiRequest<MissedCallsResponse>("/customercare/call/missed/")
 /* ------------------------------------------------------------------ */
 /*  Account Suspension                                               */
 /* ------------------------------------------------------------------ */
@@ -1041,6 +1191,72 @@ export async function appealSuspension(formData: FormData) {
     {} // no extra options needed
   );
 }
+
+/* ------------------------------------------------------------------ */
+/*  MPESA NOTIFICATIONS                                               */
+/* ------------------------------------------------------------------ */
+
+const MPESA_NOTIF_BASE = process.env.NEXT_PUBLIC_API_URL || "https://traderiserproapp.onrender.com"
+//const MPESA_NOTIF_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+
+
+async function mpesaNotifRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const token = getAccess()
+  const url = `${MPESA_NOTIF_BASE}/mpesa-notif${path}`
+  const res = await fetch(url, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(init.headers as Record<string, string>),
+    },
+    cache: "no-store",
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => "")
+    throw new Error(`${res.status}: ${text || res.statusText}`)
+  }
+  return res.json() as Promise<T>
+}
+
+export const listMpesaNotifications = () =>
+  mpesaNotifRequest<MpesaNotification[]>("/notifications/")
+
+export const markMpesaRead = (id: number) =>
+  mpesaNotifRequest<{ status: string }>(`/notifications/${id}/read/`, { method: "POST" })
+
+/* ------------------------------------------------------------------ */
+
+export const placeDigitTrade = (data: {
+  market_id: number;
+  digit_contract_type: 'over' | 'under' | 'matches' | 'differs' | 'even' | 'odd';
+  digit_barrier?: number;
+  amount: number;
+  account_type?: 'standard' | 'demo';
+  robot_id?: number;
+  use_martingale?: boolean;
+  martingale_level?: number;
+}) => 
+  apiRequest("/trading/trades/place-digit/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
+// ====================== S-DIGIT ROBOT TRADING ======================
+export const placeSRobotTrade = (data: {
+  robot_id: number;
+  market_id: number;
+  digit_contract_type: 'over' | 'under' | 'matches' | 'differs' | 'even' | 'odd';
+  digit_barrier?: number;
+  amount: number;
+  use_martingale?: boolean;
+  martingale_level?: number;
+  account_type?: 'standard' | 'demo';
+}) => 
+  apiRequest("/trading/trades/place-srobot/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 /* ------------------------------------------------------------------ */
 /*  EXPORT API OBJECT                                                 */
 /* ------------------------------------------------------------------ */
@@ -1049,12 +1265,15 @@ export const api = {
   login,
   adminLogin,
   getAccount,
+  createAdditionalAccount,
   createAccount: createAdditionalAccount,
   switchAccount,
   getMarkets,
   getTradeTypes,
   getAssets,
   placeTrade,
+  placeDigitTrade,
+  placeSRobotTrade,
   getTradeHistory,
   cancelTrade,
   getPriceHistory,
@@ -1113,4 +1332,11 @@ export const api = {
   verifyTransfer,
   generateSignal,
   appealSuspension,
+  initiateAudioCall,
+  answerAudioCall,
+  endAudioCall,
+  getMissedCalls,
+  closeEAPositions,
+  listMpesaNotifications,
+  markMpesaRead,
 }

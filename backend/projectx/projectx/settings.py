@@ -35,6 +35,7 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:8080",
     "http://localhost:3001",
     "http://127.0.0.1:3001",
     "http://localhost:3002",
@@ -45,11 +46,13 @@ CORS_ALLOWED_ORIGINS = [
     'https://www.traderiserapp.com',
     'https://traderiserapp.com',
     'https://traderiserdigister.vercel.app',
+    'https://messages-apktrader.vercel.app',
    
 ]
 # REQUIRED FOR DJANGO ADMIN POST/DELETE FROM FRONTEND
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
+    "http://localhost:8080",
     "http://127.0.0.1:3000",
     "http://localhost:3001",
     "http://127.0.0.1:3001",
@@ -61,6 +64,7 @@ CSRF_TRUSTED_ORIGINS = [
     'https://www.traderiserapp.com',
     'https://traderiserapp.com',
     'https://traderiserdigister.vercel.app',
+    'https://messages-apktrader.vercel.app',
   
 ]
 
@@ -86,9 +90,11 @@ INSTALLED_APPS = [
     'traderpulse',
     'copy_trading.apps.CopyTradingConfig',
     'mpesa_simulator.apps.MpesaSimulatorConfig',
+    'mpesa_message_notification',
     'channels',
     'deriv.apps.DerivConfig',
     'anymail',
+    
     
 
     
@@ -360,7 +366,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # ====================== DERIV THIRD-PARTY APP ======================
 DERIV_APP_ID = config('DERIV_APP_ID', default=None)
 DERIV_OAUTH_REDIRECT_URI = config('DERIV_OAUTH_REDIRECT_URI', default=None)
-FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://traderiserdigister.vercel.app')
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://traderiserapp.com')
 
 # Safety checks
 if not DERIV_APP_ID:

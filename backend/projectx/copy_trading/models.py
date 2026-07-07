@@ -17,10 +17,19 @@ class Trader(models.Model):
         choices=[('low', 'Low'), ('medium', 'Medium'), ('high', 'High')],
         default='medium'
     )
+    
+    # Updated: More flexible allocation
     min_allocation = models.DecimalField(
-        max_digits=12, decimal_places=2, default=Decimal('100.00'),
-        validators=[MinValueValidator(Decimal('100.00'))]
+        max_digits=12, decimal_places=2, default=Decimal('10.00'),
+        validators=[MinValueValidator(Decimal('10.00'))],
+        help_text="Minimum amount a user can allocate to copy you (e.g. 10 USD)"
     )
+    max_allocation = models.DecimalField(          # ← NEW FIELD
+        max_digits=12, decimal_places=2, default=Decimal('1000.00'),
+        validators=[MinValueValidator(Decimal('10.00')), MaxValueValidator(Decimal('5000.00'))],
+        help_text="Maximum amount a user can allocate to copy you"
+    )
+    
     performance_fee_percent = models.DecimalField(
         max_digits=5, decimal_places=2, default=Decimal('20.00'),
         validators=[MinValueValidator(Decimal('0.00')), MaxValueValidator(Decimal('50.00'))]
@@ -45,7 +54,7 @@ class Trader(models.Model):
         if not trades.exists():
             return Decimal('0.00')
         total_profit = trades.aggregate(total=Sum('profit'))['total'] or Decimal('0.00')
-        return (total_profit / Decimal(trades.count()))  # Average profit per trade (can be negative)
+        return (total_profit / Decimal(trades.count()))  # Average profit per trade
 
     @property
     def subscriber_count(self):
@@ -69,18 +78,21 @@ class CopySubscription(models.Model):
         return f"{self.user.username} copies {self.trader.user.username} (${self.allocated_amount})"
 
     def clean(self):
-        """Validate allocated amount against account balance and trader minimum"""
+        """Validate allocated amount against trader's min/max and account balance"""
         from django.core.exceptions import ValidationError
 
         if self.allocated_amount < self.trader.min_allocation:
             raise ValidationError(f"Minimum allocation for this trader is ${self.trader.min_allocation}")
+
+        if self.allocated_amount > self.trader.max_allocation:
+            raise ValidationError(f"Maximum allocation for this trader is ${self.trader.max_allocation}")
 
         balance = Decimal(str(self.account.balance))
         if self.allocated_amount > balance:
             raise ValidationError("Allocated amount exceeds available account balance")
 
     def save(self, *args, **kwargs):
-        self.clean()  # Run validation
+        self.clean()  # Run validation before saving
         super().save(*args, **kwargs)
 
     def check_drawdown(self):

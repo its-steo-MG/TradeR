@@ -3,10 +3,11 @@ from rest_framework import serializers
 from .models import MarketType, Market, TradeType, Robot, UserRobot, Trade, Signal
 from django.conf import settings
 
+
 class RobotSerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()
     effective_price = serializers.SerializerMethodField()
-    original_price = serializers.ReadOnlyField(source='price')  # Useful for showing strike-through on frontend
+    original_price = serializers.ReadOnlyField(source='price')
 
     def get_image(self, obj):
         if obj.image:
@@ -19,15 +20,30 @@ class RobotSerializer(serializers.ModelSerializer):
     class Meta:
         model = Robot
         fields = [
-            'id', 'name', 'description', 'price', 'original_price',
-            'discounted_price', 'effective_price', 'available_for_demo',
-            'image', 'win_rate'
+            'id',
+            'name',
+            'description',
+            'price',
+            'original_price',
+            'discounted_price',
+            'effective_price',
+            'available_for_demo',
+            'image',
+            'win_rate',
+            # Deriv Premium Robot fields
+            'is_deriv_robot',
+            'deriv_access_key',
+            # ==================== NEW: S-Digit Robot Fields ====================
+            'is_s_digit_robot',
+            'default_digit_contract_type',
         ]
+
 
 class MarketTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = MarketType
         fields = '__all__'
+
 
 class MarketSerializer(serializers.ModelSerializer):
     market_type = MarketTypeSerializer(read_only=True)
@@ -42,27 +58,60 @@ class MarketSerializer(serializers.ModelSerializer):
         model = Market
         fields = ['id', 'name', 'market_type', 'profit_multiplier']
 
+
 class TradeTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = TradeType
         fields = '__all__'
 
+
 class UserRobotSerializer(serializers.ModelSerializer):
     robot = RobotSerializer(read_only=True)
+    deriv_access_key = serializers.SerializerMethodField()
+
+    def get_deriv_access_key(self, obj):
+        """Return deriv_access_key only if the robot is a Deriv Premium Robot"""
+        if getattr(obj.robot, 'is_deriv_robot', False) and obj.robot.deriv_access_key:
+            return obj.robot.deriv_access_key
+        return None
 
     class Meta:
         model = UserRobot
-        fields = ['id', 'robot', 'purchased_at', 'purchased_price']
+        fields = [
+            'id',
+            'robot',
+            'purchased_at',
+            'purchased_price',
+            'deriv_access_key'
+        ]
+
 
 class TradeSerializer(serializers.ModelSerializer):
     market = MarketSerializer(read_only=True)
     trade_type = TradeTypeSerializer(read_only=True)
     used_robot = RobotSerializer(read_only=True)
 
+    # ==================== NEW: Digit Trading Fields ====================
+    is_digit_trade = serializers.BooleanField(read_only=True)
+    digit_contract_type = serializers.CharField(read_only=True)
+    digit_barrier = serializers.IntegerField(read_only=True)
+    last_digit_outcome = serializers.IntegerField(read_only=True)
+
     class Meta:
         model = Trade
         fields = '__all__'
-        read_only_fields = ['user', 'is_win', 'profit', 'timestamp', 'session_profit_before']
+        read_only_fields = [
+            'user', 
+            'is_win', 
+            'profit', 
+            'timestamp', 
+            'session_profit_before',
+            'is_digit_trade',
+            'digit_contract_type',
+            'digit_barrier',
+            'last_digit_outcome'
+        ]
+
 
 class SignalSerializer(serializers.ModelSerializer):
     market = MarketSerializer(read_only=True)
@@ -74,7 +123,14 @@ class SignalSerializer(serializers.ModelSerializer):
     class Meta:
         model = Signal
         fields = [
-            'id', 'market', 'direction', 'probability',
-            'take_profit', 'stop_loss', 'generated_at', 'timeframe',
-            'strength', 'current_price'  # Added
+            'id', 
+            'market', 
+            'direction', 
+            'probability',
+            'take_profit', 
+            'stop_loss', 
+            'generated_at', 
+            'timeframe',
+            'strength', 
+            'current_price'
         ]

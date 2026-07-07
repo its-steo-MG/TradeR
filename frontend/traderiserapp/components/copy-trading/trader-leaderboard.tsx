@@ -16,13 +16,14 @@ export function TraderLeaderboard() {
     async function loadTraders() {
       setLoading(true)
       setError(null)
+      
       const result = await fetchTraders()
 
       if (result.error) {
         console.error("[v0] Failed to fetch traders:", result.error)
         setError(result.error)
         setTraders([])
-      } else if (result.data) {
+      } else if (result.data && Array.isArray(result.data)) {
         setTraders(result.data)
       }
 

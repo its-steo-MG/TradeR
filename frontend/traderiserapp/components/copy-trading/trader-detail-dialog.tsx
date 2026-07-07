@@ -23,6 +23,7 @@ interface TraderDetailDialogProps {
     average_return: number
     subscriber_count: number
     min_allocation: number
+    max_allocation?: number          // ← Added
     performance_fee_percent: number
     is_verified?: boolean
   }
@@ -31,6 +32,7 @@ interface TraderDetailDialogProps {
 }
 
 export function TraderDetailDialog({ trader, open, onOpenChange }: TraderDetailDialogProps) {
+  const maxAlloc = trader.max_allocation || 1000
   const [allocation, setAllocation] = useState(trader.min_allocation)
   const [maxDrawdown, setMaxDrawdown] = useState([20])
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -49,6 +51,26 @@ export function TraderDetailDialog({ trader, open, onOpenChange }: TraderDetailD
       toast({
         title: "Error",
         description: "No account found. Please switch to a real account.",
+        variant: "destructive",
+      })
+      setIsSubmitting(false)
+      return
+    }
+
+    // Final validation
+    if (allocation < trader.min_allocation) {
+      toast({
+        title: "Invalid Amount",
+        description: `Minimum allocation is $${trader.min_allocation}`,
+        variant: "destructive",
+      })
+      setIsSubmitting(false)
+      return
+    }
+    if (allocation > maxAlloc) {
+      toast({
+        title: "Invalid Amount",
+        description: `Maximum allocation is $${maxAlloc}`,
         variant: "destructive",
       })
       setIsSubmitting(false)
@@ -147,23 +169,23 @@ export function TraderDetailDialog({ trader, open, onOpenChange }: TraderDetailD
               <div className="glass-card p-4 space-y-2">
                 <div className="flex items-center gap-2 text-emerald-400">
                   <Clock size={16} />
-                  <span className="text-xs text-white/50 uppercase font-semibold">Active Since</span>
+                  <span className="text-xs text-white/50 uppercase font-semibold">Min Alloc</span>
                 </div>
-                <p className="text-2xl font-bold">2022</p>
+                <p className="text-2xl font-bold">${minAlloc}</p>
               </div>
               <div className="glass-card p-4 space-y-2">
                 <div className="flex items-center gap-2 text-purple-400">
                   <Calendar size={16} />
-                  <span className="text-xs text-white/50 uppercase font-semibold">Strategy</span>
+                  <span className="text-xs text-white/50 uppercase font-semibold">Max Alloc</span>
                 </div>
-                <p className="text-sm font-bold text-white/80">Professional</p>
+                <p className="text-2xl font-bold">${maxAlloc}</p>
               </div>
               <div className="glass-card p-4 space-y-2">
                 <div className="flex items-center gap-2 text-rose-400">
-                  <AlertCircle size={16} />
-                  <span className="text-xs text-white/50 uppercase font-semibold">Min Alloc</span>
+                  <Shield size={16} />
+                  <span className="text-xs text-white/50 uppercase font-semibold">Fee</span>
                 </div>
-                <p className="text-2xl font-bold">${minAlloc}</p>
+                <p className="text-2xl font-bold">{perfFee}%</p>
               </div>
             </div>
 
@@ -198,7 +220,7 @@ export function TraderDetailDialog({ trader, open, onOpenChange }: TraderDetailD
               {/* Allocation Amount */}
               <div className="space-y-3">
                 <Label htmlFor="allocation" className="text-white/80">
-                  Allocation Amount
+                  Allocation Amount (USD)
                 </Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40">$</span>
@@ -206,12 +228,15 @@ export function TraderDetailDialog({ trader, open, onOpenChange }: TraderDetailD
                     id="allocation"
                     type="number"
                     min={minAlloc}
+                    max={maxAlloc}
                     value={allocation}
                     onChange={(e) => setAllocation(Number(e.target.value))}
                     className="pl-8 bg-black/40 border-white/10 focus:ring-pink-500/50"
                   />
                 </div>
-                <p className="text-xs text-white/40">Minimum: ${minAlloc}</p>
+                <p className="text-xs text-white/40">
+                  Range: ${minAlloc} — ${maxAlloc}
+                </p>
               </div>
 
               {/* Max Drawdown Slider */}
@@ -231,22 +256,13 @@ export function TraderDetailDialog({ trader, open, onOpenChange }: TraderDetailD
                   step={5}
                   className="[&_[role=slider]]:bg-pink-500 [&_[role=slider]]:border-pink-600"
                 />
-                <p className="text-xs text-white/40">Auto-stop copying if losses exceed this threshold</p>
-              </div>
-
-              {/* Position Scaling Info */}
-              <div className="bg-white/5 p-4 rounded-lg space-y-2">
-                <p className="text-xs text-white/50 uppercase font-semibold">Position Scaling</p>
-                <p className="text-sm text-white/80">
-                  Your trades will be scaled to match your allocation relative to the traders position size
-                </p>
+                <p className="text-xs text-white/40">Auto-pause if losses exceed this threshold</p>
               </div>
 
               {/* Performance Fee Notice */}
               <Alert className="bg-pink-500/10 border-pink-500/20">
                 <AlertDescription className="text-xs text-white/70">
-                  This trader charges a {perfFee}% performance fee on profits. Fees are deducted automatically from
-                  winning trades.
+                  This trader charges a <strong>{perfFee}%</strong> performance fee on profits. Fees are deducted automatically from winning trades.
                 </AlertDescription>
               </Alert>
 

@@ -31,7 +31,6 @@ class ManagementRequest(models.Model):
     ACCOUNT_TYPES = [
         ('standard', 'Standard'),
         ('pro-fx', 'ProFX'),
-        # Add other types if needed
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='management_requests')
@@ -42,7 +41,6 @@ class ManagementRequest(models.Model):
     payment_amount = models.DecimalField(max_digits=12, decimal_places=2, editable=False)
     mpesa_phone = models.CharField(max_length=15)
 
-    # New field for account type
     account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPES, default='standard')
 
     # M-Pesa payment fields
@@ -62,6 +60,9 @@ class ManagementRequest(models.Model):
 
     current_pnl = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending_payment')
+
+    # ←←← NEW FIELD: Prevents sending "Started" email multiple times
+    started_email_sent = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

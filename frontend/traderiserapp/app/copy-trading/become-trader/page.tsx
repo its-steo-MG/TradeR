@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -18,9 +17,10 @@ import { useToast } from "@/hooks/use-toast"
 export default function BecomeTraderPage() {
   const [formData, setFormData] = useState({
     bio: "",
-    risk_level: "",
-    min_allocation: "",
-    performance_fee: "",
+    risk_level: "medium",
+    min_allocation: "10",
+    max_allocation: "1000",
+    performance_fee: "20",
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitSuccess, setSubmitSuccess] = useState(false)
@@ -34,6 +34,7 @@ export default function BecomeTraderPage() {
       bio: formData.bio,
       risk_level: formData.risk_level as "low" | "medium" | "high",
       min_allocation: Number(formData.min_allocation),
+      max_allocation: Number(formData.max_allocation),
       performance_fee_percent: Number(formData.performance_fee),
     })
 
@@ -190,10 +191,7 @@ export default function BecomeTraderPage() {
                 <SelectContent className="bg-slate-950 border-white/10 text-white">
                   <SelectItem value="low">
                     <div className="flex items-center gap-2">
-                      <Badge
-                        variant="outline"
-                        className="text-emerald-400 border-emerald-400/30 bg-transparent text-xs"
-                      >
+                      <Badge variant="outline" className="text-emerald-400 border-emerald-400/30 bg-transparent text-xs">
                         Low
                       </Badge>
                       <span>Conservative, focus on capital preservation</span>
@@ -219,52 +217,75 @@ export default function BecomeTraderPage() {
               </Select>
             </div>
 
-            {/* Min Allocation and Performance Fee in Grid */}
+            {/* Allocation Settings */}
             <div className="grid md:grid-cols-2 gap-6">
               {/* Min Allocation */}
               <div className="space-y-2">
                 <Label htmlFor="min_allocation" className="text-white/80">
-                  Minimum Allocation
+                  Minimum Allocation (USD)
                 </Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40">$</span>
                   <Input
                     id="min_allocation"
                     type="number"
-                    min={100}
-                    step={50}
+                    min={10}
+                    step={5}
                     value={formData.min_allocation}
                     onChange={(e) => setFormData({ ...formData, min_allocation: e.target.value })}
-                    placeholder="100"
+                    placeholder="10"
                     className="pl-8 bg-black/40 border-white/10 focus:ring-pink-500/50"
                     required
                   />
                 </div>
-                <p className="text-xs text-white/40">Minimum amount subscribers must allocate (min: $100)</p>
+                <p className="text-xs text-white/40">Lowest amount users can allocate to copy you</p>
               </div>
 
-              {/* Performance Fee */}
+              {/* Max Allocation */}
               <div className="space-y-2">
-                <Label htmlFor="performance_fee" className="text-white/80">
-                  Performance Fee
+                <Label htmlFor="max_allocation" className="text-white/80">
+                  Maximum Allocation (USD)
                 </Label>
                 <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40">$</span>
                   <Input
-                    id="performance_fee"
+                    id="max_allocation"
                     type="number"
-                    min={0}
-                    max={50}
-                    step={5}
-                    value={formData.performance_fee}
-                    onChange={(e) => setFormData({ ...formData, performance_fee: e.target.value })}
-                    placeholder="20"
-                    className="pr-8 bg-black/40 border-white/10 focus:ring-pink-500/50"
+                    min={10}
+                    max={5000}
+                    step={50}
+                    value={formData.max_allocation}
+                    onChange={(e) => setFormData({ ...formData, max_allocation: e.target.value })}
+                    placeholder="1000"
+                    className="pl-8 bg-black/40 border-white/10 focus:ring-pink-500/50"
                     required
                   />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40">%</span>
                 </div>
-                <p className="text-xs text-white/40">Percentage of subscriber profits (0-50%)</p>
+                <p className="text-xs text-white/40">Highest amount users can allocate to copy you</p>
               </div>
+            </div>
+
+            {/* Performance Fee */}
+            <div className="space-y-2">
+              <Label htmlFor="performance_fee" className="text-white/80">
+                Performance Fee (%)
+              </Label>
+              <div className="relative">
+                <Input
+                  id="performance_fee"
+                  type="number"
+                  min={0}
+                  max={50}
+                  step={5}
+                  value={formData.performance_fee}
+                  onChange={(e) => setFormData({ ...formData, performance_fee: e.target.value })}
+                  placeholder="20"
+                  className="pr-8 bg-black/40 border-white/10 focus:ring-pink-500/50"
+                  required
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40">%</span>
+              </div>
+              <p className="text-xs text-white/40">Percentage of subscriber profits you earn (0-50%)</p>
             </div>
 
             {/* Warning */}
@@ -277,25 +298,23 @@ export default function BecomeTraderPage() {
             </Alert>
 
             {/* Submit Button */}
-            <div className="flex gap-4 pt-4">
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-                className="flex-1 bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 h-12 font-semibold"
-              >
-                {isSubmitting ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
-                    Submitting...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 size={18} className="mr-2" />
-                    Submit Application
-                  </>
-                )}
-              </Button>
-            </div>
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full h-12 bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 font-semibold"
+            >
+              {isSubmitting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                  Submitting Application...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 size={18} className="mr-2" />
+                  Submit Application
+                </>
+              )}
+            </Button>
           </form>
         </CardContent>
       </Card>

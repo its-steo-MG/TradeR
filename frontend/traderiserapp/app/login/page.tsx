@@ -13,13 +13,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ArrowLeft, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, ExternalLink } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { api } from "@/lib/api";
 import Image from "next/image";
 import { toast } from "sonner";
 
-// Define the expected shape of API error responses (no 'any'!)
 interface ApiError {
   response?: {
     status?: number;
@@ -31,7 +30,7 @@ interface ApiError {
         evidence_status?: string;
         appeal_available?: boolean;
       };
-      [key: string]: unknown; // Allows extra fields without breaking
+      [key: string]: unknown;
     };
   };
 }
@@ -40,9 +39,11 @@ export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
-  const [accountType, setAccountType] = useState<"demo" | "standard">(
-    searchParams.get("type") === "demo" ? "demo" : "standard"
+
+  const [accountType, setAccountType] = useState<"standard" | "demo" | "deriv">(
+    (searchParams.get("type") as "standard" | "demo" | "deriv") || "standard"
   );
+
   const referralCode = searchParams.get("ref") || "";
 
   const [formData, setFormData] = useState({ email: "", password: "" });
@@ -58,11 +59,15 @@ export default function LoginPage() {
   const [showConfirmPass, setShowConfirmPass] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(60);
   const [canResend, setCanResend] = useState(false);
-  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // Fixed ref typing + proper callback
+  const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
+
   const signupLink = `/signup?type=${accountType}${referralCode ? `&ref=${referralCode}` : ""}`;
 
   useEffect(() => {
-    setAccountType(searchParams.get("type") === "demo" ? "demo" : "standard");
+    const typeFromUrl = searchParams.get("type") as "standard" | "demo" | "deriv" | null;
+    if (typeFromUrl) setAccountType(typeFromUrl);
   }, [searchParams]);
 
   useEffect(() => {
@@ -79,7 +84,6 @@ export default function LoginPage() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Updated handleSubmit – fully type-safe, no 'any'
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
@@ -94,51 +98,41 @@ export default function LoginPage() {
       const response = await api.login({
         email: formData.email,
         password: formData.password,
-        account_type: accountType,
+        account_type: accountType === "deriv" ? "standard" : accountType,
       });
 
-      // SUCCESS: Check for suspension in response.data
       if (response.data && 'suspension' in response.data) {
-  const suspension = response.data.suspension!;           // ← tell TS it's definitely there
+        const suspension = response.data.suspension!;
+        const { code, details } = suspension;
 
-  const { code, details } = suspension;
+        localStorage.setItem('suspensionDetails', JSON.stringify({
+          type: code.replace('suspended_', '') as 'temporary' | 'permanent',
+          reason: details.reason,
+          until: details.until,
+          evidenceStatus: details.evidence_status || 'no_evidence',
+          appealAvailable: details.appeal_available || false,
+        }));
 
-  localStorage.setItem('suspensionDetails', JSON.stringify({
-    type: code.replace('suspended_', '') as 'temporary' | 'permanent',
-    reason: details.reason,
-    until: details.until,
-    evidenceStatus: details.evidence_status || 'no_evidence',
-    appealAvailable: details.appeal_available || false,
-  }));
-
-        // User-friendly toast
         toast.error(
           code === 'suspended_temporary'
             ? `Account temporarily suspended until ${details.until ? new Date(details.until).toLocaleString() : 'later'}.`
             : 'Account permanently suspended. Please submit an appeal for review.'
         );
 
-        // Redirect to suspension page
         router.push('/suspended');
         setIsLoading(false);
         return;
       }
 
-      // Normal success: No suspension
-      if (response.data) {
-        toast.success("Logged in successfully!");
-        router.push("/dashboard");
-      }
+      toast.success("Logged in successfully!");
+      router.push("/dashboard");
     } catch (err: unknown) {
       const apiError = err as ApiError;
-
       const errorData = apiError.response?.data ?? {};
       const status = apiError.response?.status ?? 0;
 
       if (status === 401 || status === 403) {
-        // Check if it's a suspension-related error (if backend still raises)
         if (errorData.code === 'suspended_temporary' || errorData.code === 'suspended_permanent') {
-          // Fallback: Save minimal details and redirect
           localStorage.setItem('suspensionDetails', JSON.stringify({
             type: (errorData.code as string).replace('suspended_', '') as 'temporary' | 'permanent',
             reason: (errorData.details as { reason?: string })?.reason || 'Your account has been suspended',
@@ -157,8 +151,6 @@ export default function LoginPage() {
           setIsLoading(false);
           return;
         }
-
-        // Generic auth failure
         toast.error("Invalid email or password. Please try again.");
       } else {
         toast.error("Login failed. Check your connection and try again.");
@@ -166,6 +158,10 @@ export default function LoginPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleDerivConnect = () => {
+    window.open("https://digister.site", "_blank");
   };
 
   const startReset = async () => {
@@ -180,6 +176,7 @@ export default function LoginPage() {
       setResetStep("otp");
       setSecondsLeft(60);
       setCanResend(false);
+      setOtp(["", "", "", ""]);
     } catch {
       toast.error("Failed to send code. Try again.");
     } finally {
@@ -252,6 +249,7 @@ export default function LoginPage() {
       toast.success("Password reset successful! Please log in.");
       setShowResetModal(false);
       setResetStep("email");
+      setOtp(["", "", "", ""]);
     } catch {
       toast.error("Failed to reset password");
     } finally {
@@ -261,16 +259,26 @@ export default function LoginPage() {
 
   const handleOtpChange = (idx: number, val: string) => {
     if (!/^\d?$/.test(val)) return;
+
     const newOtp = [...otp];
     newOtp[idx] = val;
     setOtp(newOtp);
-    if (val && idx < 3) otpRefs.current[idx + 1]?.focus();
+
+    // Auto focus next input
+    if (val && idx < 3) {
+      otpRefs.current[idx + 1]?.focus();
+    }
   };
 
   return (
     <>
-      <div className="min-h-screen flex flex-col items-center justify-center p-4">
-        <Card className="w-full max-w-md border-white/20 bg-white/5 backdrop-blur-sm">
+      <div 
+        className="min-h-screen flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat relative"
+        style={{ backgroundImage: "url('/background.jpg')" }}
+      >
+        <div className="absolute inset-0 bg-black/70 z-0" />
+
+        <Card className="w-full max-w-md border-white/20 bg-white/5 backdrop-blur-sm relative z-10">
           <CardHeader className="space-y-2">
             <Link href="/" className="inline-flex items-center text-white/70 hover:text-white">
               <ArrowLeft className="w-4 h-4 mr-2" />
@@ -278,130 +286,175 @@ export default function LoginPage() {
             </Link>
             <CardTitle className="text-2xl text-white">Log In</CardTitle>
             <CardDescription className="text-white/70">
-              {accountType === "standard"
-                ? "Access your real trading account"
-                : "Practice with your demo account"}
+              Choose your trading journey
             </CardDescription>
           </CardHeader>
 
-          <CardContent>
-            <div className="flex items-center gap-4 mb-6">
+          <CardContent className="space-y-6">
+            {/* Account Type Buttons */}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setAccountType("standard")}
+                className={`flex-1 py-2.5 px-4 rounded-lg font-medium transition-all ${
+                  accountType === "standard"
+                    ? "bg-white text-black shadow"
+                    : "bg-white/10 text-white border border-white/20 hover:bg-white/20"
+                }`}
+                disabled={isLoading}
+              >
+                Real
+              </button>
+              <button
+                type="button"
+                onClick={() => setAccountType("demo")}
+                className={`flex-1 py-2.5 px-4 rounded-lg font-medium transition-all ${
+                  accountType === "demo"
+                    ? "bg-white text-black shadow"
+                    : "bg-white/10 text-white border border-white/20 hover:bg-white/20"
+                }`}
+                disabled={isLoading}
+              >
+                Demo
+              </button>
+              <button
+                type="button"
+                onClick={() => setAccountType("deriv")}
+                className={`flex-1 py-2.5 px-4 rounded-lg font-medium transition-all ${
+                  accountType === "deriv"
+                    ? "bg-white text-black shadow"
+                    : "bg-white/10 text-white border border-white/20 hover:bg-white/20"
+                }`}
+                disabled={isLoading}
+              >
+                Deriv
+              </button>
+            </div>
+
+            {/* Account Info Card */}
+            <div className="flex items-center gap-4 bg-white/5 rounded-xl p-4 border border-white/10">
               <div className="flex-shrink-0">
-                <div className={`w-10 h-10 rounded-full ${accountType === "standard" ? "from-orange-400 to-orange-500" : "from-blue-400 to-blue-500"} flex items-center justify-center overflow-hidden shadow-md`}>
+                <div className="w-14 h-14 rounded-full flex items-center justify-center overflow-hidden shadow-md">
                   <Image
-                    src={accountType === "standard" ? "/real-account-icon.png" : "/demo-account-icon.png"}
-                    alt={accountType === "standard" ? "Real Account" : "Demo Account"}
+                    src={
+                      accountType === "standard" ? "/real-account-icon.png" :
+                      accountType === "demo" ? "/demo-account-icon.png" :
+                      "/deriv-account-icon.png"
+                    }
+                    alt={
+                      accountType === "standard" ? "Real Account" :
+                      accountType === "demo" ? "Demo Account" : "Deriv Account"
+                    }
                     width={64}
                     height={64}
-                    className="w-14 h-14 object-cover"
+                    className="w-12 h-12 object-cover"
                   />
                 </div>
               </div>
               <div>
                 <h3 className="text-xl font-bold text-white">
-                  {accountType === "standard" ? "Real Account" : "Demo Account"}
+                  {accountType === "standard" ? "Real Account" :
+                   accountType === "demo" ? "Demo Account" : "Deriv Account"}
                 </h3>
-                <p className="text-sm text-white/70">
-                  {accountType === "standard"
-                    ? "Trade with real money and earn real profits."
-                    : "Practice trading with $10,000 virtual balance."}
+                <p className="text-sm text-white/70 mt-1 leading-tight">
+                  {accountType === "standard" 
+                    ? "Trade with real money and earn real profits." 
+                    : accountType === "demo" 
+                    ? "Practice trading with $10,000 virtual balance." 
+                    : "Trade synthetic indices, forex & more on Deriv."}
                 </p>
               </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAccountType("standard")}
-                  className={`flex-1 py-2 px-3 rounded-lg font-medium transition-colors ${
-                    accountType === "standard"
-                      ? "bg-white text-black"
-                      : "bg-white/10 text-white border border-white/20 hover:bg-white/20"
-                  }`}
-                  disabled={isLoading}
-                >
-                  Real Account
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAccountType("demo")}
-                  className={`flex-1 py-2 px-3 rounded-lg font-medium transition-colors ${
-                    accountType === "demo"
-                      ? "bg-white text-black"
-                      : "bg-white/10 text-white border border-white/20 hover:bg-white/20"
-                  }`}
-                  disabled={isLoading}
-                >
-                  Demo Account
-                </button>
+            {/* Deriv Connect Section */}
+            {accountType === "deriv" ? (
+              <div className="space-y-4 pt-2">
+                <div className="bg-white/10 border border-white/20 rounded-2xl p-6 text-center">
+                  <p className="text-white/80 mb-5 text-sm">
+                    Connect your Deriv account to start trading on Traderiser Pro
+                  </p>
+                  <Button
+                    onClick={handleDerivConnect}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-6 text-base flex items-center justify-center gap-2"
+                  >
+                    Connect to Deriv Account
+                    <ExternalLink className="w-5 h-5" />
+                  </Button>
+                </div>
+                <p className="text-center text-xs text-white/50">
+                  You will be redirected to digister.site
+                </p>
               </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-white">Email</label>
-                <Input
-                  type="email"
-                  name="email"
-                  placeholder="john@example.com"
-                  value={formData.email}
-                  onChange={handleChange}
-                  className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                  disabled={isLoading}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-white">Password</label>
-                <div className="relative">
+            ) : (
+              /* Real & Demo Login Form */
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-white">Email</label>
                   <Input
-                    type={showPassword ? "text" : "password"}
-                    name="password"
-                    placeholder="••••••••"
-                    value={formData.password}
+                    type="email"
+                    name="email"
+                    placeholder="john@example.com"
+                    value={formData.email}
                     onChange={handleChange}
-                    className="bg-white/10 border-white/20 text-white placeholder:text-white/50 pr-10"
+                    className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
                     disabled={isLoading}
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-white">Password</label>
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      name="password"
+                      placeholder="••••••••"
+                      value={formData.password}
+                      onChange={handleChange}
+                      className="bg-white/10 border-white/20 text-white placeholder:text-white/50 pr-10"
+                      disabled={isLoading}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-white/70 hover:text-white"
+                      disabled={isLoading}
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="text-right">
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/70 hover:text-white"
-                    disabled={isLoading}
+                    onClick={() => setShowResetModal(true)}
+                    className="text-sm text-white/70 hover:text-white"
                   >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    Forgot password?
                   </button>
                 </div>
-              </div>
 
-              <div className="text-right">
-                <button
-                  type="button"
-                  onClick={() => setShowResetModal(true)}
-                  className="text-sm text-white/70 hover:text-white"
+                <Button
+                  type="submit"
+                  className="w-full bg-white text-black hover:bg-white/90 font-semibold py-6"
+                  disabled={isLoading}
                 >
-                  Forgot password?
-                </button>
-              </div>
+                  {isLoading ? "Logging in..." : "Log In"}
+                </Button>
 
-              <Button
-                type="submit"
-                className="w-full bg-white text-black hover:bg-white/90 font-semibold"
-                disabled={isLoading}
-              >
-                {isLoading ? "Logging in..." : "Log In"}
-              </Button>
-
-              <p className="text-center text-sm text-white/70">
-                Dont have an account?{" "}
-                <Link href={signupLink} className="text-white hover:underline font-semibold">
-                  Sign up
-                </Link>
-              </p>
-            </form>
+                <p className="text-center text-sm text-white/70">
+                  Dont have an account?{" "}
+                  <Link href={signupLink} className="text-white hover:underline font-semibold">
+                    Sign up
+                  </Link>
+                </p>
+              </form>
+            )}
           </CardContent>
         </Card>
       </div>
 
+      {/* Password Reset Modal */}
       {showResetModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <Card className="w-full max-w-md border-white/20 bg-white/5 backdrop-blur-sm">
@@ -445,9 +498,10 @@ export default function LoginPage() {
                         value={d}
                         onChange={(e) => handleOtpChange(i, e.target.value)}
                         ref={(el) => {
-                          otpRefs.current[i] = el;
+                          otpRefs.current[i] = el;   // ← Fixed ref callback
                         }}
                         className="w-12 h-12 text-center text-lg font-semibold bg-white/10 border-white/20 text-white"
+                        disabled={isLoading}
                       />
                     ))}
                   </div>

@@ -2,12 +2,31 @@
 from django.contrib import admin
 from .models import MpesaUser, MpesaTransaction
 
+
 @admin.register(MpesaUser)
 class MpesaUserAdmin(admin.ModelAdmin):
-    list_display = ('user', 'real_name', 'phone_number', 'balance')
+    list_display = ('user', 'real_name', 'phone_number', 'balance', 'daily_sent_total', 'get_remaining_daily_limit', 'daily_limit_reset_at')
     list_editable = ('balance',)
-    search_fields = ('user__username', 'phone_number')
-    readonly_fields = ('user', 'phone_number')
+    search_fields = ('user__username', 'phone_number', 'real_name')
+    readonly_fields = ('user', 'phone_number', 'daily_limit_reset_at', 'get_remaining_daily_limit')
+
+    def get_remaining_daily_limit(self, obj):
+        """Show remaining daily limit in admin"""
+        return f"{obj.get_remaining_daily_limit():,.2f} KSH"
+    get_remaining_daily_limit.short_description = 'Remaining Daily Limit'
+
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('user', 'real_name', 'phone_number', 'pin', 'profile_photo')
+        }),
+        ('Financial Info', {
+            'fields': ('balance', 'fuliza')
+        }),
+        ('Daily Transaction Limit', {
+            'fields': ('daily_sent_total', 'daily_limit_reset_at', 'get_remaining_daily_limit'),
+            'description': 'Daily sending limit is 500,000 KSH and resets every 24 hours.'
+        }),
+    )
 
 
 @admin.register(MpesaTransaction)
