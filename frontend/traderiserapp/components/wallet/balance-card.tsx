@@ -40,10 +40,18 @@ export function BalanceCard() {
     return () => window.removeEventListener("session-updated", handleSessionUpdate);
   }, []);
 
+  // Dynamic label based on account type (design unchanged)
+  const getAccountLabel = () => {
+    if (!selectedWallet) return "TradeR";
+    if (selectedWallet.account_type === "mt5") return "MT5";
+    if (selectedWallet.account_type === "pro-fx") return "ProFX";
+    return "TradeR";
+  };
+
   return (
     <div className="bg-gradient-to-br from-purple-600 to-purple-700 rounded-3xl p-6 sm:p-8 text-white shadow-lg">
       <p className="text-xs sm:text-sm font-medium text-purple-100 mb-2">
-        {selectedWallet?.account_type === "standard" ? "TradeR" : "ProFX"} Balance
+        {getAccountLabel()} Balance
       </p>
       <h2 className="text-3xl sm:text-4xl font-bold mb-6 sm:mb-8">
         {loading

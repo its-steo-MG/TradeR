@@ -13,7 +13,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ChevronDown, Zap, DollarSign, TrendingUp } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import clsx from "clsx"
 
 interface Robot {
   id: number
@@ -63,18 +62,20 @@ export default function RobotConfigPanel({
   const [stake, setStake] = useState("10")
   const [timeframe, setTimeframe] = useState("M1")
 
-  const selectedRobot = purchasedRobots.find(r => r.id === selectedRobotId)
-  const isEA = selectedRobot?.is_ea === true
+  // Filter out EA robots on this screen (Pro-FX)
+  const visibleRobots = purchasedRobots.filter(robot => !robot.is_ea)
 
-  // Auto-select first robot & pair
+  const selectedRobot = visibleRobots.find(r => r.id === selectedRobotId)
+
+  // Auto-select first available robot & pair
   useEffect(() => {
-    if (purchasedRobots.length > 0 && selectedRobotId === null) {
-      setSelectedRobotId(purchasedRobots[0].id)
+    if (visibleRobots.length > 0 && selectedRobotId === null) {
+      setSelectedRobotId(visibleRobots[0].id)
     }
     if (pairs.length > 0 && selectedPairId === null) {
       setSelectedPairId(pairs[0].id)
     }
-  }, [purchasedRobots, pairs, selectedRobotId, selectedPairId])
+  }, [visibleRobots, pairs, selectedRobotId, selectedPairId])
 
   const handleStartTrading = () => {
     if (!selectedRobotId) {
@@ -86,7 +87,6 @@ export default function RobotConfigPanel({
       return
     }
 
-    // Fixed: Proper typed config instead of 'any'
     const config: {
       robotId: number
       pairId: number
@@ -98,14 +98,12 @@ export default function RobotConfigPanel({
       timeframe,
     }
 
-    if (!isEA) {
-      const stakeNum = parseFloat(stake)
-      if (isNaN(stakeNum) || stakeNum <= 0) {
-        toast.error("Please enter a valid stake amount")
-        return
-      }
-      config.stake = stakeNum
+    const stakeNum = parseFloat(stake)
+    if (isNaN(stakeNum) || stakeNum <= 0) {
+      toast.error("Please enter a valid stake amount")
+      return
     }
+    config.stake = stakeNum
 
     onStartTrading(config)
   }
@@ -120,20 +118,6 @@ export default function RobotConfigPanel({
       </CardHeader>
 
       <CardContent className="space-y-6 p-6">
-        {/* EA Mode Banner */}
-        {isEA && (
-          <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4">
-            <div className="flex items-center gap-2 text-amber-400 mb-3">
-              <Zap className="w-5 h-5" />
-              <span className="font-bold text-lg">EXPERT ADVISOR (EA) AI</span>
-            </div>
-            <p className="text-sm text-amber-300 leading-relaxed">
-              This is a highly Advanced AI Automatic Expert Advisor.<br />
-              It will automatically open and manage multiple positions according to its logic.
-            </p>
-          </div>
-        )}
-
         {/* Robot Selection */}
         <div>
           <label className="block text-sm font-medium mb-2 text-white/80">Select Robot</label>
@@ -145,13 +129,18 @@ export default function RobotConfigPanel({
               <SelectValue placeholder="Choose a robot" />
             </SelectTrigger>
             <SelectContent>
-              {purchasedRobots.map((robot) => (
+              {visibleRobots.map((robot) => (
                 <SelectItem key={robot.id} value={robot.id.toString()}>
-                  {robot.name} {robot.is_ea && "• EA"}
+                  {robot.name}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          {visibleRobots.length === 0 && (
+            <p className="text-xs text-amber-400 mt-2">
+              No manual robots available. EA robots only work on MT5.
+            </p>
+          )}
         </div>
 
         {/* Pair Selection */}
@@ -191,25 +180,23 @@ export default function RobotConfigPanel({
           </Select>
         </div>
 
-        {/* Stake - Only for non-EA robots */}
-        {!isEA && (
-          <div>
-            <label className="block text-sm font-medium mb-2 text-white/80 flex items-center gap-2">
-              <DollarSign className="w-4 h-4" />
-              Stake per Trade ($)
-            </label>
-            <Input
-              type="number"
-              step="0.01"
-              min="1"
-              value={stake}
-              onChange={(e) => setStake(e.target.value)}
-              className="bg-zinc-900 border-white/20 text-white"
-              placeholder="10.00"
-            />
-            <p className="text-xs text-white/50 mt-1">Amount deducted per trade</p>
-          </div>
-        )}
+        {/* Stake */}
+        <div>
+          <label className="block text-sm font-medium mb-2 text-white/80 flex items-center gap-2">
+            <DollarSign className="w-4 h-4" />
+            Stake per Trade ($)
+          </label>
+          <Input
+            type="number"
+            step="0.01"
+            min="1"
+            value={stake}
+            onChange={(e) => setStake(e.target.value)}
+            className="bg-zinc-900 border-white/20 text-white"
+            placeholder="10.00"
+          />
+          <p className="text-xs text-white/50 mt-1">Amount deducted per trade</p>
+        </div>
 
         {/* Summary */}
         {selectedRobot && selectedPairId && (
@@ -232,12 +219,10 @@ export default function RobotConfigPanel({
                   {TIMEFRAMES.find(t => t.value === timeframe)?.label}
                 </span>
               </div>
-              {!isEA && (
-                <div className="flex justify-between">
-                  <span>Stake:</span>
-                  <span className="font-medium text-green-400">${parseFloat(stake).toFixed(2)}</span>
-                </div>
-              )}
+              <div className="flex justify-between">
+                <span>Stake:</span>
+                <span className="font-medium text-green-400">${parseFloat(stake).toFixed(2)}</span>
+              </div>
             </div>
           </div>
         )}
@@ -254,10 +239,6 @@ export default function RobotConfigPanel({
         >
           {isLoading ? (
             "Starting Robot..."
-          ) : isEA ? (
-            <>
-              🚀 <span className="ml-2">Activate EA Bot</span>
-            </>
           ) : (
             <>
               ▶ <span className="ml-2">Start Trading Bot</span>

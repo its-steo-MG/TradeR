@@ -1,6 +1,6 @@
 // lib/api.ts (updated with suspension typing)
-//const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://traderiserproapp.onrender.com/api"
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"
+//const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://traderiserproapp.onrender.com/api"
 
 
 
@@ -232,6 +232,7 @@ export interface UserSession {
   username?: string
   email?: string
   accounts?: UserAccount[]
+  kyc_status?: "pending" | "approved" | "rejected"
   [key: string]: unknown
 }
 
@@ -332,7 +333,8 @@ export type LoginResponseData = {
   refresh: string;
   user: UserSession;
   active_account: Record<string, unknown>;
-  suspension?: SuspensionInfo;  // ← NEW: Optional suspension field
+  suspension?: SuspensionInfo;
+  // kyc_status lives inside user now
 };
 
 /* ------------------------------------------------------------------ */
@@ -613,6 +615,9 @@ export const switchAccount = async (data: { account_id: number }) => {
 
   return response
 }
+export const submitKYC = (formData: FormData) =>
+  apiRequestWithFile<{ message: string; status: string }>("/accounts/kyc/submit/", formData)
+
 
 /* ------------------------------------------------------------------ */
 /*  TRADING & WALLET                                                  */
@@ -752,6 +757,19 @@ export const closeAllPositions = () =>
   apiRequest<{ message: string }>("/forex/positions/close-all/", { method: "POST" })
 export const getForexHistory = () => apiRequest<{ trades: ForexTrade[] }>("/forex/history/")
 
+// ✅ NEW: Used by MT5 local trading (Chart + TradeScreen)
+//export const creditWalletOnClose = (data: {
+//  realized_profit: number
+//  symbol: string
+//  volume: number
+//  side: "buy" | "sell"
+//}) =>
+//  apiRequest<{ message: string; new_balance: number }>("/forex/positions/credit-on-close/", {
+//    method: "POST",
+//    body: JSON.stringify(data),
+//  }
+//)
+
 /* --------------------- FOREX ROBOTS --------------------- */
 
 export const getForexRobots = () => 
@@ -778,7 +796,7 @@ export const toggleForexRobot = (
     is_running: boolean; 
     message?: string;
     is_ea?: boolean;
-    closed_positions?: number;        // from backend when stopping EA
+    closed_positions?: number;
   }>(
     `/forex/robots/${userRobotId}/toggle/`,
     {
@@ -787,7 +805,6 @@ export const toggleForexRobot = (
     }
   )
 
-// ✅ Improved: Close all EA positions for a specific UserRobot
 export const closeEAPositions = (userRobotId: number) =>
   apiRequest<{ 
     success: boolean;
@@ -1251,6 +1268,7 @@ export const api = {
   confirmPasswordReset,
   initiateTransfer,
   verifyTransfer,
+  submitKYC,
   generateSignal,
   appealSuspension,
   initiateAudioCall,

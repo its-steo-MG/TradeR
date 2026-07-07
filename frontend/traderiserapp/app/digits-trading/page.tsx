@@ -17,6 +17,7 @@ import TradeButtons from "@/components/trading/TradeButtons";
 import BottomNav from "@/components/trading/BottomNav";
 import PositionsPanel from "@/components/trading/positions/PositionPanel";
 import WinLossBurst from "@/components/trading/WinLossBurst";
+import AIScannerFAB from "@/components/trading/AIScannerFAB";
 
 import { RobotConfigForm } from "@/components/trading/RobotConfigPanel";
 import { RunPanel } from "@/components/trading/RunPanel";
@@ -675,6 +676,12 @@ export default function TradingPage() {
           )}
         </div>
       </div>
+
+      {/* AI Scanner floating button — sits above the trade action area */}
+      <AIScannerFAB
+        markets={markets}
+        onStarted={() => setShowRobotPanel(true)}
+      />
 
       <div className="lg:hidden">
         <BottomNav tab={tab} onChange={setTab} />

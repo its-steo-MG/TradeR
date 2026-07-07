@@ -149,8 +149,8 @@ export default function ReferralSection() {
   };
 
   const openMpesaApp = () => {
-    let url = "https://mpesa-orpin-gamma.vercel.app/login";
-    //let url = "http://localhost:3001/login";
+    //let url = "https://mpesa-orpin-gamma.vercel.app/login";
+    let url = "http://localhost:8080/login";
     if (mpesaPhoneForUrl) {
       url += `?phone=${encodeURIComponent(mpesaPhoneForUrl)}`;
     }

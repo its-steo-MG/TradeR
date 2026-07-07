@@ -1,4 +1,3 @@
-// app/(auth)/login/page.tsx
 "use client";
 
 import type React from "react";
@@ -13,7 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ArrowLeft, Eye, EyeOff, ExternalLink } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, ExternalLink, AlertCircle } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { api } from "@/lib/api";
 import Image from "next/image";
@@ -60,10 +59,11 @@ export default function LoginPage() {
   const [secondsLeft, setSecondsLeft] = useState(60);
   const [canResend, setCanResend] = useState(false);
 
-  // Fixed ref typing + proper callback
   const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   const signupLink = `/signup?type=${accountType}${referralCode ? `&ref=${referralCode}` : ""}`;
+
+  const isRealAccount = accountType === "standard";
 
   useEffect(() => {
     const typeFromUrl = searchParams.get("type") as "standard" | "demo" | "deriv" | null;
@@ -124,7 +124,27 @@ export default function LoginPage() {
         return;
       }
 
-      toast.success("Logged in successfully!");
+      // === NEW: KYC Status Check for existing + new users ===
+      const user = response.data?.user;
+      if (user && user.kyc_status && user.kyc_status !== 'approved') {
+        const kycMessage = user.kyc_status === 'rejected'
+          ? "Your previous KYC submission was rejected. Please resubmit your Proof of Identity."
+          : "Complete your KYC (Proof of Identity) to unlock withdrawals and full platform features.";
+
+        toast.warning(kycMessage, {
+          duration: 7000,
+          action: {
+            label: "Submit KYC",
+            onClick: () => router.push("/kyc"), // Create this page when ready
+          },
+        });
+      } else if (user?.kyc_status === 'approved') {
+        toast.success("Logged in successfully! KYC verified.");
+      } else {
+        toast.success("Logged in successfully!");
+      }
+      // ========================================================
+
       router.push("/dashboard");
     } catch (err: unknown) {
       const apiError = err as ApiError;
@@ -264,7 +284,6 @@ export default function LoginPage() {
     newOtp[idx] = val;
     setOtp(newOtp);
 
-    // Auto focus next input
     if (val && idx < 3) {
       otpRefs.current[idx + 1]?.focus();
     }
@@ -331,6 +350,16 @@ export default function LoginPage() {
               </button>
             </div>
 
+            {/* KYC Info for Real Account */}
+            {isRealAccount && (
+              <div className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-sm">
+                <AlertCircle className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
+                <div className="text-amber-200 text-xs leading-snug">
+                  Real accounts require completed KYC (Proof of Identity) for withdrawals and full access.
+                </div>
+              </div>
+            )}
+
             {/* Account Info Card */}
             <div className="flex items-center gap-4 bg-white/5 rounded-xl p-4 border border-white/10">
               <div className="flex-shrink-0">
@@ -358,7 +387,7 @@ export default function LoginPage() {
                 </h3>
                 <p className="text-sm text-white/70 mt-1 leading-tight">
                   {accountType === "standard" 
-                    ? "Trade with real money and earn real profits." 
+                    ? "Trade with real money • KYC required for withdrawals." 
                     : accountType === "demo" 
                     ? "Practice trading with $10,000 virtual balance." 
                     : "Trade synthetic indices, forex & more on Deriv."}
@@ -498,7 +527,7 @@ export default function LoginPage() {
                         value={d}
                         onChange={(e) => handleOtpChange(i, e.target.value)}
                         ref={(el) => {
-                          otpRefs.current[i] = el;   // ← Fixed ref callback
+                          otpRefs.current[i] = el;
                         }}
                         className="w-12 h-12 text-center text-lg font-semibold bg-white/10 border-white/20 text-white"
                         disabled={isLoading}
