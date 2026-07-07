@@ -39,6 +39,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3001",
     "http://localhost:3002",
     "http://127.0.0.1:3002",
+    "http://localhost:8080",
     'https://mpesa-orpin-gamma.vercel.app',
     'https://traderiserproapp.onrender.com',
     'https://traderiserproapp.vercel.app',
@@ -55,6 +56,7 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:3001",
     "http://127.0.0.1:3002",
     "http://localhost:3002",
+    "http://localhost:8080",
     'https://mpesa-orpin-gamma.vercel.app',
     'https://traderiserproapp.onrender.com',
     'https://traderiserproapp.vercel.app',
@@ -82,6 +84,7 @@ INSTALLED_APPS = [
     'forex',
     'agents',
     'customercare',
+    'mt5',
     'management.apps.ManagementConfig',
     'traderpulse',
     'copy_trading.apps.CopyTradingConfig',
@@ -227,10 +230,10 @@ CHANNEL_LAYERS = {
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'accounts.authentication.SuspendedUserJWTAuthentication',
+        # 'accounts.authentication.SuspendedUserJWTAuthentication',  # ← REMOVED from default
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
+        'rest_framework.permissions.AllowAny',   # ← Changed to AllowAny (safer)
     ],
 }
 

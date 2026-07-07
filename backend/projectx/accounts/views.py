@@ -1,4 +1,3 @@
-# views.py
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
@@ -7,6 +6,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from .models import User, Account, SuspensionEvidence
 from .serializers import UserSerializer, AccountSerializer, SuspensionEvidenceSerializer
+from .models import User, Account, SuspensionEvidence, KYCSubmission
 from django.conf import settings
 from django.db import transaction
 from django.core.cache import cache
@@ -35,11 +35,12 @@ class SignupView(APIView):
 
         if not email or not password or not username:
             return Response(
-                {'error': 'Email, password, and username are required'},
+                {'error': 'Email, password, and username are required'}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
+            # Existing user trying to create additional account
             user = User.objects.get(email=email)
             if not user.check_password(password):
                 return Response({'error': 'Invalid password'}, status=status.HTTP_401_UNAUTHORIZED)
@@ -51,8 +52,13 @@ class SignupView(APIView):
                 Account.objects.create(user=user, account_type=account_type)
 
         except User.DoesNotExist:
-            # New user
-            serializer = UserSerializer(data={'email': email, 'username': username, 'phone': phone})
+            # === NEW USER - Create with exactly 4 default accounts ===
+            serializer = UserSerializer(data={
+                'email': email, 
+                'username': username, 
+                'phone': phone
+            })
+            
             if not serializer.is_valid():
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -60,63 +66,40 @@ class SignupView(APIView):
                 user = serializer.save()
                 user.set_password(password)
                 user.save()
-                # Auto-create demo + standard accounts
-                Account.objects.create(user=user, account_type='demo')
-                Account.objects.create(user=user, account_type='standard')
 
-        # Authenticate the user
+                # Use the clean method from models
+                user.create_default_accounts()
+
+        # Re-authenticate user
         user = authenticate(request=request, username=email, password=password)
         if not user:
-            return Response({'error': 'Authentication failed after account creation'}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response({'error': 'Authentication failed after account creation'}, 
+                          status=status.HTTP_401_UNAUTHORIZED)
 
         # Handle referral
-        referrer = None
         if referral_code:
             try:
                 referrer = User.objects.get(referral_code=referral_code, is_marketo=True)
                 if user != referrer:
                     user.referred_by = referrer
                     user.save(update_fields=['referred_by'])
-
-                    # Notify referrer with Resend
-                    try:
-                        send_mail(
-                            subject="New Referral - Someone Joined via Your Link!",
-                            message=(
-                                f"Hello {referrer.username},\n\n"
-                                f"A new user ({user.username} / {user.email}) has registered using your referral link.\n\n"
-                                f"Thank you for spreading the word!\nTradeRiser Team"
-                            ),
-                            from_email=None,                    # Uses DEFAULT_FROM_EMAIL
-                            recipient_list=[referrer.email],
-                            html_message=f"""
-                            <h2>New Referral Notification</h2>
-                            <p>Hello <strong>{referrer.username}</strong>,</p>
-                            <p>A new user has joined TradeRiser using your referral link:</p>
-                            <p><strong>Username:</strong> {user.username}<br>
-                               <strong>Email:</strong> {user.email}</p>
-                            <p>Thank you for helping us grow!</p>
-                            <p>Best regards,<br>TradeRiser Team</p>
-                            """,
-                            fail_silently=True,
-                        )
-                    except Exception as e:
-                        logger.warning(f"Referral notification failed: {e}")
-
             except User.DoesNotExist:
-                pass  # silent fail
+                pass
 
-        # Generate JWT tokens
         refresh = RefreshToken.for_user(user)
-        active_account = user.accounts.filter(account_type=account_type).first() or user.accounts.get(account_type='standard')
+        
+        # Get active account (prefer the one requested)
+        active_account = (
+            user.accounts.filter(account_type=account_type).first() 
+            or user.accounts.first()
+        )
 
         return Response({
             'access': str(refresh.access_token),
             'refresh': str(refresh),
             'user': UserSerializer(user).data,
-            'active_account': AccountSerializer(active_account).data
+            'active_account': AccountSerializer(active_account).data if active_account else None
         }, status=status.HTTP_201_CREATED)
-
 
 class CreateAdditionalAccountView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -147,32 +130,37 @@ class LoginView(APIView):
         if not email or not password:
             return Response({'error': 'Email and password required'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Authenticate user
         user = authenticate(request=request, username=email, password=password)
-        if not user or not user.is_active:
-            return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
-        # Clean up expired temporary suspensions
-        was_suspended_before_cleanup = user.is_suspended
-        user.clean_up_expired_suspension()
+        if not user:
+            return Response({'error': 'Invalid email or password'}, status=status.HTTP_401_UNAUTHORIZED)
 
-        # Detect recent recovery
+        if not user.is_active:
+            return Response({'error': 'Account is disabled'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Clean up expired suspensions safely
+        try:
+            user.clean_up_expired_suspension()
+        except Exception as e:
+            logger.warning(f"Failed to clean suspension for {email}: {str(e)}")
+
+        # Check for recent recovery (temporary suspension or appeal)
         recently_recovered_temp = False
         recently_recovered_appeal = False
 
-        if was_suspended_before_cleanup and not user.is_suspended:
-            if user.suspension_history:
-                last_entry = user.suspension_history[-1]
-                if last_entry.get('type') == 'unsuspended':
+        if user.suspension_history:
+            last_entry = user.suspension_history[-1]
+            if last_entry.get('type') == 'unsuspended':
+                try:
                     entry_time = timezone.datetime.fromisoformat(last_entry['date'])
                     if timezone.now() - entry_time < timedelta(minutes=5):
                         recently_recovered_temp = True
-
-        if not user.is_suspended and user.suspension_history:
-            last_entry = user.suspension_history[-1]
-            if last_entry.get('type') == 'unsuspended' and 'appeal approved' in last_entry.get('reason', '').lower():
-                entry_time = timezone.datetime.fromisoformat(last_entry['date'])
-                if timezone.now() - entry_time < timedelta(minutes=30):
-                    recently_recovered_appeal = True
+                    if 'appeal approved' in last_entry.get('reason', '').lower() and \
+                       timezone.now() - entry_time < timedelta(minutes=30):
+                        recently_recovered_appeal = True
+                except Exception:
+                    pass
 
         active_account = (
             user.accounts.filter(account_type=account_type).first()
@@ -180,6 +168,7 @@ class LoginView(APIView):
         )
 
         refresh = RefreshToken.for_user(user)
+
         response_data = {
             'access': str(refresh.access_token),
             'refresh': str(refresh),
@@ -189,6 +178,7 @@ class LoginView(APIView):
             'recovered_type': 'temporary_expired' if recently_recovered_temp else 'appeal_approved' if recently_recovered_appeal else None,
         }
 
+        # If user is still suspended, include suspension details
         if user.is_suspended:
             evidence_status = 'no_evidence'
             appeal_available = user.suspension_type == 'permanent'
@@ -204,7 +194,7 @@ class LoginView(APIView):
                 'code': suspension_code,
                 'details': {
                     'reason': user.suspension_reason or 'Your account has been suspended',
-                    'until': user.suspended_until.isoformat() if user.suspension_type == 'temporary' and user.suspended_until else None,
+                    'until': user.suspended_until.isoformat() if user.suspended_until else None,
                     'evidence_status': evidence_status,
                     'appeal_available': appeal_available,
                 }
@@ -236,12 +226,11 @@ class AppealSuspensionView(APIView):
             evidence.status = 'pending'
             evidence.save()
 
-        # Notify admin using Resend
         send_mail(
             subject=f"Appeal Submitted: {request.user.username}",
             message=f"User {request.user.email} appealed: {description}",
             from_email=None,
-            recipient_list=['support@traderiser.com'],   # Change to your real support email
+            recipient_list=['support@traderiser.com'],
             html_message=f"""
             <h2>New Appeal Submitted</h2>
             <p><strong>User:</strong> {request.user.username} ({request.user.email})</p>
@@ -285,18 +274,24 @@ class ResetDemoBalanceView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        platform = request.data.get('platform', 'traderiser')
         try:
-            account = Account.objects.get(user=request.user, account_type='demo')
+            account = Account.objects.get(
+                user=request.user, 
+                platform=platform, 
+                account_type='demo'
+            )
             account.reset_demo_balance()
             from dashboard.models import Transaction
             Transaction.objects.filter(account=account).delete()
 
+            reset_amount = '100,000 USD' if platform == 'mt5' else '10,000 USD'
             return Response({
                 'balance': account.balance,
-                'message': 'Demo balance reset to 10,000 USD'
+                'message': f'{platform.title()} Demo balance reset to {reset_amount}'
             }, status=status.HTTP_200_OK)
         except Account.DoesNotExist:
-            return Response({'error': 'Demo account not found'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': f'{platform.title()} Demo account not found'}, status=status.HTTP_404_NOT_FOUND)
 
 
 class SwitchWalletView(APIView):
@@ -345,7 +340,6 @@ class ResendOTPView(APIView):
         expires = timezone.now() + timedelta(minutes=1)
         cache.set(f"otp_{email}", {'code': code, 'expires': expires}, timeout=60)
 
-        # Send OTP using Resend
         send_mail(
             subject='Your TradeRiser Verification Code',
             message=f'Your verification code is: {code}',
@@ -391,7 +385,6 @@ def password_reset_request(request):
     try:
         User.objects.get(email=email)
     except User.DoesNotExist:
-        # Don't reveal whether email exists (security)
         return Response({"message": "If the email exists, a reset code was sent."})
 
     code = ''.join(random.choices('0123456789', k=4))
@@ -445,3 +438,41 @@ def password_reset_confirm(request):
     user.save()
     cache.delete(f"pw_reset_{email}")
     return Response({"message": "Password reset successful"})
+
+# ====================== KYC SUBMISSION VIEW ======================
+class KYCSubmitView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+
+        id_document = request.FILES.get('id_document')
+        selfie = request.FILES.get('selfie')
+        proof_of_address = request.FILES.get('proof_of_address')
+
+        if not id_document or not selfie:
+            return Response(
+                {'error': 'ID document and selfie are required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Create or update KYC submission
+        kyc_submission, created = KYCSubmission.objects.update_or_create(
+            user=user,
+            defaults={
+                'id_document': id_document,
+                'selfie': selfie,
+                'proof_of_address': proof_of_address,
+                'status': 'pending',
+            }
+        )
+
+        # Update user status
+        user.kyc_status = 'pending'
+        user.kyc_submitted_at = timezone.now()
+        user.save()
+
+        return Response({
+            'message': 'KYC documents submitted successfully',
+            'status': kyc_submission.status
+        }, status=status.HTTP_201_CREATED)

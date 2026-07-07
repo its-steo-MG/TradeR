@@ -1,4 +1,3 @@
-# forex/views.py
 import random
 from decimal import Decimal
 import logging
@@ -28,23 +27,44 @@ from dashboard.models import Transaction
 logger = logging.getLogger(__name__)
 
 
+# ====================== HELPER FUNCTION ======================
+def get_trading_account(user):
+    """Respect the user's active account (Pro-FX or MT5)"""
+    # Try to get active Pro-FX first
+    profx_account = user.accounts.filter(account_type='pro-fx').first()
+    if profx_account:
+        return profx_account
+
+    # Then MT5
+    mt5_account = user.accounts.filter(platform='mt5').first()
+    if mt5_account:
+        return mt5_account
+
+    return user.accounts.first()
+
+
+# ====================== PAIRS ======================
 class ForexPairListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        if not request.user.accounts.filter(account_type='pro-fx').exists():
-            return Response({'error': 'Pro-FX account required'}, status=status.HTTP_403_FORBIDDEN)
+        account = get_trading_account(request.user)
+        if not account:
+            return Response({'error': 'No trading account found'}, status=status.HTTP_403_FORBIDDEN)
+
         pairs = ForexPair.objects.all()
         serializer = ForexPairSerializer(pairs, many=True)
         return Response({'pairs': serializer.data})
 
 
+# ====================== PLACE ORDER ======================
 class PlaceOrderView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        if not request.user.accounts.filter(account_type='pro-fx').exists():
-            return Response({'error': 'Pro-FX account required'}, status=status.HTTP_403_FORBIDDEN)
+        account = get_trading_account(request.user)
+        if not account:
+            return Response({'error': 'No trading account found (Pro-FX or MT5)'}, status=status.HTTP_403_FORBIDDEN)
 
         pair_id = request.data.get('pair_id')
         direction = request.data.get('direction')
@@ -55,7 +75,6 @@ class PlaceOrderView(APIView):
 
         try:
             pair = ForexPair.objects.get(id=pair_id)
-            account = request.user.accounts.get(account_type='pro-fx')
 
             entry_price = pair.get_current_price(time_frame=time_frame)
             if entry_price <= 0:
@@ -86,6 +105,7 @@ class PlaceOrderView(APIView):
 
                 wallet.balance -= margin
                 wallet.save()
+
                 Transaction.objects.create(
                     account=account,
                     amount=-margin,
@@ -102,14 +122,16 @@ class PlaceOrderView(APIView):
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+# ====================== POSITIONS ======================
 class PositionListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        if not request.user.accounts.filter(account_type='pro-fx').exists():
-            return Response({'error': 'Pro-FX account required'}, status=status.HTTP_403_FORBIDDEN)
+        account = get_trading_account(request.user)
+        if not account:
+            return Response({'error': 'No trading account found'}, status=status.HTTP_403_FORBIDDEN)
 
-        positions = Position.objects.filter(user=request.user, status='open')
+        positions = Position.objects.filter(user=request.user, account=account, status='open')
         for pos in positions:
             current_price = pos.pair.get_current_price()
             pos.update_floating_p_l(current_price)
@@ -122,8 +144,6 @@ class ClosePositionView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, position_id):
-        if not request.user.accounts.filter(account_type='pro-fx').exists():
-            return Response({'error': 'Pro-FX account required'}, status=status.HTTP_403_FORBIDDEN)
         try:
             position = Position.objects.get(id=position_id, user=request.user, status='open')
             current_price = position.pair.get_current_price(
@@ -136,7 +156,7 @@ class ClosePositionView(APIView):
         except Position.DoesNotExist:
             return Response({'error': 'Position not found or already closed'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            logger.error(f"ClosePositionView error for position {position_id}: {str(e)}")
+            logger.error(f"ClosePositionView error: {str(e)}")
             return Response({'error': 'Failed to close position'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -144,10 +164,12 @@ class CloseAllPositionsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        positions = Position.objects.filter(user=request.user, status='open')
+        account = get_trading_account(request.user)
+        positions = Position.objects.filter(user=request.user, account=account, status='open')
+
         if not positions.exists():
             return Response({'message': 'No open positions to close'}, status=status.HTTP_200_OK)
-        
+
         closed_count = 0
         for position in positions:
             try:
@@ -164,50 +186,45 @@ class CloseAllPositionsView(APIView):
         return Response({'message': f'{closed_count} positions closed successfully'}, status=status.HTTP_200_OK)
 
 
-# ==================== NEW: Close EA Positions ====================
+# ====================== EA POSITIONS ======================
 class CloseEAPositionsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, user_robot_id):
-        """Close all open positions opened by a specific EA robot"""
         try:
             user_robot = UserRobot.objects.get(id=user_robot_id, user=request.user)
-            
             if not user_robot.is_ea:
                 return Response({'error': 'This robot is not an EA'}, status=status.HTTP_400_BAD_REQUEST)
 
             closed_count = user_robot.close_all_positions()
-
             return Response({
                 'success': True,
-                'message': f'Successfully closed {closed_count} position(s) from EA "{user_robot.robot.name}"',
+                'message': f'Successfully closed {closed_count} position(s)',
                 'closed_count': closed_count
             }, status=status.HTTP_200_OK)
-
         except UserRobot.DoesNotExist:
             return Response({'error': 'Robot not found'}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            logger.error(f"Error in CloseEAPositionsView: {e}", exc_info=True)
-            return Response({'error': 'Failed to close EA positions'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+# ====================== HISTORY ======================
 class ForexTradeHistoryView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        if not request.user.accounts.filter(account_type='pro-fx').exists():
-            return Response({'error': 'Pro-FX account required'}, status=status.HTTP_403_FORBIDDEN)
-        trades = ForexTrade.objects.filter(position__user=request.user)
+        account = get_trading_account(request.user)
+        if not account:
+            return Response({'error': 'No trading account found'}, status=status.HTTP_403_FORBIDDEN)
+
+        trades = ForexTrade.objects.filter(position__user=request.user, position__account=account)
         serializer = ForexTradeSerializer(trades, many=True)
         return Response({'trades': serializer.data})
 
 
+# ====================== PRICES ======================
 class CurrentPriceView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, pair_id):
-        if not request.user.accounts.filter(account_type='pro-fx').exists():
-            return Response({'error': 'Pro-FX required'}, status=status.HTTP_403_FORBIDDEN)
         try:
             pair = ForexPair.objects.get(id=pair_id)
             price = pair.get_current_price()
@@ -221,13 +238,10 @@ class CurrentPricesView(APIView):
 
     @method_decorator(cache_page(1))
     def get(self, request):
-        if not request.user.accounts.filter(account_type='pro-fx').exists():
-            return Response({'error': 'Pro-FX account required'}, status=status.HTTP_403_FORBIDDEN)
-        
         ids_str = request.query_params.get('ids', '')
         if not ids_str:
             return Response({'error': 'ids parameter required'}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         try:
             pair_ids = [int(id.strip()) for id in ids_str.split(',') if id.strip().isdigit()]
             pairs = ForexPair.objects.filter(id__in=pair_ids)
@@ -237,39 +251,45 @@ class CurrentPricesView(APIView):
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+# ====================== ROBOTS ======================
 class ForexRobotListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        if not request.user.accounts.filter(account_type='pro-fx').exists():
-            return Response({'error': 'Pro-FX required'}, status=status.HTTP_403_FORBIDDEN)
-        robots = ForexRobot.objects.filter(is_active=True)
-        serializer = ForexRobotSerializer(robots, many=True)
+        account = get_trading_account(request.user)
+        
+        queryset = ForexRobot.objects.filter(is_active=True)
+        
+        # Hide EA robots on Pro-FX
+        if account and account.platform != 'mt5':
+            queryset = queryset.filter(is_ea=False)
+        
+        serializer = ForexRobotSerializer(queryset, many=True)
         return Response({'robots': serializer.data})
-
 
 class PurchaseRobotView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, robot_id):
-        if not request.user.accounts.filter(account_type='pro-fx').exists():
-            return Response({'error': 'Pro-FX account required'}, status=status.HTTP_403_FORBIDDEN)
+        # Use correct account based on what user is currently using
+        account = get_trading_account(request.user)
+        if not account:
+            return Response({'error': 'No trading account found'}, status=status.HTTP_403_FORBIDDEN)
 
         try:
             robot = ForexRobot.objects.get(id=robot_id, is_active=True)
         except ForexRobot.DoesNotExist:
             return Response({'error': 'Robot not found or inactive'}, status=status.HTTP_404_NOT_FOUND)
 
+        # Block EA purchase if not on MT5
+        if robot.is_ea and account.platform != 'mt5':
+            return Response({'error': 'EA Robots can only be used on MT5 accounts'}, status=status.HTTP_400_BAD_REQUEST)
+
         if UserRobot.objects.filter(user=request.user, robot=robot).exists():
             return Response({'error': 'You already own this robot'}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            usd = Currency.objects.get(code='USD')
-            account = request.user.accounts.get(account_type='pro-fx')
-            wallet = Wallet.objects.get(account=account, wallet_type='main', currency=usd)
-        except Exception:
-            return Response({'error': 'Wallet or account configuration error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+        usd = Currency.objects.get(code='USD')
+        wallet = Wallet.objects.get(account=account, wallet_type='main', currency=usd)
         effective_price = robot.effective_price
 
         if wallet.balance < effective_price:
@@ -287,22 +307,16 @@ class PurchaseRobotView(APIView):
                 max_open_positions=robot.max_open_positions,
             )
 
-            is_discounted = robot.discounted_price is not None and robot.discounted_price < robot.price
-            description = f'Purchased robot: {robot.name}' + (' (discounted)' if is_discounted else '')
-
             Transaction.objects.create(
                 account=account,
                 amount=-effective_price,
                 transaction_type='withdrawal',
-                description=description
+                description=f'Purchased robot: {robot.name}'
             )
 
-        serializer = UserRobotSerializer(user_robot)
         return Response({
             'message': 'Robot purchased successfully',
-            'user_robot': serializer.data,
-            'purchased_price': effective_price,
-            'discounted': is_discounted
+            'user_robot': UserRobotSerializer(user_robot).data
         }, status=status.HTTP_201_CREATED)
 
 
@@ -315,7 +329,7 @@ class MyRobotsView(APIView):
         return Response({'user_robots': serializer.data})
 
 
-# ==================== UPDATED: Toggle Robot View ====================
+# ====================== TOGGLE ROBOT ======================
 class ToggleRobotView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -325,6 +339,12 @@ class ToggleRobotView(APIView):
         except UserRobot.DoesNotExist:
             return Response({'error': 'Robot not found'}, status=status.HTTP_404_NOT_FOUND)
 
+        account = get_trading_account(request.user)
+
+        # Block starting EA on non-MT5
+        if user_robot.is_ea and account.platform != 'mt5':
+            return Response({'error': 'EA Robots can only run on MT5 accounts'}, status=status.HTTP_400_BAD_REQUEST)
+
         payload = request.data
         if 'stake' in payload:
             user_robot.stake_per_trade = Decimal(str(payload['stake']))
@@ -333,37 +353,29 @@ class ToggleRobotView(APIView):
         if 'timeframe' in payload:
             user_robot.timeframe = payload['timeframe']
 
-        was_running = user_robot.is_running
         is_ea = user_robot.is_ea
-
         user_robot.is_running = not user_robot.is_running
         user_robot.save(update_fields=['is_running', 'stake_per_trade', 'selected_pair', 'timeframe'])
 
         closed_count = 0
 
-        if user_robot.is_running:  # Just started
+        if user_robot.is_running:
             if is_ea:
-                BotLog.objects.create(
-                    user_robot=user_robot,
-                    message="🚀 EA Bot Activated - Real positions will be opened automatically"
-                )
+                BotLog.objects.create(user_robot=user_robot, message="🚀 EA Bot Activated")
             else:
                 perform_robot_trade(user_robot)
-                thread = threading.Thread(target=recurring_trade_loop, args=(user_robot.id,))
-                thread.daemon = True
-                thread.start()
+                threading.Thread(target=recurring_trade_loop, args=(user_robot.id,), daemon=True).start()
 
             message = "Robot started successfully"
-        else:  # Just stopped
+        else:
             if is_ea:
-                import time
-                time.sleep(0.4)  # Give background worker time to finish current cycle
+                time.sleep(0.3)
                 closed_count = user_robot.close_all_positions()
                 BotLog.objects.create(
                     user_robot=user_robot,
-                    message=f"⛔ EA Bot Stopped - Closed {closed_count} open position(s)"
+                    message=f"⛔ EA Bot Stopped - Closed {closed_count} positions"
                 )
-                message = f"EA stopped and {closed_count} position(s) closed"
+                message = f"EA stopped and {closed_count} positions closed"
             else:
                 message = "Robot stopped successfully"
 
@@ -373,8 +385,9 @@ class ToggleRobotView(APIView):
             'is_ea': is_ea,
             'closed_positions': closed_count
         })
-    
-# Helper functions (unchanged)
+
+
+# ====================== HELPER FUNCTIONS ======================
 def recurring_trade_loop(user_robot_id):
     while True:
         try:
@@ -398,24 +411,21 @@ def perform_robot_trade(user_robot):
         win_rate = robot.win_rate_sashi if is_sashi else robot.win_rate_normal
 
         stake = user_robot.stake_per_trade
+        account = get_trading_account(user)
+        if not account:
+            return
+
         usd = Currency.objects.get(code='USD')
-        account = user.accounts.get(account_type='pro-fx')
         wallet = Wallet.objects.get(account=account, wallet_type='main', currency=usd)
 
         if wallet.balance < stake:
-            BotLog.objects.create(
-                user_robot=user_robot,
-                message=f"Insufficient balance: ${wallet.balance} < ${stake}. Stopping."
-            )
+            BotLog.objects.create(user_robot=user_robot, message="Insufficient balance. Stopping.")
             user_robot.is_running = False
             user_robot.save()
             return
 
-        BotLog.objects.create(user_robot=user_robot, message="Analyzing market conditions...")
-
         wallet.balance -= stake
         wallet.save()
-        BotLog.objects.create(user_robot=user_robot, message=f"Stake deducted: ${stake}")
 
         time.sleep(random.uniform(1, 3))
 
@@ -467,8 +477,45 @@ class BotLogListView(generics.ListAPIView):
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
         serializer = self.get_serializer(queryset, many=True)
-        
         with transaction.atomic():
             response = Response(serializer.data)
             queryset.delete()
         return response
+    
+
+class CreditWalletOnCloseView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        try:
+            realized_profit = Decimal(str(request.data.get('realized_profit', 0)))
+            symbol = request.data.get('symbol')
+            volume = request.data.get('volume')
+            side = request.data.get('side')
+
+            account = get_trading_account(request.user)
+            if not account:
+                return Response({'error': 'No trading account found'}, status=status.HTTP_400_BAD_REQUEST)
+
+            usd = Currency.objects.get(code='USD')
+            wallet = Wallet.objects.get(account=account, wallet_type='main', currency=usd)
+
+            with transaction.atomic():
+                wallet.balance += realized_profit
+                wallet.save()
+
+                Transaction.objects.create(
+                    account=account,
+                    amount=realized_profit,
+                    transaction_type='profit' if realized_profit > 0 else 'loss',
+                    description=f'Closed local position: {symbol} {side} {volume} lots'
+                )
+
+            return Response({
+                'message': 'Wallet updated successfully',
+                'new_balance': float(wallet.balance)
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"CreditWalletOnCloseView error: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

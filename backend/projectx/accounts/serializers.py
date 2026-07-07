@@ -8,14 +8,31 @@ class AccountSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Account
-        fields = ['id', 'account_type', 'balance']
-        read_only_fields = ['id', 'balance']
+        fields = [
+            'id', 
+            'platform',           # ← NEW
+            'account_type', 
+            'balance',
+            'is_wallet_verified',
+            'mt5_login',          # ← NEW (for MT5 accounts)
+            'mt5_server',         # ← NEW
+            'created_at'          # ← NEW
+        ]
+        read_only_fields = [
+            'id', 
+            'balance', 
+            'created_at',
+            'mt5_login',
+            'mt5_server'
+        ]
+
 
 class SuspensionEvidenceSerializer(serializers.ModelSerializer):
     class Meta:
         model = SuspensionEvidence
         fields = ['id', 'description', 'status', 'reviewed_at']
         read_only_fields = ['id', 'reviewed_at']
+
 
 class UserSerializer(serializers.ModelSerializer):
     accounts = AccountSerializer(many=True, read_only=True)
@@ -24,6 +41,7 @@ class UserSerializer(serializers.ModelSerializer):
     suspension_details = serializers.SerializerMethodField()
     evidence_status = serializers.SerializerMethodField()  # For permanent
     mpesa_connected = serializers.SerializerMethodField()  # ← NEW: Check if M-Pesa connected
+    kyc_status = serializers.CharField(read_only=True)    # ← NEW
 
     class Meta:
         model = User
@@ -31,12 +49,14 @@ class UserSerializer(serializers.ModelSerializer):
             'id', 'username', 'email', 'phone',
             'is_sashi', 'is_email_verified', 'accounts', 'is_staff',
             'is_marketo', 'referral_link', 'is_suspended', 'suspension_details', 'evidence_status',
-            'mpesa_connected'  # ← Added
+            'mpesa_connected',   # ← Added
+            'kyc_status'         # ← NEW
         ]
         read_only_fields = [
             'id', 'is_sashi', 'is_email_verified', 'is_staff',
             'is_marketo', 'referral_link', 'is_suspended', 'suspension_details', 'evidence_status',
-            'mpesa_connected'  # ← Added
+            'mpesa_connected',
+            'kyc_status'
         ]
 
     def get_referral_link(self, obj):
