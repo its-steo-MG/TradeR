@@ -245,28 +245,36 @@ class MT5ClosePositionView(APIView):
 
         final_profit = gross_profit - position.swap - position.commission
 
-        # ⚠️ Safety limit — left in place, but flagged:
-        # This silently overrides any loss beyond -$100 to exactly -$100,
-        # even though the frontend calculated (and likely displayed) the
-        # real, larger loss. That mismatch is itself a source of "wallet
-        # doesn't match" bugs. Decide one of:
-        #   (a) remove this cap entirely so real math always applies, or
-        #   (b) keep it, but have the frontend fetch/display this same cap
-        #       BEFORE the user confirms the close, so what they see always
-        #       matches what actually happens to their wallet.
-        # Leaving as-is for now since I don't know your intent here.
-        if final_profit < Decimal('-100'):
-            final_profit = Decimal('-100.00')
+        # NOTE: the old "-100 max loss" cap was REMOVED. It made the backend
+        # deduct a different amount than the frontend displayed, which is
+        # exactly the kind of wallet mismatch we're fixing here. The real
+        # calculated loss is now applied — but clamped so the wallet can
+        # NEVER go below zero (see below).
 
         with transaction.atomic():
+            # Lock the wallet row so concurrent closes (e.g. EA "close all")
+            # can't race each other into a negative balance.
+            wallet = Wallet.objects.select_for_update().get(pk=wallet.pk)
             old_balance = wallet.balance
-            wallet.balance += final_profit
+
+            # ================== BLOWN ACCOUNT PROTECTION ==================
+            # If the loss is bigger than what's left in the wallet, only
+            # deduct what the wallet actually has and reset the balance to
+            # exactly 0.00 — NEVER negative. This mirrors the frontend's
+            # blow-account behaviour (close everything, balance = 0).
+            applied_profit = final_profit
+            if final_profit < 0 and (old_balance + final_profit) < Decimal('0'):
+                applied_profit = -old_balance  # deduct everything that's left
+
+            wallet.balance = old_balance + applied_profit
+            if wallet.balance < Decimal('0'):
+                wallet.balance = Decimal('0.00')  # hard safety net
             wallet.save()
 
             Transaction.objects.create(
                 account=account,
-                amount=final_profit,
-                transaction_type='profit' if final_profit > 0 else 'loss',
+                amount=applied_profit,
+                transaction_type='profit' if applied_profit > 0 else 'loss',
                 description=f"MT5 Closed: {position.symbol}"
             )
 
@@ -275,7 +283,8 @@ class MT5ClosePositionView(APIView):
         return Response({
             "success": True,
             "message": "Position closed successfully",
-            "final_profit": float(final_profit),
+            "final_profit": float(final_profit),      # real calculated P/L
+            "applied_profit": float(applied_profit),  # what actually hit the wallet
             "old_balance": float(old_balance),
-            "new_balance": float(wallet.balance),
+            "new_balance": float(wallet.balance),     # never negative
         })
