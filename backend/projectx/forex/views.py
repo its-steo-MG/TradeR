@@ -10,6 +10,8 @@ from rest_framework import status, permissions, generics
 from django.db import transaction
 from django.views.decorators.cache import cache_page
 from django.utils.decorators import method_decorator
+from rest_framework.pagination import PageNumberPagination
+from rest_framework import generics
 
 from .models import ForexPair, Position, ForexTrade, ForexRobot, UserRobot, BotLog
 from .serializers import (
@@ -207,17 +209,30 @@ class CloseEAPositionsView(APIView):
 
 
 # ====================== HISTORY ======================
-class ForexTradeHistoryView(APIView):
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 50          # Show 50 records per page
+    page_size_query_param = 'page_size'
+    max_page_size = 200
+
+
+class ForexTradeHistoryView(generics.ListAPIView):
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ForexTradeSerializer
+    pagination_class = StandardResultsSetPagination
 
-    def get(self, request):
-        account = get_trading_account(request.user)
+    def get_queryset(self):
+        account = get_trading_account(self.request.user)
         if not account:
-            return Response({'error': 'No trading account found'}, status=status.HTTP_403_FORBIDDEN)
+            return ForexTrade.objects.none()
 
-        trades = ForexTrade.objects.filter(position__user=request.user, position__account=account)
-        serializer = ForexTradeSerializer(trades, many=True)
-        return Response({'trades': serializer.data})
+        return ForexTrade.objects.filter(
+            position__user=self.request.user,
+            position__account=account
+        ).select_related(
+            'position', 
+            'position__pair', 
+            'position__user'
+        ).order_by('-close_time')
 
 
 # ====================== PRICES ======================
