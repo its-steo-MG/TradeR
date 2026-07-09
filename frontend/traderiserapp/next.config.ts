@@ -30,9 +30,15 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'via.placeholder.com',
+        hostname: 'grandview-storage.s3.amazonaws.com',
         port: '',
-        pathname: '/**',
+        pathname: '/kyc/**',                    // ← Added for KYC
+      },
+      {
+        protocol: 'https',
+        hostname: 'grandview-storage.s3.eu-north-1.amazonaws.com',
+        port: '',
+        pathname: '/kyc/**',                    // ← Added for KYC
       },
       {
         protocol: 'https',
@@ -43,6 +49,12 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: 'grandview-storage.s3.eu-north-1.amazonaws.com',
         pathname: '/mpesa_avatars/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'via.placeholder.com',
+        port: '',
+        pathname: '/**',
       },
     ],
   },
@@ -57,7 +69,7 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true,
   },
 
-  // Optional: helps with service worker headers if you keep custom sw.js
+  // Optional: helps with service worker headers
   async headers() {
     return [
       {

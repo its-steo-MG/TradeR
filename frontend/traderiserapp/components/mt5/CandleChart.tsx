@@ -17,34 +17,110 @@ export default function CandleChart({ symbol, tf, digits, positions, onClosePosi
   // ====================== INTERACTIVE STATE ======================
   const [offset, setOffset] = useState(0);
   const [visibleCount, setVisibleCount] = useState(80);
-  const [isDragging, setIsDragging] = useState(false);
-  const [lastX, setLastX] = useState(0);
+
+  // Mouse drag
+  const isDraggingRef = useRef(false);
+  const lastXRef = useRef(0);
+  const dragMovedRef = useRef(false);
+
+  // Touch state (mobile)
+  const touchModeRef = useRef<"none" | "pan" | "pinch">("none");
+  const lastTouchXRef = useRef(0);
+  const pinchStartDistRef = useRef(0);
+  const pinchStartCountRef = useRef(80);
+
+  const clampCount = (n: number) => Math.max(20, Math.min(300, Math.floor(n)));
 
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const zoomFactor = e.deltaY > 0 ? 1.12 : 0.88;
-    const newCount = Math.max(25, Math.min(280, Math.floor(visibleCount * zoomFactor)));
-    setVisibleCount(newCount);
+    setVisibleCount((c) => clampCount(c * zoomFactor));
   };
 
+  // ============ MOUSE ============
   const handleMouseDown = (e: React.MouseEvent) => {
-    setIsDragging(true);
-    setLastX(e.clientX);
+    isDraggingRef.current = true;
+    dragMovedRef.current = false;
+    lastXRef.current = e.clientX;
   };
-
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
-    const deltaX = e.clientX - lastX;
+    if (!isDraggingRef.current) return;
+    const deltaX = e.clientX - lastXRef.current;
     const candleWidth = (ref.current?.clientWidth || 900) / visibleCount;
     const candlesMoved = Math.round(deltaX / candleWidth);
-
     if (candlesMoved !== 0) {
+      dragMovedRef.current = true;
       setOffset((prev) => Math.max(0, prev - candlesMoved));
-      setLastX(e.clientX);
+      lastXRef.current = e.clientX;
     }
   };
+  const handleMouseUp = () => { isDraggingRef.current = false; };
 
-  const handleMouseUp = () => setIsDragging(false);
+  // ============ TOUCH (mobile pan + pinch zoom) ============
+  useEffect(() => {
+    const cv = ref.current;
+    if (!cv) return;
+
+    const dist = (t1: Touch, t2: Touch) => {
+      const dx = t1.clientX - t2.clientX;
+      const dy = t1.clientY - t2.clientY;
+      return Math.hypot(dx, dy);
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        touchModeRef.current = "pinch";
+        pinchStartDistRef.current = dist(e.touches[0], e.touches[1]);
+        pinchStartCountRef.current = visibleCount;
+        e.preventDefault();
+      } else if (e.touches.length === 1) {
+        touchModeRef.current = "pan";
+        lastTouchXRef.current = e.touches[0].clientX;
+        dragMovedRef.current = false;
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (touchModeRef.current === "pinch" && e.touches.length === 2) {
+        e.preventDefault();
+        const d = dist(e.touches[0], e.touches[1]);
+        if (pinchStartDistRef.current > 0) {
+          const ratio = pinchStartDistRef.current / d; // pinch-in => zoom in => fewer candles
+          setVisibleCount(clampCount(pinchStartCountRef.current * ratio));
+        }
+      } else if (touchModeRef.current === "pan" && e.touches.length === 1) {
+        const x = e.touches[0].clientX;
+        const deltaX = x - lastTouchXRef.current;
+        const candleWidth = (cv.clientWidth || 900) / visibleCount;
+        const candlesMoved = Math.round(deltaX / candleWidth);
+        if (candlesMoved !== 0) {
+          dragMovedRef.current = true;
+          setOffset((prev) => Math.max(0, prev - candlesMoved));
+          lastTouchXRef.current = x;
+          e.preventDefault();
+        }
+      }
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length === 0) touchModeRef.current = "none";
+      else if (e.touches.length === 1) {
+        touchModeRef.current = "pan";
+        lastTouchXRef.current = e.touches[0].clientX;
+      }
+    };
+
+    cv.addEventListener("touchstart", onTouchStart, { passive: false });
+    cv.addEventListener("touchmove", onTouchMove, { passive: false });
+    cv.addEventListener("touchend", onTouchEnd);
+    cv.addEventListener("touchcancel", onTouchEnd);
+    return () => {
+      cv.removeEventListener("touchstart", onTouchStart);
+      cv.removeEventListener("touchmove", onTouchMove);
+      cv.removeEventListener("touchend", onTouchEnd);
+      cv.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, [visibleCount]);
 
   // ====================== DRAW FUNCTION ======================
   const draw = useCallback(() => {
@@ -107,7 +183,6 @@ export default function CandleChart({ symbol, tf, digits, positions, onClosePosi
       ctx.lineTo(padL + cw, y);
       ctx.stroke();
 
-      // Right price scale
       const priceText = p.toFixed(digits);
       const textWidth = ctx.measureText(priceText).width + 10;
       ctx.fillStyle = "rgba(20, 20, 20, 0.85)";
@@ -117,7 +192,6 @@ export default function CandleChart({ symbol, tf, digits, positions, onClosePosi
       ctx.fillText(priceText, padL + cw + 6, y + 3);
     }
 
-    // Vertical lines
     ctx.strokeStyle = "rgba(255,255,255,0.35)";
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -135,7 +209,6 @@ export default function CandleChart({ symbol, tf, digits, positions, onClosePosi
     }
     ctx.setLineDash([]);
 
-    // Symbol + Timeframe
     ctx.fillStyle = "rgba(255,255,255,0.85)";
     ctx.font = "bold 12px ui-sans-serif, system-ui";
     ctx.fillText(`${symbol} ${tf}`, padL + 6, padT + 14);
@@ -153,13 +226,11 @@ export default function CandleChart({ symbol, tf, digits, positions, onClosePosi
       ctx.fillStyle = color;
       ctx.lineWidth = 1;
 
-      // Wick
       ctx.beginPath();
       ctx.moveTo(x, yOf(c.h));
       ctx.lineTo(x, yOf(c.l));
       ctx.stroke();
 
-      // Body
       const yO = yOf(c.o), yC = yOf(c.c);
       ctx.fillRect(x - bw / 2, Math.min(yO, yC), bw, Math.max(1, Math.abs(yC - yO)));
     });
@@ -183,7 +254,7 @@ export default function CandleChart({ symbol, tf, digits, positions, onClosePosi
       ctx.fillText(last.c.toFixed(digits), padL + cw + 6, yLast + 3);
     }
 
-    // Position lines + labels (your original design preserved)
+    // Position lines + labels
     const symPositions = positions.filter((p) => p.symbol === symbol);
     symPositions.forEach((p, idx) => {
       const y = yOf(p.openPrice);
@@ -247,27 +318,24 @@ export default function CandleChart({ symbol, tf, digits, positions, onClosePosi
     }
   }, [symbol, tf, digits, positions, offset, visibleCount]);
 
-  // ====================== EFFECTS ======================
   useEffect(() => {
     draw();
-
     const id = setInterval(draw, 900);
     const ro = new ResizeObserver(draw);
-
     if (ref.current) ro.observe(ref.current);
-
     return () => {
       clearInterval(id);
       ro.disconnect();
     };
   }, [draw]);
 
-  // Click to close position (your logic preserved + improved)
+  // Click to close position — ignore if user was dragging
   useEffect(() => {
     const cv = ref.current;
     if (!cv || !onClosePosition) return;
 
     const handleClick = (e: MouseEvent) => {
+      if (dragMovedRef.current) { dragMovedRef.current = false; return; }
       const rect = cv.getBoundingClientRect();
       const clickY = e.clientY - rect.top;
       const clickX = e.clientX - rect.left;
@@ -275,7 +343,6 @@ export default function CandleChart({ symbol, tf, digits, positions, onClosePosi
       const all = getCandles(symbol, tf);
       const startIndex = Math.max(0, all.length - visibleCount - offset);
       const candles = all.slice(startIndex, startIndex + visibleCount);
-
       if (!candles.length) return;
 
       let hi = -Infinity, lo = Infinity;
@@ -295,12 +362,10 @@ export default function CandleChart({ symbol, tf, digits, positions, onClosePosi
       const yOf = (price: number) => 6 + ((hi - price) / (hi - lo)) * ch;
 
       const symPositions = positions.filter((p) => p.symbol === symbol);
-
       symPositions.forEach((p, idx) => {
         const y = yOf(p.openPrice);
         const labelTop = y - 9 - (idx % 3) * 18;
         const labelBottom = labelTop + 16;
-
         if (clickY >= labelTop && clickY <= labelBottom && clickX >= 4 && clickX <= 250) {
           onClosePosition(p.id);
         }
@@ -314,7 +379,8 @@ export default function CandleChart({ symbol, tf, digits, positions, onClosePosi
   return (
     <canvas
       ref={ref}
-      className="h-full w-full cursor-grab active:cursor-grabbing"
+      className="h-full w-full cursor-grab active:cursor-grabbing touch-none select-none"
+      style={{ touchAction: "none" }}
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}

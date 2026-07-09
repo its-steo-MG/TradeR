@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.contrib.auth.validators import UnicodeUsernameValidator
+from storages.backends.s3boto3 import S3Boto3Storage
 from decimal import Decimal
 from django.apps import apps
 from django.utils import timezone
@@ -334,9 +335,22 @@ class KYCSubmission(models.Model):
     ]
     
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='kyc_submission')
-    id_document = models.FileField(upload_to='kyc/id/%Y/%m/%d/')
-    selfie = models.FileField(upload_to='kyc/selfie/%Y/%m/%d/')
-    proof_of_address = models.FileField(upload_to='kyc/address/%Y/%m/%d/', blank=True, null=True)
+    
+    id_document = models.FileField(
+        upload_to='kyc/id/%Y/%m/%d/',
+        storage=S3Boto3Storage(),
+    )
+    selfie = models.FileField(
+        upload_to='kyc/selfie/%Y/%m/%d/',
+        storage=S3Boto3Storage(),
+    )
+    proof_of_address = models.FileField(
+        upload_to='kyc/address/%Y/%m/%d/',
+        storage=S3Boto3Storage(),
+        blank=True,
+        null=True
+    )
+
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     submitted_at = models.DateTimeField(auto_now_add=True)
     reviewed_at = models.DateTimeField(null=True, blank=True)

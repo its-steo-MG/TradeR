@@ -16,7 +16,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Quick-start development settings - unsuitable for production
 SECRET_KEY = config('SECRET_KEY')
-DEBUG = True
+DEBUG =False
 
 ALLOWED_HOSTS = [
     'localhost',
@@ -103,6 +103,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
+    'projectx.middleware.DatabaseRetryMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -180,24 +181,28 @@ DATABASES = {
 
 
 # ──────────────────────────────────────────────────────────────
-# DATABASE – works on Render build + runtime + local dev
+# DATABASE CONFIGURATION
 # ──────────────────────────────────────────────────────────────
 if "DATABASE_URL" in os.environ:
-    # Render production (and preview environments)
+    # Production on Render (PostgreSQL)
     DATABASES = {
         "default": dj_database_url.parse(
             os.environ["DATABASE_URL"],
-            conn_max_age=0,
+            conn_max_age=600,
             conn_health_checks=True,
             ssl_require=True,
         )
     }
 else:
-    # Local development OR Render build step → fall back to SQLite
+    # Local Development - Enhanced SQLite
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
             "NAME": BASE_DIR / "db.sqlite3",
+            "OPTIONS": {
+                "timeout": 60,           # Increase lock timeout
+            },
+            "ATOMIC_REQUESTS": True,     # Better consistency
         }
     }
   
@@ -358,8 +363,9 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-STATIC_URL = 'static/'
+
+STATICFILES_STORAGE = 'whitenoise.middleware.WhiteNoiseStorage'
+STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'  # Add this line
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

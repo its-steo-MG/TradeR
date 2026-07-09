@@ -5,12 +5,17 @@ from django import forms
 from django.utils import timezone
 from django.urls import reverse
 from django.utils.html import format_html
+from botocore.exceptions import ClientError
+from django.conf import settings
+from django.contrib import messages
 import boto3
 from botocore.exceptions import ClientError
 from django.conf import settings
-
-
+import logging
 from .models import User, Account, SuspensionEvidence,KYCSubmission
+
+logger = logging.getLogger(__name__)
+
 
 
 # ====================== Forms ======================
@@ -152,20 +157,22 @@ class CustomUserAdmin(UserAdmin):
 
 # ====================== KYC Admin ======================
 class KYCSubmissionAdmin(admin.ModelAdmin):
-    list_display = ('user_link', 'status', 'submitted_at', 'reviewed_at', 'view_id_document', 'view_selfie', 'view_proof_of_address')
+    list_display = ('user_link', 'status', 'submitted_at', 'reviewed_at', 
+                   'view_id_document', 'view_selfie', 'view_proof_of_address')
     list_filter = ('status', 'submitted_at')
     search_fields = ('user__username', 'user__email')
-    readonly_fields = ('submitted_at', 'reviewed_at', 'view_id_document', 'view_selfie', 'view_proof_of_address')
-    actions = ['approve_kyc', 'reject_kyc']
+    readonly_fields = ('submitted_at', 'reviewed_at', 'view_id_document', 
+                      'view_selfie', 'view_proof_of_address', 'notes')
+    actions = ['approve_kyc', 'reject_kyc', 'delete_selected']
 
     def user_link(self, obj):
         url = reverse('admin:accounts_user_change', args=[obj.user.pk])
         return format_html('<a href="{}">{}</a>', url, obj.user.username)
     user_link.short_description = 'User'
 
-    # Private signed URLs for admin only
+    # Secure Presigned URLs
     def _get_signed_url(self, file_field, expiration=3600):
-        if not file_field:
+        if not file_field or not file_field.name:
             return "No file"
         try:
             s3 = boto3.client('s3',
@@ -177,9 +184,9 @@ class KYCSubmissionAdmin(admin.ModelAdmin):
                 Params={'Bucket': settings.AWS_STORAGE_BUCKET_NAME, 'Key': file_field.name},
                 ExpiresIn=expiration
             )
-            return format_html('<a href="{}" target="_blank">🔒 View File</a>', url)
-        except Exception as e:
-            return f"Error: {str(e)}"
+            return format_html('<a href="{}" target="_blank">🔒 View Document</a>', url)
+        except Exception:
+            return "❌ Error"
 
     def view_id_document(self, obj):
         return self._get_signed_url(obj.id_document)
@@ -190,6 +197,8 @@ class KYCSubmissionAdmin(admin.ModelAdmin):
     view_selfie.short_description = 'Selfie'
 
     def view_proof_of_address(self, obj):
+        if not obj.proof_of_address:
+            return "— (Optional)"
         return self._get_signed_url(obj.proof_of_address)
     view_proof_of_address.short_description = 'Proof of Address'
 
@@ -206,7 +215,7 @@ class KYCSubmissionAdmin(admin.ModelAdmin):
                 submission.user.kyc_status = 'approved'
                 submission.user.save()
                 updated += 1
-        self.message_user(request, f"{updated} KYC submissions approved.")
+        self.message_user(request, f"{updated} KYC submission(s) approved.", messages.SUCCESS)
 
     @admin.action(description="Reject selected KYC submissions")
     def reject_kyc(self, request, queryset):
@@ -221,7 +230,16 @@ class KYCSubmissionAdmin(admin.ModelAdmin):
                 submission.user.kyc_status = 'rejected'
                 submission.user.save()
                 updated += 1
-        self.message_user(request, f"{updated} KYC submissions rejected.")
+        self.message_user(request, f"{updated} KYC submission(s) rejected.", messages.SUCCESS)
+
+    # Optional: Allow deleting KYC submissions
+    def delete_selected(self, request, queryset):
+        deleted = 0
+        for submission in queryset:
+            submission.delete()
+            deleted += 1
+        self.message_user(request, f"{deleted} KYC submission(s) deleted.", messages.SUCCESS)
+    delete_selected.short_description = "Delete selected KYC submissions"
 
 # ====================== Register Models ======================
 admin.site.register(User, CustomUserAdmin)

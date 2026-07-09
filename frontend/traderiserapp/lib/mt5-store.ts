@@ -64,7 +64,7 @@ const KEYS = {
   candles: "mt5_candles_v1",
   selectedSymbol: "mt5_sel_symbol",
   selectedTf: "mt5_sel_tf",
-  eaState: "mt5_ea_state",
+  ea: "mt5_ea_state",
 };
 
 // ====================== PRICE PERSISTENCE ======================
@@ -125,36 +125,36 @@ function mkSym(symbol: string, name: string, price: number, digits: number, spre
 }
 
 export const SYMBOLS: MT5Symbol[] = [
-  mkSym("EURUSD", "Euro vs US Dollar", 1.08542, 5),
-  mkSym("GBPUSD", "Great Britain Pound vs US Dollar", 1.26431, 5),
-  mkSym("USDJPY", "US Dollar vs Japanese Yen", 156.842, 3),
-  mkSym("AUDUSD", "Australian Dollar vs US Dollar", 0.6523, 5),
-  mkSym("USDCAD", "US Dollar vs Canadian Dollar", 1.3854, 5),
-  mkSym("USDCHF", "US Dollar vs Swiss Franc", 0.8721, 5),
-  mkSym("NZDUSD", "New Zealand Dollar vs US Dollar", 0.5987, 5),
+  mkSym("EURUSD", "Euro vs US Dollar", 1.0850, 5),
+  mkSym("GBPUSD", "Great Britain Pound vs US Dollar", 1.2755, 5),
+  mkSym("USDJPY", "US Dollar vs Japanese Yen", 154.20, 3),
+  mkSym("AUDUSD", "Australian Dollar vs US Dollar", 0.6612, 5),
+  mkSym("USDCAD", "US Dollar vs Canadian Dollar", 1.3985, 5),
+  mkSym("USDCHF", "US Dollar vs Swiss Franc", 0.8895, 5),
+  mkSym("NZDUSD", "New Zealand Dollar vs US Dollar", 0.5945, 5),
 
   // Minor & Cross Forex
-  mkSym("EURGBP", "Euro vs Great Britain Pound", 0.8574, 5),
-  mkSym("EURJPY", "Euro vs Japanese Yen", 163.25, 3),
-  mkSym("GBPJPY", "Great Britain Pound vs Japanese Yen", 190.45, 3),
-  mkSym("AUDJPY", "Australian Dollar vs Japanese Yen", 98.75, 3),
+  mkSym("EURGBP", "Euro vs Great Britain Pound", 0.8508, 5),
+  mkSym("EURJPY", "Euro vs Japanese Yen", 167.30, 3),
+  mkSym("GBPJPY", "Great Britain Pound vs Japanese Yen", 196.70, 3),
+  mkSym("AUDJPY", "Australian Dollar vs Japanese Yen", 101.95, 3),
   mkSym("AUDCAD", "Australian Dollar vs Canadian Dollar", 0.98277, 5),
-  mkSym("EURCAD", "Euro vs Canadian Dollar", 1.5023, 5),
-  mkSym("EURAUD", "Euro vs Australian Dollar", 1.6621, 5),
+  mkSym("EURCAD", "Euro vs Canadian Dollar", 1.5174, 5),
+  mkSym("EURAUD", "Euro vs Australian Dollar", 1.6410, 5),
 
   // Popular Cryptocurrencies
-  mkSym("BTCUSD", "Bitcoin vs US Dollar", 68420.5, 2),
-  mkSym("ETHUSD", "Ethereum vs US Dollar", 2650, 2),
-  mkSym("XRPUSD", "Ripple vs US Dollar", 0.524, 4),
-  mkSym("LTCUSD", "Litecoin vs US Dollar", 72.85, 2),
-  mkSym("SOLUSD", "Solana vs US Dollar", 148.3, 2),
-  mkSym("BNBUSD", "Binance Coin vs US Dollar", 585.4, 2),
+  mkSym("BTCUSD", "Bitcoin vs US Dollar", 98500.00, 2),
+  mkSym("ETHUSD", "Ethereum vs US Dollar", 3450.00, 2),
+  mkSym("XRPUSD", "Ripple vs US Dollar", 2.35, 4),
+  mkSym("LTCUSD", "Litecoin vs US Dollar", 105.40, 2),
+  mkSym("SOLUSD", "Solana vs US Dollar", 215.60, 2),
+  mkSym("BNBUSD", "Binance Coin vs US Dollar", 680.20, 2),
 
   // Keep your original ones too
   mkSym("AUDCHF", "Australian Dollar vs Swiss Franc", 0.56324, 5),
   mkSym("AUDNZD", "Australian Dollar vs New Zealand Dollar", 1.21882, 5),
-  mkSym("XAUUSD", "Gold vs US Dollar", 2351.23, 2, 20, 100),
-  mkSym("XAGUSD", "Silver vs US Dollar", 28.43, 3, 25, 5000),
+  mkSym("XAUUSD", "Gold vs US Dollar", 4020.50, 2, 20, 100),
+  mkSym("XAGUSD", "Silver vs US Dollar", 48.75, 3, 25, 5000),
 ];
 
 export function bidAsk(s: MT5Symbol) {
@@ -339,14 +339,6 @@ function seedRobots(): MT5Robot[] {
 let eaInterval: any = null;
 let isInCooldown = false;
 const CYCLE_COOLDOWN = 10000;
-// EA batch exit rules:
-//  - TAKE PROFIT: close the whole batch as soon as its combined PnL is in
-//    profit by at least this amount (was $5 before — batches at +$1..$4
-//    never closed, which looked like "profits never close").
-const EA_TAKE_PROFIT = 0.5;
-//  - STOP LOSS: cut the batch when combined loss reaches this level
-//    (applies to ALL users so a batch can never bleed forever).
-const EA_STOP_LOSS = -30;
 
 export const mt5Store = {
   getAccount: (): MT5Account | null => {
@@ -383,63 +375,65 @@ export const mt5Store = {
   isEaRunning: false,
   eaMaxPositions: 5,
   eaSymbol: "",
+  eaRobotId: null as number | null,
 
-  startEA: (maxPositions: number, robotId: number | null = null) => {
+  getEAState: (): { running: boolean; robotId: number | null; maxPositions: number; symbol: string } => {
+    return read(KEYS.ea, { running: false, robotId: null, maxPositions: 5, symbol: "" });
+  },
+
+  _persistEA: () => {
+    write(KEYS.ea, {
+      running: mt5Store.isEaRunning,
+      robotId: mt5Store.eaRobotId,
+      maxPositions: mt5Store.eaMaxPositions,
+      symbol: mt5Store.eaSymbol,
+    });
+  },
+
+  startEA: (maxPositions: number, robotId?: number) => {
     mt5Store.isEaRunning = true;
     mt5Store.eaMaxPositions = maxPositions;
     mt5Store.eaSymbol = mt5Store.getSelectedSymbol();
+    if (robotId != null) mt5Store.eaRobotId = robotId;
     isInCooldown = false;
 
     if (eaInterval) clearInterval(eaInterval);
 
     eaInterval = setInterval(() => mt5Store.runEAStep(), 3000);
+    mt5Store._persistEA();
+    console.log(`[EA] Started with max ${maxPositions} positions (robot ${mt5Store.eaRobotId})`);
+  },
 
-    // PERSIST the running state so navigating away and back (or reloading
-    // the page) keeps the robot showing as RUNNING. Only an explicit user
-    // Stop click clears this.
-    write(KEYS.eaState, {
-      running: true,
-      maxPositions,
-      symbol: mt5Store.eaSymbol,
-      robotId,
-    });
+  /**
+   * Re-attach the EA engine after a navigation / page reload if it was
+   * running before. Returns true when the engine was resumed so callers
+   * can restore the UI (e.g. show the Stop button on the matching robot).
+   */
+  resumeEA: (): boolean => {
+    const st = mt5Store.getEAState();
+    if (!st.running || st.robotId == null) return false;
+    if (eaInterval) return true; // already running in this session
 
-    console.log(`[EA] Started with max ${maxPositions} positions`);
+    mt5Store.isEaRunning = true;
+    mt5Store.eaMaxPositions = st.maxPositions || 5;
+    mt5Store.eaSymbol = st.symbol || mt5Store.getSelectedSymbol();
+    mt5Store.eaRobotId = st.robotId;
+    isInCooldown = false;
+    eaInterval = setInterval(() => mt5Store.runEAStep(), 3000);
+    console.log(`[EA] Resumed after navigation (robot ${st.robotId})`);
+    return true;
   },
 
   stopEA: () => {
     mt5Store.isEaRunning = false;
+    mt5Store.eaRobotId = null;
     if (eaInterval) {
       clearInterval(eaInterval);
       eaInterval = null;
     }
     isInCooldown = false;
-    write(KEYS.eaState, { running: false, maxPositions: 5, symbol: "", robotId: null });
+    mt5Store._persistEA();
     console.log("[EA] Stopped");
-  },
-
-  // Read the persisted EA state (survives navigation & page reloads).
-  getEAState: () =>
-    read<{ running: boolean; maxPositions: number; symbol: string; robotId: number | null }>(
-      KEYS.eaState,
-      { running: false, maxPositions: 5, symbol: "", robotId: null },
-    ),
-
-  // Call this on mount of the Bots screen (or any MT5 screen): if the EA
-  // was running according to persisted state but the interval died (page
-  // reload / fresh navigation), silently restart the engine so trades keep
-  // opening/closing per the logic until the USER presses Stop.
-  resumeEA: (): boolean => {
-    const st = mt5Store.getEAState();
-    if (!st.running) return false;
-    mt5Store.isEaRunning = true;
-    mt5Store.eaMaxPositions = st.maxPositions || 5;
-    mt5Store.eaSymbol = st.symbol || mt5Store.getSelectedSymbol();
-    if (!eaInterval) {
-      eaInterval = setInterval(() => mt5Store.runEAStep(), 3000);
-      console.log("[EA] Resumed after navigation/reload");
-    }
-    return true;
   },
 
   stopEAAndClosePositions: async () => {
@@ -513,19 +507,13 @@ export const mt5Store = {
 
     const symbol = mt5Store.eaSymbol || mt5Store.getSelectedSymbol();
     const maxPos = mt5Store.eaMaxPositions;
+    const isSashi = mt5Store.isSashi;
 
     let currentBatch = mt5Store.getPositions().filter(p => p.symbol === symbol);
 
     if (currentBatch.length > 0) {
       const totalPnL = currentBatch.reduce((sum, p) => sum + calcProfit(p), 0);
-      // FIXED (v2): the batch closes as soon as it is IN PROFIT (>= $0.50
-      // combined), for BOTH sashi and non-sashi users. The old ">$5" gate
-      // meant a batch sitting at +$1..$4 never took profit, so it drifted
-      // back into loss and only the -$35 loss cut ever fired. The loss cut
-      // now applies to everyone at -$30 so no batch can bleed forever.
-      // Cycle: open batch -> in profit? close & credit balance -> cooldown
-      // -> open next batch -> repeat until the user presses Stop.
-      const shouldClose = totalPnL >= EA_TAKE_PROFIT || totalPnL <= EA_STOP_LOSS;
+      const shouldClose = isSashi ? totalPnL > 5 : totalPnL < -35;
 
       if (shouldClose) {
         isInCooldown = true;

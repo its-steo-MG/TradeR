@@ -57,7 +57,7 @@ export default function KYCPage() {
 
         if (storedLoginType) setLoginType(storedLoginType);
 
-        // Fetch latest KYC status (fixed typing)
+        // Fetch latest KYC status
         const res = await api.getAccount();
         const latestUser = (res.data as { user?: User })?.user;
 
@@ -84,12 +84,12 @@ export default function KYCPage() {
     router.push("/login");
   };
 
-  // Submit KYC
+  // ====================== SUBMIT KYC (Consistent with Deposit) ======================
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!idFile || !selfieFile) {
-      toast.error("Please upload both ID and Selfie");
+      toast.error("Please upload both ID Document and Selfie");
       return;
     }
 
@@ -99,20 +99,31 @@ export default function KYCPage() {
       const formData = new FormData();
       formData.append("id_document", idFile);
       formData.append("selfie", selfieFile);
-      if (addressFile) formData.append("proof_of_address", addressFile);
+      
+      if (addressFile) {
+        formData.append("proof_of_address", addressFile);
+      }
 
       const response = await api.submitKYC(formData);
 
       if (response?.error) {
-        toast.error(response.error);
-        return;
+        const errorMsg = typeof response.error === "string" 
+          ? response.error 
+          : "Failed to submit KYC. Please try again.";
+        throw new Error(errorMsg);
       }
 
       setKycStatus("pending");
       toast.success("KYC submitted successfully! We'll review it within 24-48 hours.");
-    } catch (error) {
+      
+      // Optional: Clear files after successful submission
+      setIdFile(null);
+      setSelfieFile(null);
+      setAddressFile(null);
+
+    } catch (error: any) {
       console.error("KYC submission error:", error);
-      toast.error("Failed to submit KYC. Please try again.");
+      toast.error(error.message || "Failed to submit KYC. Please try again.");
     } finally {
       setIsSubmitting(false);
     }

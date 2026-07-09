@@ -272,13 +272,18 @@ class ForexRobotListView(APIView):
 
     def get(self, request):
         account = get_trading_account(request.user)
-        
+        if not account:
+            return Response({'error': 'No trading account found'}, status=403)
+
         queryset = ForexRobot.objects.filter(is_active=True)
-        
-        # Hide EA robots on Pro-FX
-        if account and account.platform != 'mt5':
+
+        # Strong EA filtering based on platform
+        if account.platform != 'mt5':
             queryset = queryset.filter(is_ea=False)
-        
+        else:
+            # On MT5, show all, but you can prioritize EAs if you want
+            pass
+
         serializer = ForexRobotSerializer(queryset, many=True)
         return Response({'robots': serializer.data})
 
