@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react'
 
-const API_BASE = 'http://localhost:8000'
-const WS_BASE = 'ws://localhost:8000'
+//const API_BASE = 'http://localhost:8000'
+//const WS_BASE = 'ws://localhost:8000'
 
-//const API_BASE = 'https://traderiserproapp.onrender.com'
-//const WS_BASE = 'wss://traderiserproapp.onrender.com'
+const API_BASE = 'https://traderiserproapp.onrender.com'
+const WS_BASE = 'wss://traderiserproapp.onrender.com'
 
 export interface CallEvent {
   type: string
