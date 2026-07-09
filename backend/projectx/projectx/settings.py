@@ -208,13 +208,45 @@ else:
 DATABASES['default']['CONN_MAX_AGE'] = 0
 ASGI_APPLICATION = 'projectx.asgi.application'
 # Redis Layer (already added from earlier)
+# ====================== REDIS & CHANNELS ======================
 import os
 from urllib.parse import urlparse
 
-REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
-redis_parsed = urlparse(REDIS_URL)
-redis_address = f"redis://{redis_parsed.username}:{redis_parsed.password}@{redis_parsed.hostname}:{redis_parsed.port or 6379}{redis_parsed.path or ''}"
+# Get Redis URL from Render
+REDIS_URL = os.environ.get("REDIS_URL")
 
+if REDIS_URL:
+    # Parse Render's Redis URL properly
+    parsed = urlparse(REDIS_URL)
+    REDIS_HOST = parsed.hostname
+    REDIS_PORT = parsed.port or 6379
+    REDIS_PASSWORD = parsed.password
+    REDIS_DB = parsed.path.lstrip('/') or 0
+
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                'hosts': [{
+                    'address': (REDIS_HOST, REDIS_PORT),
+                    'password': REDIS_PASSWORD,
+                    'db': int(REDIS_DB),
+                }],
+                'capacity': 1500,
+                'expiry': 10,
+            },
+        },
+    }
+else:
+    # Fallback for local development
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                'hosts': ['redis://localhost:6379/0'],
+            },
+        },
+    }
 # settings.py — YOUR STYLE, BUT 100% FIXED
 
 import os
