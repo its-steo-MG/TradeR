@@ -188,7 +188,7 @@ if "DATABASE_URL" in os.environ:
     DATABASES = {
         "default": dj_database_url.parse(
             os.environ["DATABASE_URL"],
-            conn_max_age=600,
+            conn_max_age=300,
             conn_health_checks=True,
             ssl_require=True,
         )
@@ -205,7 +205,7 @@ else:
             "ATOMIC_REQUESTS": True,     # Better consistency
         }
     }
-  
+DATABASES['default']['CONN_MAX_AGE'] = 0
 ASGI_APPLICATION = 'projectx.asgi.application'
 # Redis Layer (already added from earlier)
 import os
@@ -316,8 +316,8 @@ else:
 MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
 
 # settings.py
-CELERY_BROKER_URL = 'redis://localhost:6379/0'  # Default Redis URL
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'

@@ -14,7 +14,6 @@ from channels.auth import AuthMiddlewareStack
 # ====================== WINDOWS FIX ======================
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-    print("✅ WindowsProactorEventLoopPolicy enabled (better socket handling)")
 
 # Set Django settings BEFORE any Django import
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'projectx.settings')
@@ -22,7 +21,6 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'projectx.settings')
 # Initialize Django
 django.setup()
 
-# Get standard Django ASGI app
 django_asgi_app = get_asgi_application()
 
 # ====================== IMPORTS ======================
@@ -39,12 +37,12 @@ websocket_urlpatterns = (
     deriv.routing.websocket_urlpatterns
 )
 
-# ====================== FIXED WEBSOCKET STACK ======================
+# ====================== APPLICATION ======================
 application = ProtocolTypeRouter({
     "http": django_asgi_app,
 
     "websocket": AllowedHostsOriginValidator(
-        QueryStringJWTAuthMiddleware(          # ← Now properly imported
+        QueryStringJWTAuthMiddleware(
             AuthMiddlewareStack(
                 URLRouter(websocket_urlpatterns)
             )
