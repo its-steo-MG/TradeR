@@ -31,38 +31,51 @@ export default function ClientWrapper({ children }: { children: React.ReactNode 
   const [kycStatus, setKycStatus] = useState<"pending" | "approved" | "rejected" | null>(null);
   const [showNotice, setShowNotice] = useState(true);
 
-  // ==================== GLOBAL INCOMING CALL (for staff) ====================
+  // ==================== GLOBAL INCOMING CALL (Staff) ====================
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
-  const [isAnsweringGlobal, setIsAnsweringGlobal] = useState(false);
+  const [isAnswering, setIsAnswering] = useState(false);
   const callWsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load user from localStorage
+  // Load user session
   useEffect(() => {
     const rawSession = localStorage.getItem("user_session");
     if (rawSession) {
       try {
-        const session = JSON.parse(rawSession);
-        setCurrentUser(session);
+        setCurrentUser(JSON.parse(rawSession));
       } catch {}
     }
   }, []);
 
   const isStaff = currentUser?.is_staff === true;
 
-  // ==================== GLOBAL CALL WEBSOCKET (Staff only) ====================
+  // ==================== PERSISTENCE: Restore pending call on load ====================
+  useEffect(() => {
+    if (!isStaff) return;
+
+    const savedCallId = localStorage.getItem("pending_incoming_call_id");
+    if (savedCallId && !incomingCall) {
+      // Show persistent incoming call card
+      setIncomingCall({
+        call_id: Number(savedCallId),
+        user: { id: 0, username: "Support User" }, // Will be updated if WS gives better data
+      });
+    }
+  }, [isStaff]);
+
+  // ==================== GLOBAL CALL WEBSOCKET ====================
   const connectGlobalCallSocket = useCallback(() => {
     const token = localStorage.getItem("access_token")?.replace(/^"|"$/g, "");
     if (!token || !isStaff) return;
 
-    const WS_BASE = "ws://localhost:8000"; // Change to wss:// in production
+    const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
     const wsUrl = `${WS_BASE}/ws/call/?token=${encodeURIComponent(token)}`;
 
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      console.log("[GlobalCall] Staff connected to call WebSocket");
+      console.log("[GlobalCallWS] Staff connected");
     };
 
     ws.onmessage = (event) => {
@@ -70,46 +83,48 @@ export default function ClientWrapper({ children }: { children: React.ReactNode 
         const data = JSON.parse(event.data);
 
         if (data.type === "new_incoming_call" && data.call_id) {
-          // Only show if we're not already in a call
-          setIncomingCall({
+          const callInfo: IncomingCall = {
             call_id: data.call_id,
             user: data.user || { id: 0, username: "User" },
-          });
+          };
+
+          // Persist so it survives refresh / navigation
+          localStorage.setItem("pending_incoming_call_id", data.call_id.toString());
+
+          setIncomingCall(callInfo);
         }
 
-        if (data.type === "call_ended") {
-          setIncomingCall(null);
+        if (data.type === "call_ended" || data.type === "call_answered") {
+          // Clear if this call was answered or ended
+          const endedId = data.call_id;
+          if (endedId && incomingCall?.call_id === endedId) {
+            setIncomingCall(null);
+            localStorage.removeItem("pending_incoming_call_id");
+          }
         }
       } catch (e) {
-        console.error("[GlobalCall] Parse error", e);
+        console.error("[GlobalCallWS] Parse error", e);
       }
     };
 
     ws.onclose = () => {
-      console.log("[GlobalCall] Disconnected, reconnecting...");
       reconnectTimeoutRef.current = setTimeout(connectGlobalCallSocket, 4000);
     };
 
-    ws.onerror = (err) => {
-      console.error("[GlobalCall] WebSocket error", err);
-    };
-
     callWsRef.current = ws;
-  }, [isStaff]);
+  }, [isStaff, incomingCall?.call_id]);
 
-  // Connect global call socket for staff
   useEffect(() => {
     if (isStaff) {
       connectGlobalCallSocket();
     }
-
     return () => {
-      if (callWsRef.current) callWsRef.current.close();
+      callWsRef.current?.close();
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
     };
   }, [isStaff, connectGlobalCallSocket]);
 
-  // ==================== KYC CHECK ====================
+  // ==================== KYC BANNER ====================
   useEffect(() => {
     if (isAuthPage) return;
 
@@ -117,10 +132,8 @@ export default function ClientWrapper({ children }: { children: React.ReactNode 
       try {
         const res = await api.getAccount();
         const user = (res.data as any)?.user as User | undefined;
-
         if (user?.kyc_status) {
           setKycStatus(user.kyc_status);
-
           const current = localStorage.getItem("user_session");
           if (current) {
             const parsed = JSON.parse(current);
@@ -130,123 +143,125 @@ export default function ClientWrapper({ children }: { children: React.ReactNode 
         }
       } catch {}
     };
-
     checkKYC();
   }, [pathname, isAuthPage]);
 
-  const shouldShowBanner =
+  const shouldShowKycBanner =
     !isAuthPage &&
     kycStatus &&
     (kycStatus === "pending" || kycStatus === "rejected") &&
     showNotice;
 
-  // ==================== GLOBAL INCOMING CALL HANDLERS ====================
-  const handleAnswerGlobalCall = async () => {
+  // ==================== GLOBAL INCOMING CALL ACTIONS ====================
+  const handleAnswerFromAnywhere = () => {
     if (!incomingCall) return;
 
-    setIsAnsweringGlobal(true);
+    setIsAnswering(true);
 
-    // Store the call_id so CustomerCarePage can pick it up
-    localStorage.setItem("pending_incoming_call_id", incomingCall.call_id.toString());
-
-    // Close the global modal
-    setIncomingCall(null);
-
-    // Navigate to customer care page (where full WebRTC logic lives)
+    // The heavy lifting (WebRTC + voice choice + REST answer) lives in /customer-care
+    // We just navigate there. The page will pick up the pending_incoming_call_id from localStorage
     router.push("/customer-care");
 
-    setIsAnsweringGlobal(false);
+    // Keep the call info in localStorage so CustomerCarePage can show the modal immediately
+    // (We already set it when the event arrived)
+    setIsAnswering(false);
   };
 
-  const handleDeclineGlobalCall = () => {
+  const handleDeclineFromAnywhere = () => {
+    if (!incomingCall) return;
+
+    localStorage.removeItem("pending_incoming_call_id");
     setIncomingCall(null);
-    // Optionally notify backend that call was declined
+
+    // Optional: call backend to mark as declined if you want
+    // For now we just hide it for this staff member
   };
 
   return (
     <div className={isGradientPage ? "gradient-bg min-h-screen" : "min-h-screen"}>
-      {/* Floating KYC Notice Card */}
-      {shouldShowBanner && (
+      {/* KYC Floating Banner */}
+      {shouldShowKycBanner && (
         <div className="fixed top-4 right-4 z-[99999] w-full max-w-sm">
           <div className="bg-zinc-900 border border-amber-500/30 rounded-2xl shadow-2xl p-5 text-white">
             <div className="flex items-start gap-3">
-              <div className="mt-0.5">
-                <AlertCircle className="w-5 h-5 text-amber-400" />
-              </div>
-
+              <AlertCircle className="mt-0.5 h-5 w-5 text-amber-400" />
               <div className="flex-1 min-w-0">
                 <h4 className="font-semibold text-amber-400 mb-1">
                   {kycStatus === "rejected" ? "KYC Rejected" : "KYC Under Review"}
                 </h4>
-
                 <p className="text-sm text-white/80 leading-relaxed">
                   {kycStatus === "rejected"
                     ? "Your previous KYC submission was rejected. Please resubmit your Proof of Identity."
-                    : "Your Proof of Identity has been submitted and is currently under review. You will receive an email once it is approved."}
+                    : "Your Proof of Identity has been submitted and is currently under review."}
                 </p>
-
                 <div className="mt-4 flex gap-3">
                   <Link
                     href="/kyc"
-                    className="inline-flex items-center justify-center px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-xl transition-colors"
+                    className="inline-flex items-center justify-center rounded-xl bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
                   >
                     {kycStatus === "rejected" ? "Resubmit KYC" : "View Status"}
                   </Link>
-
                   <button
                     onClick={() => setShowNotice(false)}
-                    className="px-4 py-2 text-sm text-white/70 hover:text-white hover:bg-white/10 rounded-xl transition-colors"
+                    className="rounded-xl px-4 py-2 text-sm text-white/70 hover:bg-white/10 hover:text-white"
                   >
                     Dismiss
                   </button>
                 </div>
               </div>
-
-              <button
-                onClick={() => setShowNotice(false)}
-                className="text-white/50 hover:text-white p-1 -mr-1 -mt-1"
-              >
-                <X className="w-4 h-4" />
+              <button onClick={() => setShowNotice(false)} className="text-white/50 hover:text-white">
+                <X className="h-4 w-4" />
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ==================== GLOBAL INCOMING CALL MODAL (Staff) ==================== */}
+      {/* ==================== GLOBAL PERSISTENT INCOMING CALL CARD (Staff) ==================== */}
       {incomingCall && isStaff && (
-        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="bg-zinc-900 border border-green-500/30 rounded-3xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
-            <div className="p-8 text-center">
-              <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-500/10">
-                <Phone className="h-10 w-10 text-green-400 animate-pulse" />
+        <div className="fixed bottom-6 right-6 z-[999999] w-full max-w-sm">
+          <div className="rounded-3xl border border-green-500/40 bg-zinc-900/95 p-5 shadow-2xl backdrop-blur-xl">
+            <div className="flex items-start gap-4">
+              <div className="mt-1 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-green-500/10">
+                <Phone className="h-6 w-6 animate-pulse text-green-400" />
               </div>
 
-              <h2 className="text-3xl font-bold text-white mb-2">Incoming Support Call</h2>
-              <p className="text-xl text-white/80 mb-1">
-                from <span className="font-semibold text-white">{incomingCall.user.username}</span>
-              </p>
-              <p className="text-sm text-white/50 mb-8">Call ID: #{incomingCall.call_id}</p>
+              <div className="flex-1">
+                <div className="font-semibold text-white">Incoming Support Call</div>
+                <div className="text-sm text-white/70">
+                  from <span className="font-medium text-white">{incomingCall.user.username}</span>
+                </div>
+                <div className="mt-1 text-xs text-white/50">Call #{incomingCall.call_id}</div>
 
-              <div className="flex gap-4">
-                <button
-                  onClick={handleDeclineGlobalCall}
-                  disabled={isAnsweringGlobal}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/5 py-4 text-lg font-medium text-white hover:bg-white/10 transition-colors disabled:opacity-50"
-                >
-                  <PhoneOff className="h-5 w-5" />
-                  Decline
-                </button>
+                <div className="mt-4 flex gap-3">
+                  <button
+                    onClick={handleDeclineFromAnywhere}
+                    disabled={isAnswering}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/5 py-2.5 text-sm font-medium text-white hover:bg-white/10 disabled:opacity-50"
+                  >
+                    <PhoneOff className="h-4 w-4" /> Decline
+                  </button>
 
-                <button
-                  onClick={handleAnswerGlobalCall}
-                  disabled={isAnsweringGlobal}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-green-600 py-4 text-lg font-semibold text-white hover:bg-green-700 transition-colors disabled:opacity-50"
-                >
-                  <Phone className="h-5 w-5" />
-                  {isAnsweringGlobal ? "Connecting..." : "Answer Call"}
-                </button>
+                  <button
+                    onClick={handleAnswerFromAnywhere}
+                    disabled={isAnswering}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-green-600 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                  >
+                    <Phone className="h-4 w-4" />
+                    {isAnswering ? "Opening..." : "Answer Call"}
+                  </button>
+                </div>
               </div>
+
+              <button
+                onClick={() => {
+                  localStorage.removeItem("pending_incoming_call_id");
+                  setIncomingCall(null);
+                }}
+                className="text-white/40 hover:text-white/70"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
           </div>
         </div>
