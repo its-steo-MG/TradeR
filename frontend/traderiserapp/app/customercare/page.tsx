@@ -16,7 +16,7 @@ import { useWebRTCCall } from '@/hooks/useWebRTCCall'
 
 import { TopNavbar } from '@/components/top-navbar'
 import { Sidebar } from '@/components/sidebar'
-import type { Account } from '@/types/account'   // ← Import the real type
+import type { Account } from '@/types/account'
 
 // ==================== TYPES ====================
 
@@ -33,12 +33,18 @@ interface User {
   username: string
   email: string
   is_staff: boolean
-  accounts: Account[]        // ← Now uses the imported Account
+  accounts: Account[]
 }
 
 interface CallEvent {
   type: string
   call_id?: number
+  offer?: RTCSessionDescriptionInit
+  answer?: RTCSessionDescriptionInit
+  candidate?: RTCIceCandidateInit
+  voice_preset?: string
+  agent?: string
+  user?: { id: number; username: string }
   [key: string]: unknown
 }
 
@@ -54,7 +60,6 @@ interface ChatMessage {
   }
 }
 
-// Raw account coming from localStorage (for normalization)
 interface RawAccount {
   id?: string | number
   account_type?: string
@@ -75,12 +80,19 @@ export default function CustomerCarePage() {
   const [callId, setCallId] = useState<number | null>(null)
   const [callDuration, setCallDuration] = useState(0)
   const [showCallModal, setShowCallModal] = useState(false)
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null)
+
+  // Store incoming offer for staff when they receive webrtc_offer
+  const [pendingOffer, setPendingOffer] = useState<RTCSessionDescriptionInit | null>(null)
+  const pendingOfferCallIdRef = useRef<number | null>(null)
 
   const tokenRef = useRef<string | null>(null)
+  const outgoingCallRef = useRef<number | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const durationTimerRef = useRef<NodeJS.Timeout | null>(null)
   const welcomeAudioRef = useRef<HTMLAudioElement | null>(null)
   const holdMusicRef = useRef<HTMLAudioElement | null>(null)
+  const remoteAudioRef = useRef<HTMLAudioElement>(null)
 
   // Load Session + Normalize Account Types
   useEffect(() => {
@@ -94,14 +106,12 @@ export default function CustomerCarePage() {
         const sessionData = JSON.parse(rawSession)
         const rawAccounts: RawAccount[] = sessionData.accounts || []
 
-        // Normalize to match the shape expected by @/types/account
         const normalizedAccounts: Account[] = rawAccounts
           .filter((acc): acc is RawAccount & { id: string | number } => acc.id != null)
           .map((acc) => ({
-            id: Number(acc.id),           // Convert to number
+            id: Number(acc.id),
             account_type: acc.account_type || '',
             balance: Number(acc.balance) || 0,
-            // Add any other fields your real Account type requires (with defaults)
           }))
 
         const userData: User = {
@@ -126,34 +136,120 @@ export default function CustomerCarePage() {
 
   const token = tokenRef.current
 
-  const { closeConnection } = useWebRTCCall()
+  // ==================== WEBRTC + CALL HOOKS ====================
+
+  const {
+    createAndSendOffer,
+    handleRemoteOffer,
+    handleRemoteAnswer,
+    addIceCandidate,
+    closeConnection,
+  } = useWebRTCCall({
+    onIceCandidate: (candidate) => {
+      if (callId) {
+        sendICECandidate(callId, candidate)
+      }
+    },
+    onRemoteStreamAvailable: (stream) => {
+      console.log('[CustomerCare] Remote stream received')
+      setRemoteStream(stream)
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = stream
+        remoteAudioRef.current.play().catch((err) => {
+          console.error('Failed to play remote audio:', err)
+        })
+      }
+    },
+    onConnectionStateChange: (state) => {
+      console.log('[CustomerCare] WebRTC connection state:', state)
+      if (state === 'connected') {
+        setIsCallActive(true)
+      }
+      if (state === 'failed' || state === 'closed') {
+        handleEndCallLogic()
+      }
+    },
+  })
 
   const handleCallEvent = useCallback((event: CallEvent) => {
     console.log('Call Event Received:', event.type, event)
 
-    if (event.type === 'new_incoming_call' && currentUser?.is_staff && event.call_id) {
+    // ==================== INCOMING CALL (for staff) ====================
+    if (event.type === 'new_incoming_call' && event.call_id) {
       const id = event.call_id
-      setCallId(id)
-      localStorage.setItem('pending_incoming_call_id', id.toString())
-      setShowCallModal(true)
-      toast.success(`Incoming call - ID: ${id}`)
+
+      const isOwnOutgoingCall =
+        outgoingCallRef.current === id ||
+        (event.user && event.user.username === currentUser?.username)
+
+      if (currentUser?.is_staff && !isOwnOutgoingCall) {
+        setCallId(id)
+        pendingOfferCallIdRef.current = id
+        localStorage.setItem('pending_incoming_call_id', id.toString())
+        setShowCallModal(true)
+        toast.success(`Incoming call - ID: ${id}`)
+      }
     }
 
+    // ==================== WEBRTC OFFER (staff receives this) ====================
+    if (event.type === 'webrtc_offer' && event.call_id && event.offer) {
+      // Only staff should process incoming offers
+      if (currentUser?.is_staff) {
+        console.log('[WebRTC] Received offer for call', event.call_id)
+        setPendingOffer(event.offer)
+        pendingOfferCallIdRef.current = event.call_id
+
+        // If modal is already open for this call, we can prefill
+        if (callId === event.call_id) {
+          setCallId(event.call_id)
+        }
+      }
+    }
+
+    // ==================== WEBRTC ANSWER (user receives this) ====================
+    if (event.type === 'webrtc_answer' && event.call_id && event.answer) {
+      console.log('[WebRTC] Received answer for call', event.call_id)
+      handleRemoteAnswer(event.answer).catch((err) => {
+        console.error('Failed to handle remote answer:', err)
+      })
+    }
+
+    // ==================== ICE CANDIDATE ====================
+    if (event.type === 'webrtc_ice' && event.call_id && event.candidate) {
+      addIceCandidate(event.candidate).catch((err) => {
+        console.error('Failed to add ICE candidate:', err)
+      })
+    }
+
+    // ==================== CALL ANSWERED ====================
     if (event.type === 'call_answered') {
       stopAllAudio()
       setIsCalling(false)
-      setIsCallActive(true)
       setIsLoadingCall(false)
       startCallTimer()
+
+      // If we are the caller, we should already have sent offer.
+      // If we are staff, we just answered via modal.
+      setIsCallActive(true)
       toast.success('Call connected successfully')
     }
 
+    // ==================== CALL ENDED ====================
     if (event.type === 'call_ended') {
       handleEndCallLogic()
     }
-  }, [currentUser?.is_staff])
+  }, [currentUser?.is_staff, currentUser?.username, callId, handleRemoteAnswer, addIceCandidate])
 
-  const { initiateCall, answerCall, endCall } = useWebSocketCall(token, handleCallEvent)
+  const {
+    initiateCall,
+    answerCall,
+    endCall,
+    sendWebRTCOffer,
+    sendWebRTCAnswer,
+    sendICECandidate,
+    joinCallRoom,
+  } = useWebSocketCall(token, handleCallEvent)
+
   const { messages: chatMessages, isConnected: chatConnected, blockInfo, sendMessage: sendChatMessage } =
     useWebSocketChat(token)
 
@@ -199,19 +295,35 @@ export default function CustomerCarePage() {
     setCallDuration(0)
     setShowCallModal(false)
     setIsLoadingCall(false)
+    setPendingOffer(null)
+    setRemoteStream(null)
+    outgoingCallRef.current = null
+    pendingOfferCallIdRef.current = null
     localStorage.removeItem('pending_incoming_call_id')
+
+    // Clear remote audio
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.srcObject = null
+    }
   }, [closeConnection])
 
-  // Restore pending incoming call
+  // Restore pending incoming call for staff
   useEffect(() => {
-    if (currentUser?.is_staff) {
+    if (currentUser?.is_staff && !isCalling && !isCallActive) {
       const savedCallId = localStorage.getItem('pending_incoming_call_id')
-      if (savedCallId && !showCallModal) {
+      if (
+        savedCallId &&
+        !showCallModal &&
+        outgoingCallRef.current !== Number(savedCallId)
+      ) {
         setCallId(Number(savedCallId))
+        pendingOfferCallIdRef.current = Number(savedCallId)
         setShowCallModal(true)
       }
     }
-  }, [currentUser?.is_staff, showCallModal])
+  }, [currentUser?.is_staff, showCallModal, isCalling, isCallActive])
+
+  // ==================== CALL INITIATION (USER) ====================
 
   const handleInitiateCall = async () => {
     if (!token) return toast.error('Please log in again')
@@ -221,9 +333,20 @@ export default function CustomerCarePage() {
 
     try {
       const callData = await initiateCall()
-      setCallId(callData.call_id)
+      const newCallId = callData.call_id
+
+      outgoingCallRef.current = newCallId
+      setCallId(newCallId)
+
+      // Join the specific call room for better signaling
+      joinCallRoom(newCallId)
+
+      // Create WebRTC offer and send it
+      const offer = await createAndSendOffer()
+      sendWebRTCOffer(newCallId, offer)
+
       playWelcomeSound()
-      toast.info('Calling support...')
+      toast.info('Calling support... Connecting...')
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to initiate call'
       toast.error(message)
@@ -233,28 +356,67 @@ export default function CustomerCarePage() {
     }
   }
 
+  // ==================== END CALL ====================
+
   const handleEndCall = async () => {
-    if (callId) await endCall(callId).catch(() => {})
+    if (callId) {
+      await endCall(callId).catch(() => {})
+    }
     handleEndCallLogic()
   }
 
+  // ==================== ANSWER CALL (STAFF) ====================
+
   const handleAnswerCall = async (voicePreset: string): Promise<void> => {
-    if (!callId) {
+    const currentCallId = callId || pendingOfferCallIdRef.current
+
+    if (!currentCallId) {
       toast.error('Call ID not found')
       return
     }
+
+    if (!pendingOffer) {
+      toast.error('No offer received yet. Please wait a moment and try again.')
+      return
+    }
+
     try {
-      await answerCall(callId, voicePreset)
+      // 1. Call REST API to mark call as answered
+      await answerCall(currentCallId, voicePreset)
+
+      // 2. Create answer using the pending offer + chosen voice preset
+      const answer = await handleRemoteOffer(pendingOffer, voicePreset)
+
+      // 3. Send answer via WebSocket
+      sendWebRTCAnswer(currentCallId, answer)
+
+      // 4. Join the call room for ICE + media
+      joinCallRoom(currentCallId)
+
+      // 5. Update UI
       setShowCallModal(false)
       localStorage.removeItem('pending_incoming_call_id')
+      setPendingOffer(null)
+      pendingOfferCallIdRef.current = null
+
+      stopAllAudio()
+      setIsCalling(false)
+      setIsLoadingCall(false)
+      setIsCallActive(true)
+      startCallTimer()
+
+      toast.success('Call connected')
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to answer call'
       toast.error(message)
+      console.error('Answer call error:', error)
     }
   }
 
   const handleDeclineCall = () => {
     setShowCallModal(false)
+    setPendingOffer(null)
+    pendingOfferCallIdRef.current = null
     localStorage.removeItem('pending_incoming_call_id')
   }
 
@@ -403,15 +565,14 @@ export default function CustomerCarePage() {
 
               {!isBlocked && (
                 <div className="p-6 border-t border-white/10">
-                  <ChatInput 
+                  <ChatInput
                     onSend={async (message: string) => {
-                      const success = sendChatMessage(message);   // your current hook returns boolean
-                      // Optionally handle the boolean if needed
+                      const success = sendChatMessage(message)
                       if (!success) {
-                        toast.error("Failed to send message");
+                        toast.error("Failed to send message")
                       }
-                    }} 
-                    disabled={!chatConnected} 
+                    }}
+                    disabled={!chatConnected}
                   />
                 </div>
               )}
@@ -419,6 +580,9 @@ export default function CustomerCarePage() {
           </div>
         </main>
       </div>
+
+      {/* Hidden audio element for remote stream */}
+      <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
 
       {showCallModal && (
         <CallAnswerModal onAnswer={handleAnswerCall} onDecline={handleDeclineCall} />

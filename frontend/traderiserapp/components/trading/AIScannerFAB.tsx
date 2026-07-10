@@ -34,6 +34,21 @@ type ScanResult = {
 };
 
 /* ------------------------------------------------------------------ */
+/*  Helpers — detect sashi status from local session                  */
+/* ------------------------------------------------------------------ */
+function getIsSashi(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const raw = localStorage.getItem("user_session");
+    if (!raw) return false;
+    const parsed = JSON.parse(raw) as { is_sashi?: boolean };
+    return parsed?.is_sashi === true;
+  } catch {
+    return false;
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /*  AI scoring — uses synthetic per-market digit distributions        */
 /* ------------------------------------------------------------------ */
 // Deterministic pseudo-random from a string seed (mulberry32)
@@ -133,10 +148,27 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
   const [scanIdx, setScanIdx] = useState(0);
   const [pickedRobot, setPickedRobot] = useState<Robot | null>(null);
   const [loadingRobot, setLoadingRobot] = useState(true);
+  const [isSashi, setIsSashi] = useState(false);
 
   const { isRunning } = useRobotRunner();
 
-  /* -------- Load an S-Digit Robot silently (respects is_sashi) -------- */
+  /* -------- Detect sashi status once on mount -------- */
+  useEffect(() => {
+    setIsSashi(getIsSashi());
+  }, []);
+
+  /* -------- Load an S-Digit Robot silently (REQUIRED) --------
+   *
+   * An S-Digit Robot is required to use the AI Scanner for ALL users.
+   * The scanner then routes trades based on the account type:
+   *   - Sashi user     → pass robotId so the backend runs the sashi
+   *                      engine (forced-digit sync).
+   *   - Non-sashi user → omit robotId so robotRunner falls back to
+   *                      api.placeDigitTrade — the standard endpoint
+   *                      that returns real profit/loss for regular
+   *                      accounts. This fixes the "profit/loss = 0"
+   *                      bug non-sashi users were seeing.
+   */
   useEffect(() => {
     const load = async () => {
       setLoadingRobot(true);
@@ -178,6 +210,7 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
       toast.error("No S-Digit Robot found on your account. Purchase one to use the AI Scanner.");
       return;
     }
+
     const stakeNum = Math.max(0.5, parseFloat(stake) || 0.5);
     const targetNum = Math.max(0, parseFloat(targetProfit) || 0);
     const stopNum = Math.max(0, parseFloat(stopLoss) || 0);
@@ -207,7 +240,13 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
       { duration: 6000 },
     );
 
-    // Start the robot via existing infrastructure — respects is_sashi on backend
+    // Decide which engine to route through:
+    //   - Sashi user + owns an S-Digit Robot → use the S-Digit robot flow
+    //     (backend forces the winning/losing digit for a "sashi sync" run)
+    //   - Everyone else → run through the normal digit-trade endpoint so
+    //     profit / loss is calculated by the real market outcome.
+    const useSashiEngine = isSashi && pickedRobot !== null;
+
     startRobot({
       market: winner.market.name || winner.market.display_name || "Volatility Market",
       contractKind: winner.contractKind,
@@ -218,7 +257,11 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
       stopLoss: stopNum,
       maxRuns: parseInt(maxRuns, 10) || 100,
       marketId: winner.market.id,
-      robotId: pickedRobot.id,
+      // Only forward robotId when the sashi engine should handle it.
+      // For non-sashi users (or users without an S-Digit Robot) we omit
+      // robotId so robotRunner falls back to api.placeDigitTrade, which
+      // returns real profit/loss for standard accounts.
+      robotId: useSashiEngine ? pickedRobot!.id : undefined,
     });
 
     onStarted();
@@ -384,6 +427,11 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
                     No S-Digit Robot on your account. Purchase one to enable AI scanning.
                   </div>
                 )}
+                {!loadingRobot && pickedRobot && !isSashi && (
+                  <div className="text-center text-[11px] text-slate-500 py-1 px-3">
+                    Standard account — trades run on the live market engine with real profit/loss.
+                  </div>
+                )}
 
                 <button
                   onClick={runScan}
@@ -399,8 +447,9 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
                 </button>
 
                 <p className="text-[10px] text-slate-500 text-center px-4">
-                  The AI scores every market in the selected category, picks the strongest edge,
-                  and auto-trades using your S-Digit Robot. You can watch every trade live.
+                  The AI scores every market in the selected category, picks the
+                  strongest edge, and auto-trades using the engine that fits
+                  your account. You can watch every trade live.
                 </p>
               </div>
             )}

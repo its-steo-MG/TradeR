@@ -12,9 +12,9 @@ export interface CallEvent {
   type: string
   call_id?: number
   is_staff?: boolean
-  offer?: any
-  answer?: any
-  candidate?: any
+  offer?: RTCSessionDescriptionInit
+  answer?: RTCSessionDescriptionInit
+  candidate?: RTCIceCandidateInit
   voice_preset?: string
   agent?: string
   user?: { id: number; username: string }
@@ -57,8 +57,6 @@ export function useWebSocketCall(token: string | null, onCallEvent?: CallEventCa
       try {
         const data = JSON.parse(event.data) as CallEvent
         console.log(`[CallWS] Received: ${data.type}`, data)
-
-        // Forward event to main component
         callbackRef.current?.(data)
 
         if (data.type === 'connection_established') {
@@ -77,7 +75,6 @@ export function useWebSocketCall(token: string | null, onCallEvent?: CallEventCa
     ws.onclose = (event) => {
       setIsConnected(false)
       console.log(`[CallWS] Disconnected (code: ${event.code})`)
-      // Auto reconnect
       reconnectTimeoutRef.current = setTimeout(connect, 3000)
     }
 
@@ -164,13 +161,13 @@ export function useWebSocketCall(token: string | null, onCallEvent?: CallEventCa
     endCall,
 
     // WebRTC Signaling
-    sendWebRTCOffer: (callId: number, offer: any) =>
+    sendWebRTCOffer: (callId: number, offer: RTCSessionDescriptionInit) =>
       send({ type: 'webrtc_offer', call_id: callId, offer }),
 
-    sendWebRTCAnswer: (callId: number, answer: any) =>
+    sendWebRTCAnswer: (callId: number, answer: RTCSessionDescriptionInit) =>
       send({ type: 'webrtc_answer', call_id: callId, answer }),
 
-    sendICECandidate: (callId: number, candidate: any) =>
+    sendICECandidate: (callId: number, candidate: RTCIceCandidateInit) =>
       send({ type: 'webrtc_ice', call_id: callId, candidate }),
 
     joinCallRoom: (callId: number) =>
