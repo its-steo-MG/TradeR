@@ -231,40 +231,49 @@ def notify_staff_on_new_call(sender, instance, created, **kwargs):
     if not created or instance.status != 'pending':
         return
 
-    admin_emails = list(User.objects.filter(is_staff=True).exclude(email='').values_list('email', flat=True))
+    admin_emails = list(
+        User.objects.filter(is_staff=True)
+        .exclude(email='')
+        .values_list('email', flat=True)
+    )
     if not admin_emails:
         return
 
     subject = f"🔴 Incoming Audio Call from {instance.user.username}"
+
+    # Fixed: Point to /customer-care instead of non-existent /admin-call
     html_message = f"""
-    <h2>New Audio Call</h2>
-    <p><strong>User:</strong> {instance.user.username} ({instance.user.email})</p>
-    <p><a href="{settings.FRONTEND_URL}/admin-call/{instance.id}" style="background:#007bff;color:white;padding:12px 20px;text-decoration:none;border-radius:5px;">ANSWER CALL NOW</a></p>
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f9f9f9; border-radius: 10px;">
+        <h2 style="color: #d32f2f;">🔴 New Incoming Support Call</h2>
+        
+        <p><strong>From:</strong> {instance.user.username} ({instance.user.email})</p>
+        <p><strong>Call ID:</strong> #{instance.id}</p>
+        <p><strong>Time:</strong> {instance.started_at.strftime('%Y-%m-%d %H:%M:%S')}</p>
+        
+        <div style="margin: 25px 0;">
+            <a href="{settings.FRONTEND_URL}/customer-care" 
+               style="background: #007bff; color: white; padding: 14px 28px; text-decoration: none; 
+                      border-radius: 8px; font-weight: bold; display: inline-block;">
+                ANSWER CALL NOW
+            </a>
+        </div>
+        
+        <p style="font-size: 13px; color: #666;">
+            Click the button above to go to the Support Center. 
+            The incoming call notification will appear automatically.
+        </p>
+    </div>
     """
 
-    send_mail(
-        subject=subject,
-        message=subject,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=admin_emails,
-        html_message=html_message,
-        fail_silently=True,
-    )
-
-    # Inside notify_staff_on_new_call, after the email:
-
     try:
-        channel_layer = get_channel_layer()
-        call_data = {
-            "type": "new_incoming_call",
-            "call_id": instance.id,
-            "user": {
-                "id": instance.user.id,
-                "username": instance.user.username,
-            },
-            "started_at": instance.started_at.isoformat(),
-        }
-        async_to_sync(channel_layer.group_send)("call_center", call_data)
-        logger.info(f"✅ Broadcast new incoming call #{instance.id} to call_center")
+        send_mail(
+            subject=subject,
+            message=subject,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=admin_emails,
+            html_message=html_message,
+            fail_silently=True,
+        )
+        logger.info(f"✅ Incoming call email sent to {len(admin_emails)} staff members for call #{instance.id}")
     except Exception as e:
-        logger.error(f"Failed to broadcast call: {e}")
+        logger.error(f"Failed to send incoming call email: {e}")
