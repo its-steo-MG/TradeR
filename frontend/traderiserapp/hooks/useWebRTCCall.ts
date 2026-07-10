@@ -18,7 +18,9 @@ export function useWebRTCCall(options: WebRTCCallOptions = {}) {
   const [error, setError] = useState<string | null>(null)
 
   const optsRef = useRef(options)
-  useEffect(() => { optsRef.current = options }, [options])
+  useEffect(() => {
+    optsRef.current = options
+  }, [options])
 
   const iceServers: RTCIceServer[] = [
     { urls: 'stun:stun.l.google.com:19302' },
@@ -38,10 +40,12 @@ export function useWebRTCCall(options: WebRTCCallOptions = {}) {
   ]
 
   /**
-   * Improved voice changer with much stronger, more audible effects.
+   * STRONGER voice changer - more dramatic and audible effects
    */
   const createVoiceProcessedStream = useCallback(
     async (preset: string = 'default'): Promise<MediaStream> => {
+      console.log(`[Voice] Creating stream with preset: ${preset}`)
+
       const rawStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -52,6 +56,7 @@ export function useWebRTCCall(options: WebRTCCallOptions = {}) {
       })
 
       if (preset === 'default') {
+        console.log('[Voice] Using DEFAULT (no processing)')
         return rawStream
       }
 
@@ -61,7 +66,6 @@ export function useWebRTCCall(options: WebRTCCallOptions = {}) {
 
       const ctx = new AudioCtx()
 
-      // Resume AudioContext if suspended (important on some browsers)
       if (ctx.state === 'suspended') {
         await ctx.resume()
       }
@@ -69,54 +73,61 @@ export function useWebRTCCall(options: WebRTCCallOptions = {}) {
       const source = ctx.createMediaStreamSource(rawStream)
       const dest = ctx.createMediaStreamDestination()
 
-      // === Stronger voice transformation chain ===
+      // === Very strong, noticeable voice transformation ===
       const lowShelf = ctx.createBiquadFilter()
       lowShelf.type = 'lowshelf'
-      lowShelf.frequency.value = 300
+      lowShelf.frequency.value = 250
 
       const highShelf = ctx.createBiquadFilter()
       highShelf.type = 'highshelf'
-      highShelf.frequency.value = 2500
+      highShelf.frequency.value = 2800
 
-      const peaking = ctx.createBiquadFilter()
-      peaking.type = 'peaking'
-      peaking.Q.value = 1.5
+      const midPeaking = ctx.createBiquadFilter()
+      midPeaking.type = 'peaking'
+      midPeaking.Q.value = 1.8
+
+      const highPeaking = ctx.createBiquadFilter()
+      highPeaking.type = 'peaking'
+      highPeaking.Q.value = 2.2
+      highPeaking.frequency.value = 3200
 
       const compressor = ctx.createDynamicsCompressor()
 
       if (preset === 'lady' || preset === 'female') {
-        // Female voice: boost highs + slight brightness
-        lowShelf.gain.value = -8
-        highShelf.gain.value = 18
-        peaking.frequency.value = 1800
-        peaking.gain.value = 12
-        peaking.Q.value = 2
+        // Strong female / bright voice
+        lowShelf.gain.value = -14
+        highShelf.gain.value = 26
+        midPeaking.frequency.value = 1600
+        midPeaking.gain.value = 18
+        highPeaking.gain.value = 12
+        console.log('[Voice] Applied STRONG LADY preset')
       } 
       else if (preset === 'man' || preset === 'male') {
-        // Male voice: boost lows + cut highs
-        lowShelf.gain.value = 14
-        highShelf.gain.value = -10
-        peaking.frequency.value = 250
-        peaking.gain.value = 8
+        // Deep male voice
+        lowShelf.gain.value = 18
+        highShelf.gain.value = -16
+        midPeaking.frequency.value = 280
+        midPeaking.gain.value = 10
+        console.log('[Voice] Applied STRONG MAN preset')
       } 
       else if (preset === 'child') {
-        // Child voice: very bright + high frequencies
-        lowShelf.gain.value = -12
-        highShelf.gain.value = 22
-        peaking.frequency.value = 2200
-        peaking.gain.value = 16
-        peaking.Q.value = 2.5
+        // Very high pitched child-like
+        lowShelf.gain.value = -18
+        highShelf.gain.value = 30
+        midPeaking.frequency.value = 2100
+        midPeaking.gain.value = 22
+        highPeaking.gain.value = 16
+        console.log('[Voice] Applied STRONG CHILD preset')
       }
 
-      // Connect the chain
       source
         .connect(lowShelf)
         .connect(highShelf)
-        .connect(peaking)
+        .connect(midPeaking)
+        .connect(highPeaking)
         .connect(compressor)
         .connect(dest)
 
-      console.log(`[Voice Changer] Applied preset: ${preset}`)
       return dest.stream
     },
     []
@@ -126,7 +137,9 @@ export function useWebRTCCall(options: WebRTCCallOptions = {}) {
     const pc = new RTCPeerConnection({ iceServers })
 
     pc.onicecandidate = (event) => {
-      if (event.candidate) optsRef.current.onIceCandidate?.(event.candidate)
+      if (event.candidate) {
+        optsRef.current.onIceCandidate?.(event.candidate)
+      }
     }
 
     pc.ontrack = (event) => {
@@ -155,7 +168,7 @@ export function useWebRTCCall(options: WebRTCCallOptions = {}) {
     try {
       await pc.addIceCandidate(new RTCIceCandidate(candidate))
     } catch (e) {
-      console.error('[WebRTC] addIceCandidate error:', e)
+      console.error('[WebRTC] addIceCandidate failed:', e)
     }
   }, [])
 
@@ -166,7 +179,7 @@ export function useWebRTCCall(options: WebRTCCallOptions = {}) {
       try {
         await pc.addIceCandidate(new RTCIceCandidate(cand))
       } catch (e) {
-        console.error('[WebRTC] Queued ICE error:', e)
+        console.error('[WebRTC] Queued ICE failed:', e)
       }
     }
     pendingIceCandidates.current = []
