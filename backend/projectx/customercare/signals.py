@@ -251,7 +251,7 @@ def notify_staff_on_new_call(sender, instance, created, **kwargs):
         <p><strong>Time:</strong> {instance.started_at.strftime('%Y-%m-%d %H:%M:%S')}</p>
         
         <div style="margin: 25px 0;">
-            <a href="{settings.FRONTEND_URL}/customer-care" 
+            <a href="{settings.FRONTEND_URL}/customercare" 
                style="background: #007bff; color: white; padding: 14px 28px; text-decoration: none; 
                       border-radius: 8px; font-weight: bold; display: inline-block;">
                 ANSWER CALL NOW
