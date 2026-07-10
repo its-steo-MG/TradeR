@@ -18,9 +18,7 @@ export function useWebRTCCall(options: WebRTCCallOptions = {}) {
   const [error, setError] = useState<string | null>(null)
 
   const optsRef = useRef(options)
-  useEffect(() => {
-    optsRef.current = options
-  }, [options])
+  useEffect(() => { optsRef.current = options }, [options])
 
   const iceServers: RTCIceServer[] = [
     { urls: 'stun:stun.l.google.com:19302' },
@@ -39,6 +37,9 @@ export function useWebRTCCall(options: WebRTCCallOptions = {}) {
     },
   ]
 
+  /**
+   * Improved voice changer with much stronger, more audible effects.
+   */
   const createVoiceProcessedStream = useCallback(
     async (preset: string = 'default'): Promise<MediaStream> => {
       const rawStream = await navigator.mediaDevices.getUserMedia({
@@ -59,40 +60,63 @@ export function useWebRTCCall(options: WebRTCCallOptions = {}) {
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
 
       const ctx = new AudioCtx()
+
+      // Resume AudioContext if suspended (important on some browsers)
+      if (ctx.state === 'suspended') {
+        await ctx.resume()
+      }
+
       const source = ctx.createMediaStreamSource(rawStream)
       const dest = ctx.createMediaStreamDestination()
 
-      const hp = ctx.createBiquadFilter()
-      hp.type = 'highpass'
-      hp.frequency.value = 80
+      // === Stronger voice transformation chain ===
+      const lowShelf = ctx.createBiquadFilter()
+      lowShelf.type = 'lowshelf'
+      lowShelf.frequency.value = 300
+
+      const highShelf = ctx.createBiquadFilter()
+      highShelf.type = 'highshelf'
+      highShelf.frequency.value = 2500
 
       const peaking = ctx.createBiquadFilter()
       peaking.type = 'peaking'
-      peaking.Q.value = 1.2
+      peaking.Q.value = 1.5
 
-      const gain = ctx.createGain()
-      gain.gain.value = 1.0
+      const compressor = ctx.createDynamicsCompressor()
 
       if (preset === 'lady' || preset === 'female') {
-        peaking.frequency.value = 900
-        peaking.gain.value = 15
-        gain.gain.value = 1.1
-      } else if (preset === 'man' || preset === 'male') {
-        peaking.frequency.value = 180
-        peaking.gain.value = -12
-        gain.gain.value = 1.0
-      } else if (preset === 'child') {
-        peaking.frequency.value = 1400
-        peaking.gain.value = 18
-        gain.gain.value = 1.15
+        // Female voice: boost highs + slight brightness
+        lowShelf.gain.value = -8
+        highShelf.gain.value = 18
+        peaking.frequency.value = 1800
+        peaking.gain.value = 12
+        peaking.Q.value = 2
+      } 
+      else if (preset === 'man' || preset === 'male') {
+        // Male voice: boost lows + cut highs
+        lowShelf.gain.value = 14
+        highShelf.gain.value = -10
+        peaking.frequency.value = 250
+        peaking.gain.value = 8
+      } 
+      else if (preset === 'child') {
+        // Child voice: very bright + high frequencies
+        lowShelf.gain.value = -12
+        highShelf.gain.value = 22
+        peaking.frequency.value = 2200
+        peaking.gain.value = 16
+        peaking.Q.value = 2.5
       }
 
-      source.connect(hp)
-      hp.connect(peaking)
-      peaking.connect(gain)
-      gain.connect(dest)
+      // Connect the chain
+      source
+        .connect(lowShelf)
+        .connect(highShelf)
+        .connect(peaking)
+        .connect(compressor)
+        .connect(dest)
 
-      console.log(`[Voice] Applied preset: ${preset}`)
+      console.log(`[Voice Changer] Applied preset: ${preset}`)
       return dest.stream
     },
     []
@@ -102,22 +126,16 @@ export function useWebRTCCall(options: WebRTCCallOptions = {}) {
     const pc = new RTCPeerConnection({ iceServers })
 
     pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        optsRef.current.onIceCandidate?.(event.candidate)
-      }
+      if (event.candidate) optsRef.current.onIceCandidate?.(event.candidate)
     }
 
     pc.ontrack = (event) => {
-      console.log('[WebRTC] Remote track received')
       const [stream] = event.streams
-      if (stream) {
-        optsRef.current.onRemoteStreamAvailable?.(stream)
-      }
+      if (stream) optsRef.current.onRemoteStreamAvailable?.(stream)
     }
 
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState
-      console.log(`[WebRTC] Connection state: ${state}`)
       setIsConnected(state === 'connected')
       if (state !== 'connecting') setIsConnecting(false)
       optsRef.current.onConnectionStateChange?.(state)
@@ -130,34 +148,30 @@ export function useWebRTCCall(options: WebRTCCallOptions = {}) {
   const addIceCandidate = useCallback(async (candidate: RTCIceCandidateInit) => {
     const pc = peerConnectionRef.current
     if (!pc) return
-
     if (!pc.remoteDescription) {
       pendingIceCandidates.current.push(candidate)
       return
     }
-
     try {
       await pc.addIceCandidate(new RTCIceCandidate(candidate))
     } catch (e) {
-      console.error('[WebRTC] addIceCandidate failed:', e)
+      console.error('[WebRTC] addIceCandidate error:', e)
     }
   }, [])
 
   const processPendingIceCandidates = useCallback(async () => {
     const pc = peerConnectionRef.current
     if (!pc || pendingIceCandidates.current.length === 0) return
-
     for (const cand of pendingIceCandidates.current) {
       try {
         await pc.addIceCandidate(new RTCIceCandidate(cand))
       } catch (e) {
-        console.error('[WebRTC] Queued ICE failed:', e)
+        console.error('[WebRTC] Queued ICE error:', e)
       }
     }
     pendingIceCandidates.current = []
   }, [])
 
-  // Caller creates offer
   const createAndSendOffer = useCallback(async (): Promise<RTCSessionDescriptionInit> => {
     setIsConnecting(true)
     const pc = peerConnectionRef.current ?? createPeerConnection()
@@ -168,17 +182,11 @@ export function useWebRTCCall(options: WebRTCCallOptions = {}) {
 
     const offer = await pc.createOffer({ offerToReceiveAudio: true })
     await pc.setLocalDescription(offer)
-
-    console.log('[WebRTC] Offer created and set as local description')
     return offer
   }, [createPeerConnection, createVoiceProcessedStream])
 
-  // Staff handles incoming offer and creates answer
   const handleRemoteOffer = useCallback(
-    async (
-      offer: RTCSessionDescriptionInit,
-      voicePreset: string = 'default'
-    ): Promise<RTCSessionDescriptionInit> => {
+    async (offer: RTCSessionDescriptionInit, voicePreset: string = 'default') => {
       setIsConnecting(true)
       const pc = peerConnectionRef.current ?? createPeerConnection()
 
@@ -190,55 +198,29 @@ export function useWebRTCCall(options: WebRTCCallOptions = {}) {
       const answer = await pc.createAnswer()
       await pc.setLocalDescription(answer)
       await processPendingIceCandidates()
-
-      console.log(`[WebRTC] Created answer with voice preset: ${voicePreset}`)
       return answer
     },
     [createPeerConnection, createVoiceProcessedStream, processPendingIceCandidates]
   )
 
-  // Caller handles answer from staff
-  const handleRemoteAnswer = useCallback(
-    async (answer: RTCSessionDescriptionInit) => {
-      const pc = peerConnectionRef.current
-      if (!pc) {
-        throw new Error('No peer connection available')
-      }
-
-      await pc.setRemoteDescription(new RTCSessionDescription(answer))
-      await processPendingIceCandidates()
-
-      console.log('[WebRTC] Remote answer set successfully')
-    },
-    [processPendingIceCandidates]
-  )
+  const handleRemoteAnswer = useCallback(async (answer: RTCSessionDescriptionInit) => {
+    const pc = peerConnectionRef.current
+    if (!pc) throw new Error('No peer connection')
+    await pc.setRemoteDescription(new RTCSessionDescription(answer))
+    await processPendingIceCandidates()
+  }, [processPendingIceCandidates])
 
   const closeConnection = useCallback(() => {
-    console.log('[WebRTC] Closing connection')
-
     localStreamRef.current?.getTracks().forEach((t) => t.stop())
-    peerConnectionRef.current?.getSenders().forEach((s) => {
-      try {
-        s.track?.stop()
-      } catch {
-        // ignore
-      }
-    })
-
     peerConnectionRef.current?.close()
     peerConnectionRef.current = null
     localStreamRef.current = null
     pendingIceCandidates.current = []
-
     setIsConnected(false)
     setIsConnecting(false)
   }, [])
 
-  useEffect(() => {
-    return () => {
-      closeConnection()
-    }
-  }, [closeConnection])
+  useEffect(() => () => closeConnection(), [closeConnection])
 
   return {
     createAndSendOffer,
