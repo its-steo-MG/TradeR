@@ -1,4 +1,4 @@
-// lib/api.ts (updated with suspension typing)
+// lib/api.ts (updated with suspension typing + customer care admin helpers)
 //const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api"
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://traderiserproapp.onrender.com/api"
 
@@ -94,6 +94,7 @@ export interface ForexRobot {
   max_open_positions?:number
   is_ea?:boolean
 }
+
 export interface RobotRaw {
   price?: number
 }
@@ -185,7 +186,7 @@ export interface AgentDeposit {
   payment_method?: string
   status: "pending" | "verified" | "rejected"
   screenshot_url?: string
-  binance_tx_hash?: string          // ← Added for Binance
+  binance_tx_hash?: string // ← Added for Binance
   transaction_code?: string
   paypal_transaction_id?: string
   bank_reference?: string
@@ -201,7 +202,7 @@ export interface AgentWithdrawal {
   payment_method?: string
   status: "pending_otp" | "otp_verified" | "completed" | "rejected"
   otp_code?: string
-  user_binance_address?: string          // ← For Binance withdrawals
+  user_binance_address?: string // ← For Binance withdrawals
   user_paypal_email?: string
   user_bank_name?: string
   user_bank_account_name?: string
@@ -231,19 +232,29 @@ export interface ChatMessage {
   is_read: boolean
   is_system: boolean
   sender: {
-    id: number
+    id?: number
     username: string
-    email: string
+    email?: string
     is_staff: boolean
   }
   is_me: boolean
+  user_id?: number
 }
 
 export interface ChatThread {
   id: number
-  is_active: boolean
-  messages: ChatMessage[]
-  block_info: {
+  is_active?: boolean
+  user?: {
+    id: number
+    username: string
+    email?: string
+  }
+  messages?: ChatMessage[]
+  last_message?: string | null
+  last_message_at?: string | null
+  unread_count?: number
+  is_blocked?: boolean
+  block_info?: {
     type?: "permanent" | "temporary"
     title?: string
     message?: string
@@ -352,7 +363,7 @@ export interface SuspensionInfo {
 }
 
 /* ------------------------------------------------------------------ */
-/*  MPESA NOTIFICATION TYPE                                            */
+/* MPESA NOTIFICATION TYPE */
 /* ------------------------------------------------------------------ */
 export type MpesaNotification = {
   id: number;
@@ -370,11 +381,11 @@ export type LoginResponseData = {
   refresh: string;
   user: UserSession;
   active_account: Record<string, unknown>;
-  suspension?: SuspensionInfo;  // ← NEW: Optional suspension field
+  suspension?: SuspensionInfo; // ← NEW: Optional suspension field
 };
 
 /* ------------------------------------------------------------------ */
-/*  TOKEN KEYS – MUST MATCH login/signup response                     */
+/* TOKEN KEYS – MUST MATCH login/signup response */
 /* ------------------------------------------------------------------ */
 const ACCESS_KEY = "access_token"
 const REFRESH_KEY = "refresh_token"
@@ -383,6 +394,7 @@ const ADMIN_KEY = "is_admin"
 const getAccess = () => localStorage.getItem(ACCESS_KEY)
 const getRefresh = () => localStorage.getItem(REFRESH_KEY)
 const setAccess = (token: string) => localStorage.setItem(ACCESS_KEY, token)
+
 const clearAuth = () => {
   localStorage.removeItem(ACCESS_KEY)
   localStorage.removeItem(REFRESH_KEY)
@@ -394,25 +406,22 @@ const clearAuth = () => {
 }
 
 /* ------------------------------------------------------------------ */
-/*  REFRESH TOKEN – uses correct endpoint                             */
+/* REFRESH TOKEN – uses correct endpoint */
 /* ------------------------------------------------------------------ */
 export async function refreshAccessToken(): Promise<string | null> {
   const refresh = getRefresh()
   if (!refresh) return null
-
   try {
     const res = await fetch(`${API_BASE_URL}/accounts/token/refresh/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh }),
     })
-
     if (!res.ok) {
       console.error("[api] Refresh failed:", await res.json().catch(() => ({})))
       clearAuth()
       return null
     }
-
     const { access } = (await res.json()) as { access: string }
     setAccess(access)
     return access
@@ -424,11 +433,10 @@ export async function refreshAccessToken(): Promise<string | null> {
 }
 
 /* ------------------------------------------------------------------ */
-/*  CORE JSON REQUEST                                                 */
+/* CORE JSON REQUEST */
 /* ------------------------------------------------------------------ */
 export async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
   const url = `${API_BASE_URL}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`
-
   const token = getAccess()
   const headers = new Headers({
     "Content-Type": "application/json",
@@ -469,7 +477,7 @@ export async function apiRequest<T>(endpoint: string, options: RequestInit = {})
 }
 
 /* ------------------------------------------------------------------ */
-/*  FILE UPLOAD REQUEST (Agent Deposit)                               */
+/* FILE UPLOAD REQUEST (Agent Deposit) */
 /* ------------------------------------------------------------------ */
 export async function apiRequestWithFile<T>(
   endpoint: string,
@@ -479,13 +487,10 @@ export async function apiRequestWithFile<T>(
   const url = `${API_BASE_URL}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`
   const token = getAccess()
   const headers = new Headers(options.headers as Record<string, string>)
-
   if (token) {
     headers.set("Authorization", `Bearer ${token}`)
   }
-
   // DO NOT set Content-Type → let browser set multipart boundary
-
   let resp = await fetch(url, {
     ...options,
     method: "POST",
@@ -522,8 +527,9 @@ export async function apiRequestWithFile<T>(
 
   return { data: json as T, status: resp.status }
 }
+
 /* ------------------------------------------------------------------ */
-/*  AUTH METHODS                                                      */
+/* AUTH METHODS */
 /* ------------------------------------------------------------------ */
 export const signup = async (data: {
   username: string
@@ -563,7 +569,6 @@ export const signup = async (data: {
       localStorage.setItem("active_account_id", defaultAccount.id.toString())
     }
   }
-
   return response
 }
 
@@ -593,7 +598,6 @@ export const login = async (data: { email: string; password: string; account_typ
       localStorage.setItem("active_account_id", defaultAccount.id.toString())
     }
   }
-
   return response
 }
 
@@ -616,7 +620,6 @@ export const adminLogin = async (data: { username: string; password: string }) =
     }
     localStorage.setItem("user_session", JSON.stringify(normalizedUser))
   }
-
   return response
 }
 
@@ -630,7 +633,6 @@ export const switchAccount = async (data: { account_id: number }) => {
     method: "POST",
     body: JSON.stringify(data),
   })
-
   if (response.data) {
     const { user, account } = response.data
     if (user && account) {
@@ -648,12 +650,11 @@ export const switchAccount = async (data: { account_id: number }) => {
       return { data: { user, account }, status: 200 }
     }
   }
-
   return response
 }
 
 /* ------------------------------------------------------------------ */
-/*  TRADING & WALLET                                                  */
+/* TRADING & WALLET */
 /* ------------------------------------------------------------------ */
 export const getMarkets = () => apiRequest("/trading/markets/")
 export const getTradeTypes = () => apiRequest("/trading/trade-types/")
@@ -664,12 +665,11 @@ export const getTradeHistory = () => apiRequest("/trading/trades/history/")
 export const cancelTrade = (tradeId: number) => apiRequest(`/trading/trades/${tradeId}/cancel/`, { method: "POST" })
 export const getPriceHistory = (data: { symbol: string; timeframe: string }) =>
   apiRequest("/trading/price-history/", { method: "POST", body: JSON.stringify(data) })
-
 export const getRobots = () => apiRequest("/trading/robots/")
 export const getUserRobots = () => apiRequest("/trading/user-robots/")
 export const purchaseRobot = (
   robotId: number,
-  account_type: "standard" | "demo" = "standard", // default to real account
+  account_type: "standard" | "demo" = "standard",
 ) =>
   apiRequest<{
     message: string
@@ -677,14 +677,11 @@ export const purchaseRobot = (
     method: "POST",
     body: JSON.stringify({ account_type }),
   })
-
 export const resetDemoBalance = () => apiRequest("/accounts/demo/reset/", { method: "POST" })
-
 export const getBots = () => apiRequest("/bots/")
 export const createBot = (data: Record<string, unknown>) =>
   apiRequest("/bots/", { method: "POST", body: JSON.stringify(data) })
 export const toggleBot = (botId: number) => apiRequest(`/bots/${botId}/toggle/`, { method: "POST" })
-
 export const getSubscription = () => apiRequest("/bots/subscription/")
 export const subscribe = () => apiRequest("/bots/subscription/", { method: "POST" })
 
@@ -722,14 +719,14 @@ export const getWallets = async () => {
   return response
 }
 
-export const getWalletTransactions = () => 
+export const getWalletTransactions = () =>
   apiRequest<
-    WalletTransaction[] | 
-    { 
-      results?: WalletTransaction[]; 
-      transactions?: WalletTransaction[]; 
-      count?: number; 
-      next?: string | null; 
+    WalletTransaction[] |
+    {
+      results?: WalletTransaction[];
+      transactions?: WalletTransaction[];
+      count?: number;
+      next?: string | null;
       previous?: string | null;
     }
   >("/wallet/transactions/");
@@ -777,14 +774,13 @@ export const verifyTransfer = (data: { otp: string; transaction_id: number }) =>
 export const generateSignal = () => apiRequest<Signal>("/trading/signals/generate/", { method: "POST" })
 
 /* ------------------------------------------------------------------ */
-/*  FOREX TRADING                                                     */
+/* FOREX TRADING */
 /* ------------------------------------------------------------------ */
 export const getForexPairs = () => apiRequest<{ pairs: ForexPair[] }>("/forex/pairs/")
 export const getForexCurrentPrices = (pairIds: number[]) =>
   apiRequest(`/forex/current-prices/?ids=${pairIds.join(",")}`)
 export const getForexCurrentPrice = (pairId: number) =>
   apiRequest<{ current_price: number }>(`/forex/current-price/${pairId}/`)
-
 export const placeForexOrder = (data: {
   pair_id: number
   direction: "buy" | "sell"
@@ -792,7 +788,6 @@ export const placeForexOrder = (data: {
   sl?: number
   tp?: number
 }) => apiRequest<{ position: Position }>("/forex/orders/place/", { method: "POST", body: JSON.stringify(data) })
-
 export const getForexPositions = () => apiRequest<{ positions: Position[] }>("/forex/positions/")
 export const closeForexPosition = (positionId: number) =>
   apiRequest<{ message: string }>(`/forex/positions/${positionId}/close/`, { method: "POST" })
@@ -801,32 +796,28 @@ export const closeAllPositions = () =>
 export const getForexHistory = () => apiRequest<{ trades: ForexTrade[] }>("/forex/history/")
 
 /* --------------------- FOREX ROBOTS --------------------- */
-
-export const getForexRobots = () => 
+export const getForexRobots = () =>
   apiRequest<{ robots: ForexRobot[] }>("/forex/robots/")
-
-export const getMyForexRobots = () => 
+export const getMyForexRobots = () =>
   apiRequest<{ user_robots: UserRobot[] }>("/forex/my-robots/")
-
 export const purchaseForexRobot = (robotId: number) =>
-  apiRequest<{ 
-    message: string; 
+  apiRequest<{
+    message: string;
     user_robot: UserRobot;
     purchased_price?: number;
     discounted?: boolean;
-  }>(`/forex/robots/${robotId}/purchase/`, { 
-    method: "POST" 
+  }>(`/forex/robots/${robotId}/purchase/`, {
+    method: "POST"
   })
-
 export const toggleForexRobot = (
   userRobotId: number,
   config?: { stake?: number; pair_id?: number; timeframe?: string }
 ) =>
-  apiRequest<{ 
-    is_running: boolean; 
+  apiRequest<{
+    is_running: boolean;
     message?: string;
     is_ea?: boolean;
-    closed_positions?: number;        // from backend when stopping EA
+    closed_positions?: number;
   }>(
     `/forex/robots/${userRobotId}/toggle/`,
     {
@@ -835,29 +826,27 @@ export const toggleForexRobot = (
     }
   )
 
-// ✅ Improved: Close all EA positions for a specific UserRobot
 export const closeEAPositions = (userRobotId: number) =>
-  apiRequest<{ 
+  apiRequest<{
     success: boolean;
     message: string;
     closed_count: number;
   }>(
-    `/forex/positions/close-ea/${userRobotId}/`, 
+    `/forex/positions/close-ea/${userRobotId}/`,
     { method: "POST" }
   )
 
 /* --------------------- BOT LOGS --------------------- */
-export const getForexBotLogs = () => 
+export const getForexBotLogs = () =>
   apiRequest<{ bot_logs: BotLog[] }>("/forex/robot-logs/")
-
 export const getForexBotLogsByRobot = (userRobotId: number) =>
   apiRequest<{ bot_logs: BotLog[] }>(`/forex/robot-logs/?user_robot_id=${userRobotId}`)
+
 /* ------------------------------------------------------------------ */
-/*  AGENTS                                                            */
+/* AGENTS */
 /* ------------------------------------------------------------------ */
 export const getAgents = () => apiRequest<{ agents: Agent[] }>("/agents/list/")
 export const getAgentById = (agentId: number) => apiRequest<{ agent: Agent }>(`/agents/${agentId}/`)
-
 export const createAgentDeposit = async (data: {
   agent_id: number
   account: number
@@ -869,15 +858,11 @@ export const createAgentDeposit = async (data: {
   method: string
 }) => {
   const fd = new FormData()
-
   fd.append("agent", data.agent_id.toString())
   fd.append("account", data.account.toString())
   fd.append("method", data.method)
-
   const methodLower = data.method.toLowerCase()
-
   if (methodLower === "binance") {
-    // Binance → Use USD amount
     if (data.amount_usd_input !== undefined) {
       fd.append("amount_usd_input", data.amount_usd_input.toString())
     }
@@ -888,34 +873,29 @@ export const createAgentDeposit = async (data: {
       fd.append("screenshot", data.screenshot)
     }
   } else {
-    // Other methods → Use KES
     if (data.amount_kes !== undefined) {
       fd.append("amount_kes", data.amount_kes.toString())
     }
-
     if (methodLower === "mpesa" || methodLower === "bank_transfer") {
       if (data.transaction_code) fd.append("transaction_code", data.transaction_code)
       if (data.screenshot) fd.append("screenshot", data.screenshot)
-    } 
+    }
     else if (methodLower === "paypal") {
       if (data.transaction_code) fd.append("paypal_transaction_id", data.transaction_code)
     }
   }
-
   return apiRequestWithFile<AgentDeposit>("/agents/deposit/", fd)
 }
-
 export const verifyAgentDeposit = (data: { deposit_id: number; action: string }) =>
   apiRequest("/agents/deposit/verify/", {
     method: "POST",
     body: JSON.stringify(data),
   })
-
 export const requestAgentWithdrawal = (data: {
   agent: number
   account: number
   amount_usd: number
-  user_binance_address?: string          // ← NEW
+  user_binance_address?: string
   user_paypal_email?: string
   user_bank_name?: string
   user_bank_account_name?: string
@@ -938,7 +918,6 @@ export const requestAgentWithdrawal = (data: {
       ...(data.phone_number && { phone_number: data.phone_number }),
     }),
   })
-
 export const verifyAgentWithdrawal = (data: {
   withdrawal_id: number
   otp: string
@@ -950,16 +929,17 @@ export const verifyAgentWithdrawal = (data: {
       otp: data.otp,
     }),
   })
-
 export const resendAgentOTP = (transactionId: number) =>
   apiRequest<{ message: string }>("/withdrawals/resend-otp/", {
     method: "POST",
     body: JSON.stringify({ transaction_id: transactionId }),
   })
-
 export const getAgentDeposits = () => apiRequest<{ deposits: AgentDeposit[] }>("/deposits/my-deposits/")
 export const getAgentWithdrawals = () => apiRequest<{ withdrawals: AgentWithdrawal[] }>("/withdrawals/my-withdrawals/")
 
+/* ------------------------------------------------------------------ */
+/* CUSTOMER CARE (USER + ADMIN)  – only this section was updated */
+/* ------------------------------------------------------------------ */
 export const getChatThread = () => apiRequest<ChatThread>("/customercare/chat/")
 
 export const sendChatMessage = (content: string) =>
@@ -968,21 +948,37 @@ export const sendChatMessage = (content: string) =>
     body: JSON.stringify({ content }),
   })
 
-export const markMessagesAsRead = () => apiRequest("/customercare/chat/mark-read/", { method: "POST" })
+export const markMessagesAsRead = () =>
+  apiRequest("/customercare/chat/mark-read/", { method: "POST" })
 
-export const requestReview = () => apiRequest("/customercare/chat/review/", { method: "POST" })
+export const requestReview = () =>
+  apiRequest("/customercare/chat/review/", { method: "POST" })
 
-export const getActiveThreads = () => apiRequest<{ threads: ChatThread[] }>("/customercare/admin/threads/")
+// Admin threads list (returns array or {threads: []})
+export const getActiveThreads = () =>
+  apiRequest<ChatThread[] | { threads: ChatThread[] }>("/customercare/admin/threads/")
 
-export const getAdminChat = (userId: number) => apiRequest<ChatThread>(`/customercare/admin/chat/${userId}/`)
+export const getAdminChat = (userId: number) =>
+  apiRequest<ChatThread>(`/customercare/admin/chat/${userId}/`)
 
-export const sendAdminMessage = (userId: number, content: string) =>
+// Admin reply – always force is_system=true so it shows as "TradeRiser Support"
+export const sendAdminMessage = (userId: number, content: string, is_system = true) =>
   apiRequest<ChatMessage>(`/customercare/admin/chat/${userId}/`, {
     method: "POST",
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({ content, is_system }),
   })
 
-export const adminBlockUser = (userId: number, action: "temp" | "perm" | "unblock", reason?: string) =>
+// When admin opens a chat → mark user messages as read (user sees double ticks)
+export const adminMarkMessagesRead = (userId: number) =>
+  apiRequest(`/customercare/admin/chat/${userId}/mark-read/`, {
+    method: "POST",
+  })
+
+export const adminBlockUser = (
+  userId: number,
+  action: "temp" | "perm" | "unblock",
+  reason?: string,
+) =>
   apiRequest(`/customercare/admin/block/${userId}/`, {
     method: "POST",
     body: JSON.stringify({ action, reason }),
@@ -1094,7 +1090,7 @@ export async function createCopySubscription(payload: CreateSubscriptionPayload)
     method: "POST",
     body: JSON.stringify({
       trader: payload.trader,
-      account: payload.account || 1, // Default to first account; should be user's account
+      account: payload.account || 1,
       allocated_amount: payload.allocated_amount,
       max_drawdown_percent: payload.max_drawdown_percent || 20,
     }),
@@ -1133,7 +1129,6 @@ export async function resumeSubscription(subscriptionId: number, allocatedAmount
 }
 
 // ====================== AUDIO CALL API FUNCTIONS ======================
-
 export interface InitiateCallResponse {
   call_id: number
   status?: string
@@ -1180,11 +1175,10 @@ export const endAudioCall = (callId: number) =>
 // Get Missed Calls
 export const getMissedCalls = () =>
   apiRequest<MissedCallsResponse>("/customercare/call/missed/")
-/* ------------------------------------------------------------------ */
-/*  Account Suspension                                               */
-/* ------------------------------------------------------------------ */
 
-// Option 1: Most precise (recommended if you know the exact shape)
+/* ------------------------------------------------------------------ */
+/* Account Suspension */
+/* ------------------------------------------------------------------ */
 export async function appealSuspension(formData: FormData) {
   return apiRequestWithFile<{
     message: string;
@@ -1193,22 +1187,19 @@ export async function appealSuspension(formData: FormData) {
       url: string;
       filename?: string;
       uploaded_at?: string;
-      // add any other fields your backend actually returns
     } | null;
   }>(
     "/accounts/appeal-suspension/",
     formData,
-    {} // no extra options needed
+    {}
   );
 }
 
 /* ------------------------------------------------------------------ */
-/*  MPESA NOTIFICATIONS                                               */
+/* MPESA NOTIFICATIONS */
 /* ------------------------------------------------------------------ */
-
 const MPESA_NOTIF_BASE = process.env.NEXT_PUBLIC_API_URL || "https://traderiserproapp.onrender.com"
 //const MPESA_NOTIF_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
-
 
 async function mpesaNotifRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getAccess()
@@ -1236,7 +1227,6 @@ export const markMpesaRead = (id: number) =>
   mpesaNotifRequest<{ status: string }>(`/notifications/${id}/read/`, { method: "POST" })
 
 /* ------------------------------------------------------------------ */
-
 export const placeDigitTrade = (data: {
   market_id: number;
   digit_contract_type: 'over' | 'under' | 'matches' | 'differs' | 'even' | 'odd';
@@ -1246,7 +1236,7 @@ export const placeDigitTrade = (data: {
   robot_id?: number;
   use_martingale?: boolean;
   martingale_level?: number;
-}) => 
+}) =>
   apiRequest("/trading/trades/place-digit/", {
     method: "POST",
     body: JSON.stringify(data),
@@ -1262,56 +1252,52 @@ export const placeSRobotTrade = (data: {
   use_martingale?: boolean;
   martingale_level?: number;
   account_type?: 'standard' | 'demo';
-}) => 
+}) =>
   apiRequest("/trading/trades/place-srobot/", {
     method: "POST",
     body: JSON.stringify(data),
   });
 
-  // ====================== KYC ======================
+// ====================== KYC ======================
 export const submitKYC = (formData: FormData) =>
-  apiRequestWithFile<{ 
-    message: string; 
-    status: string 
+  apiRequestWithFile<{
+    message: string;
+    status: string
   }>("/accounts/kyc/submit/", formData);
 
-  // ====================== MT5 ENDPOINTS ======================
+// ====================== MT5 ENDPOINTS ======================
 export const createMT5Account = (data: { account_type: "mt5" | "demo" }) =>
-  apiRequest("/mt5/create-account/", { 
-    method: "POST", 
-    body: JSON.stringify(data) 
+  apiRequest("/mt5/create-account/", {
+    method: "POST",
+    body: JSON.stringify(data)
   });
-
 export const getMT5Accounts = () => apiRequest("/mt5/my-accounts/");
-
 export const switchMT5Account = (data: { account_id: number }) =>
-  apiRequest("/mt5/switch/", { 
-    method: "POST", 
-    body: JSON.stringify(data) 
+  apiRequest("/mt5/switch/", {
+    method: "POST",
+    body: JSON.stringify(data)
   });
-
 export const getMT5Positions = () => apiRequest("/mt5/positions/");
-
 export const openMT5Position = (data: {
   symbol: string;
   side: "buy" | "sell";
   volume: number;
   open_price?: number;
   account_type?: "mt5" | "mt5-demo";
-}) => apiRequest("/mt5/positions/open/", { 
-  method: "POST", 
-  body: JSON.stringify(data) 
+}) => apiRequest("/mt5/positions/open/", {
+  method: "POST",
+  body: JSON.stringify(data)
 });
-
 export const closeMT5Position = (data: {
   position_id: string | number;
   close_price?: number;
-}) => apiRequest("/mt5/positions/close/", { 
-  method: "POST", 
-  body: JSON.stringify(data) 
+}) => apiRequest("/mt5/positions/close/", {
+  method: "POST",
+  body: JSON.stringify(data)
 });
+
 /* ------------------------------------------------------------------ */
-/*  EXPORT API OBJECT                                                 */
+/* EXPORT API OBJECT */
 /* ------------------------------------------------------------------ */
 export const api = {
   signup,
@@ -1376,6 +1362,10 @@ export const api = {
   markMessagesAsRead,
   requestReview,
   getActiveThreads,
+  getAdminChat,
+  sendAdminMessage,
+  adminMarkMessagesRead,
+  adminBlockUser,
   verifyEmailOtp,
   resendEmailOtp,
   requestPasswordReset,

@@ -159,7 +159,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 "sender": {
                     "username": "TradeRiser Support" if (m.is_system and m.sender is None)
                                else (m.sender.username if m.sender else "Support"),
-                    "is_staff": True
+                    "is_staff": True if (m.is_system or (m.sender and m.sender.is_staff)) else False
                 },
                 "is_me": False if (m.is_system or m.sender is None) else (m.sender == self.user)
             }
@@ -187,8 +187,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
             "is_system": is_system,
             "is_me": is_me,
             "sender": {
-                "username": message.sender.username,
-                "is_staff": message.sender.is_staff
+                "username": message.sender.username if message.sender else "TradeRiser Support",
+                "is_staff": bool(message.sender and message.sender.is_staff)
             }
         }
 
@@ -432,11 +432,17 @@ class AdminChatConsumer(AsyncWebsocketConsumer):
 
             thread = await safe_db(self.get_thread_by_user_id, int(target_user_id))
             messages = await safe_db(self.get_messages, thread)
-            await self.send(json.dumps({"type": "chat_history", "user_id": target_user_id, "messages": messages}))
+            await self.send(json.dumps({
+                "type": "chat_history",
+                "user_id": int(target_user_id),
+                "messages": messages
+            }))
         else:
-            active_threads = await safe_db(self.get_active_threads)
-            for thread in active_threads:
-                room_group_name = f"chat_{thread.user.id}"
+            # FIXED: Get only user_ids inside the sync function so we never
+            # access .user (or any related field) from the async context.
+            user_ids = await safe_db(self.get_active_thread_user_ids)
+            for uid in user_ids:
+                room_group_name = f"chat_{uid}"
                 await self.channel_layer.group_add(room_group_name, self.channel_name)
                 self.room_groups.append(room_group_name)
 
@@ -456,36 +462,63 @@ class AdminChatConsumer(AsyncWebsocketConsumer):
             await self.handle_admin_message(data.get("content", ""), data.get("user_id"))
         elif msg_type == "typing":
             await self.handle_typing(data.get("is_typing", False), data.get("user_id"))
+        elif msg_type == "mark_read":
+            # When admin opens a chat → mark all user messages as read
+            user_id = data.get("user_id")
+            if user_id:
+                await safe_db(self.mark_user_messages_read, int(user_id))
 
     async def handle_admin_message(self, content: str, target_user_id: int):
         if not content.strip() or not target_user_id:
             return
-        thread = await safe_db(self.get_thread_by_user_id, target_user_id)
+        thread = await safe_db(self.get_thread_by_user_id, int(target_user_id))
         message = await safe_db(self.create_message, thread, content.strip())
-        serialized = await safe_db(self.serialize_message, message, is_me=True)
+        serialized = await safe_db(self.serialize_message, message, is_me=True, user_id=int(target_user_id))
         room_group_name = f"chat_{target_user_id}"
-        await self.channel_layer.group_send(room_group_name, {"type": "chat_message", "message": serialized})
+        await self.channel_layer.group_send(room_group_name, {
+            "type": "chat_message",
+            "message": serialized,
+            "user_id": int(target_user_id),
+        })
 
     async def handle_typing(self, is_typing: bool, target_user_id: int):
         if not target_user_id:
             return
         room_group_name = f"chat_{target_user_id}"
-        await self.channel_layer.group_send(room_group_name, {"type": "typing", "is_typing": is_typing, "user_id": self.user.id})
+        await self.channel_layer.group_send(room_group_name, {
+            "type": "typing",
+            "is_typing": is_typing,
+            "user_id": self.user.id
+        })
 
     async def chat_message(self, event):
-        await self.send(text_data=json.dumps(event["message"]))
+        payload = event["message"]
+        if "user_id" in event:
+            payload["user_id"] = event["user_id"]
+        await self.send(text_data=json.dumps(payload))
 
     async def typing(self, event):
-        await self.send(json.dumps({"type": "typing", "is_typing": event["is_typing"], "user_id": event["user_id"]}))
+        await self.send(json.dumps({
+            "type": "typing",
+            "is_typing": event["is_typing"],
+            "user_id": event["user_id"]
+        }))
 
-    # Database Helpers
-    def get_active_threads(self):
+    # ------------------------------------------------------------------
+    # DATABASE HELPERS  (ALL SYNC – never touch related fields outside)
+    # ------------------------------------------------------------------
+    def get_active_thread_user_ids(self):
+        """Return plain list of user_ids only – never return model instances"""
         from .models import ChatThread
-        return list(ChatThread.objects.filter(is_active=True))
+        return list(
+            ChatThread.objects
+            .filter(is_active=True)
+            .values_list('user_id', flat=True)
+        )
 
     def get_thread_by_user_id(self, user_id):
         from .models import ChatThread
-        return ChatThread.objects.get(user_id=user_id)
+        return ChatThread.objects.select_related('user').get(user_id=user_id)
 
     def get_messages(self, thread):
         from .models import Message
@@ -498,29 +531,48 @@ class AdminChatConsumer(AsyncWebsocketConsumer):
                 "is_read": m.is_read,
                 "is_system": m.is_system,
                 "sender": {
-                    "username": "CustomerCare" if (m.is_system or (m.sender and m.sender.is_staff)) else m.sender.username,
-                    "is_staff": True
+                    "username": "TradeRiser Support" if (m.is_system or (m.sender and m.sender.is_staff)) else (m.sender.username if m.sender else "User"),
+                    "is_staff": True if (m.is_system or (m.sender and m.sender.is_staff)) else False
                 },
-                "is_me": m.sender == self.user
+                "is_me": bool(m.sender and m.sender == self.user)
             }
             for m in msgs
         ]
 
     def create_message(self, thread, content):
         from .models import Message
-        return Message.objects.create(thread=thread, sender=self.user, content=content)
+        return Message.objects.create(
+            thread=thread,
+            sender=self.user,
+            content=content,
+            is_system=True,   # ← Always system so frontend shows "TradeRiser Support"
+        )
 
-    def serialize_message(self, message, is_me: bool, is_system: bool = False):
+    def mark_user_messages_read(self, user_id):
+        """When admin opens the chat, mark all messages from the user as read"""
+        from .models import ChatThread, Message
+        try:
+            thread = ChatThread.objects.get(user_id=user_id)
+            Message.objects.filter(
+                thread=thread,
+                sender__is_staff=False,
+                is_read=False
+            ).update(is_read=True)
+        except ChatThread.DoesNotExist:
+            pass
+
+    def serialize_message(self, message, is_me: bool, user_id: int = None):
         return {
             "type": "new_message",
             "id": message.id,
             "content": message.content,
             "sent_at": message.sent_at.isoformat(),
             "is_read": message.is_read,
-            "is_system": is_system,
+            "is_system": True,          # admin always system
             "is_me": is_me,
+            "user_id": user_id,
             "sender": {
-                "username": "CustomerCare" if (is_system or (message.sender and message.sender.is_staff)) else message.sender.username,
+                "username": "TradeRiser Support",
                 "is_staff": True
             }
         }

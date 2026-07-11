@@ -14,7 +14,8 @@ from .views import (
     password_reset_verify, 
     password_reset_confirm,
     AppealSuspensionView,
-    KYCSubmitView
+    KYCSubmitView,
+    AdminLoginView
 
 
 )
@@ -36,4 +37,5 @@ urlpatterns = [
     path('password-reset/confirm/', password_reset_confirm),
     path('appeal-suspension/', AppealSuspensionView.as_view(), name='appeal_suspension'),
     path('kyc/submit/', KYCSubmitView.as_view(), name='kyc_submit'),
+    path('admin/login/', AdminLoginView.as_view(), name='admin_login'),
 ]

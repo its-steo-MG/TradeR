@@ -1,12 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useCallback, useState } from 'react'
+import { answerAudioCall, endAudioCall, initiateAudioCall } from '@/lib/api'
 
-//const API_BASE = 'http://localhost:8000'
-//const WS_BASE = 'ws://localhost:8000'
-
-const API_BASE = 'https://traderiserproapp.onrender.com'
-const WS_BASE = 'wss://traderiserproapp.onrender.com'
+const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || 'wss://traderiserproapp.onrender.com'
 
 export interface CallEvent {
   type: string
@@ -23,6 +20,11 @@ export interface CallEvent {
 
 type CallEventCallback = (event: CallEvent) => void
 
+function getToken() {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem('access_token')?.trim().replace(/^"|"$/g, '') || null
+}
+
 export function useWebSocketCall(token: string | null, onCallEvent?: CallEventCallback) {
   const wsRef = useRef<WebSocket | null>(null)
   const [isConnected, setIsConnected] = useState(false)
@@ -37,45 +39,38 @@ export function useWebSocketCall(token: string | null, onCallEvent?: CallEventCa
 
   const connect = useCallback(() => {
     if (!token || token.length < 50) {
-      console.warn('[CallWS] ❌ Invalid or missing access token')
       setError('Authentication required')
       return
     }
 
     const wsUrl = `${WS_BASE}/ws/call/?token=${encodeURIComponent(token)}`
-    console.log('[CallWS] Connecting to:', wsUrl)
-
+    console.log('[CallWS] Connecting:', wsUrl)
     const ws = new WebSocket(wsUrl)
 
     ws.onopen = () => {
       setIsConnected(true)
       setError(null)
-      console.log('[CallWS] ✅ WebSocket Connected successfully')
+      console.log('[CallWS] ✅ Connected')
     }
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data) as CallEvent
-        console.log(`[CallWS] Received: ${data.type}`, data)
         callbackRef.current?.(data)
-
         if (data.type === 'connection_established') {
           setIsStaff(!!data.is_staff)
         }
       } catch (e) {
-        console.error('[CallWS] JSON Parse error:', e)
+        console.error('[CallWS] parse error', e)
       }
     }
 
-    ws.onerror = (event) => {
-      console.error('[CallWS] WebSocket error:', event)
-      setError('WebSocket connection failed')
-    }
-
+    ws.onerror = () => setError('WebSocket connection failed')
     ws.onclose = (event) => {
       setIsConnected(false)
-      console.log(`[CallWS] Disconnected (code: ${event.code})`)
-      reconnectTimeoutRef.current = setTimeout(connect, 3000)
+      if (event.code !== 1000) {
+        reconnectTimeoutRef.current = setTimeout(connect, 3000)
+      }
     }
 
     wsRef.current = ws
@@ -89,67 +84,28 @@ export function useWebSocketCall(token: string | null, onCallEvent?: CallEventCa
     }
   }, [connect])
 
-  // ==================== REST API CALLS ====================
-
-  const initiateCall = useCallback(async () => {
-    const res = await fetch(`${API_BASE}/api/customercare/call/initiate/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-    })
-    if (!res.ok) {
-      const text = await res.text().catch(() => '')
-      throw new Error(`Failed to initiate call (${res.status}): ${text}`)
-    }
-    return res.json()
-  }, [token])
-
-  const answerCall = useCallback(async (callId: number, voicePreset = 'default') => {
-    console.log(`[CallWS] Answering call ${callId} with voice preset: ${voicePreset}`)
-
-    const res = await fetch(`${API_BASE}/api/customercare/call/answer/${callId}/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ voice_preset: voicePreset }),
-    })
-
-    if (!res.ok) {
-      const errorText = await res.text().catch(() => 'Unknown error')
-      throw new Error(`Failed to answer call (${res.status}): ${errorText}`)
-    }
-
-    const data = await res.json()
-    console.log('[CallWS] Answer call successful:', data)
-    return data
-  }, [token])
-
-  const endCall = useCallback(async (callId: number) => {
-    const res = await fetch(`${API_BASE}/api/customercare/call/end/${callId}/`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (!res.ok) {
-      const text = await res.text().catch(() => '')
-      throw new Error(`Failed to end call (${res.status}): ${text}`)
-    }
-    return res.json()
-  }, [token])
-
-  // ==================== SIGNALING SENDERS ====================
-
   const send = useCallback((data: any) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      console.warn('[CallWS] Cannot send - WebSocket is not open')
-      return false
-    }
-    console.log('[CallWS] Sending:', data.type, data)
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return false
     wsRef.current.send(JSON.stringify(data))
     return true
+  }, [])
+
+  const initiateCall = useCallback(async () => {
+    const res = await initiateAudioCall()
+    if (res.error) throw new Error(res.error)
+    return res.data!
+  }, [])
+
+  const answerCall = useCallback(async (callId: number, voicePreset = 'default') => {
+    const res = await answerAudioCall(callId, voicePreset)
+    if (res.error) throw new Error(res.error)
+    return res.data!
+  }, [])
+
+  const endCall = useCallback(async (callId: number) => {
+    const res = await endAudioCall(callId)
+    if (res.error) throw new Error(res.error)
+    return res.data!
   }, [])
 
   return {
@@ -159,18 +115,12 @@ export function useWebSocketCall(token: string | null, onCallEvent?: CallEventCa
     initiateCall,
     answerCall,
     endCall,
-
-    // WebRTC Signaling
     sendWebRTCOffer: (callId: number, offer: RTCSessionDescriptionInit) =>
       send({ type: 'webrtc_offer', call_id: callId, offer }),
-
     sendWebRTCAnswer: (callId: number, answer: RTCSessionDescriptionInit) =>
       send({ type: 'webrtc_answer', call_id: callId, answer }),
-
     sendICECandidate: (callId: number, candidate: RTCIceCandidateInit) =>
       send({ type: 'webrtc_ice', call_id: callId, candidate }),
-
-    joinCallRoom: (callId: number) =>
-      send({ type: 'join_call', call_id: callId }),
+    joinCallRoom: (callId: number) => send({ type: 'join_call', call_id: callId }),
   }
 }

@@ -2,7 +2,9 @@
 from django.urls import path
 from .views import (
     ChatThreadView, AdminBlockUserView, get_active_threads,
-    AdminChatView, MarkMessagesReadView, RequestReviewView,InitiateAudioCallView,AnswerCallView,EndCallView,MissedCallsView,AdminSendEmailView
+    AdminChatView, MarkMessagesReadView, RequestReviewView,
+    InitiateAudioCallView, AnswerCallView, EndCallView, MissedCallsView,
+    AdminSendEmailView, AdminMarkMessagesReadView,
 )
 
 urlpatterns = [
@@ -14,6 +16,7 @@ urlpatterns = [
     # Admin
     path('admin/block/<int:user_id>/', AdminBlockUserView.as_view(), name='admin_block'),
     path('admin/chat/<int:user_id>/', AdminChatView.as_view(), name='admin_chat'),
+    path('admin/chat/<int:user_id>/mark-read/', AdminMarkMessagesReadView.as_view(), name='admin_mark_read'),
     path('call/initiate/', InitiateAudioCallView.as_view(), name='call_initiate'),
     path('call/answer/<int:call_id>/', AnswerCallView.as_view(), name='call_answer'),
     path('call/end/<int:call_id>/', EndCallView.as_view(), name='call_end'),

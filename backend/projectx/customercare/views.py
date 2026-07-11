@@ -80,6 +80,12 @@ class AdminChatView(APIView):
     def get(self, request, user_id):
         user = get_object_or_404(User, id=user_id)
         thread = user.support_thread
+        # When admin opens the chat → mark all USER messages as read (so user sees double ticks)
+        thread.messages.filter(
+            sender__is_staff=False,
+            is_system=False,
+            is_read=False
+        ).update(is_read=True)
         serializer = ChatThreadSerializer(thread, context={'request': request})
         return Response(serializer.data)
 
@@ -90,7 +96,8 @@ class AdminChatView(APIView):
         if not content:
             return Response({"error": "Content required"}, status=400)
 
-        is_system = request.data.get('is_system', False)  # Allow admin to mark as system message
+        # Admin replies are ALWAYS system messages so they appear as "TradeRiser Support"
+        is_system = request.data.get('is_system', True)
 
         message = Message.objects.create(
             thread=thread,
@@ -98,6 +105,47 @@ class AdminChatView(APIView):
             content=content,
             is_system=is_system
         )
+        # Also mark any previous unread user messages as read
+        thread.messages.filter(
+            sender__is_staff=False,
+            is_system=False,
+            is_read=False
+        ).update(is_read=True)
+
+        # ===== BROADCAST TO USER VIA CHANNEL LAYER (real-time) =====
+        # This is the ONLY place the message is created + sent.
+        # Frontend must NOT also send via WebSocket.
+        try:
+            from channels.layers import get_channel_layer
+            from asgiref.sync import async_to_sync
+            channel_layer = get_channel_layer()
+            if channel_layer:
+                payload = {
+                    "type": "new_message",
+                    "id": message.id,
+                    "content": message.content,
+                    "sent_at": message.sent_at.isoformat(),
+                    "is_read": message.is_read,
+                    "is_system": True,
+                    "is_me": False,          # from the user's perspective this is NOT me
+                    "user_id": user.id,
+                    "sender": {
+                        "username": "TradeRiser Support",
+                        "is_staff": True
+                    }
+                }
+                async_to_sync(channel_layer.group_send)(
+                    f"chat_{user.id}",
+                    {
+                        "type": "chat_message",
+                        "message": payload,
+                        "user_id": user.id,
+                    }
+                )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to broadcast admin message: {e}")
+
         return Response(MessageSerializer(message, context={'request': request}).data, status=201)
 
 
@@ -131,11 +179,50 @@ class MarkMessagesReadView(APIView):
             "status": "success"
         }, status=status.HTTP_200_OK)
 
+class AdminMarkMessagesReadView(APIView):
+    """Admin marks a specific user's messages as read (when opening their chat)"""
+    permission_classes = [permissions.IsAdminUser]
+
+    def post(self, request, user_id):
+        user = get_object_or_404(User, id=user_id)
+        thread = user.support_thread
+        updated = thread.messages.filter(
+            sender__is_staff=False,
+            is_system=False,
+            is_read=False
+        ).update(is_read=True)
+        return Response({
+            "message": f"{updated} message(s) marked as read",
+            "status": "success"
+        }, status=status.HTTP_200_OK)
+
+
+
 @api_view(['GET'])
 @permission_classes([permissions.IsAdminUser])
 def get_active_threads(request):
-    threads = ChatThread.objects.select_related('user').filter(is_active=True).order_by('-created_at')[:20]
-    data = [{'id': t.id, 'user': {'id': t.user.id, 'username': t.user.username}, 'last_message': t.messages.last().content if t.messages.exists() else None, 'is_blocked': t.is_blocked()} for t in threads]
+    from django.db.models import OuterRef, Subquery, Count, Q
+    last_msg_sub = Message.objects.filter(thread=OuterRef('pk')).order_by('-sent_at')
+    threads = (
+        ChatThread.objects
+        .select_related('user')
+        .filter(is_active=True)
+        .annotate(
+            last_message_at=Subquery(last_msg_sub.values('sent_at')[:1]),
+            last_message_content=Subquery(last_msg_sub.values('content')[:1]),
+            # Unread = messages from the USER that are not yet read by admin
+            unread_count=Count('messages', filter=Q(messages__is_read=False) & ~Q(messages__sender__is_staff=True) & ~Q(messages__is_system=True))
+        )
+        .order_by('-last_message_at')[:50]
+    )
+    data = [{
+        'id': t.id,
+        'user': {'id': t.user.id, 'username': t.user.username, 'email': getattr(t.user, 'email', '')},
+        'last_message': t.last_message_content,
+        'last_message_at': t.last_message_at.isoformat() if t.last_message_at else None,
+        'is_blocked': t.is_blocked(),
+        'unread_count': t.unread_count or 0,
+    } for t in threads]
     return Response(data)
 
 from .models import CallSession, CustomerCareSettings

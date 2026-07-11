@@ -453,3 +453,54 @@ class KYCSubmitView(APIView):
             'message': 'KYC documents submitted successfully',
             'status': kyc_submission.status
         }, status=status.HTTP_201_CREATED)
+    
+# ====================== ADMIN LOGIN (for Customer Care Portal) ======================
+class AdminLoginView(APIView):
+    """
+    Dedicated login for /admin-customercare
+    POST /api/accounts/admin/login/
+    Body: { "username": "...", "password": "..." }
+    """
+    authentication_classes = []
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        username = request.data.get("username") or request.data.get("email")
+        password = request.data.get("password")
+
+        if not username or not password:
+            return Response(
+                {"error": "username and password are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Try with email first (your LoginView also uses email as username)
+        user = authenticate(request=request, username=username, password=password)
+
+        # Fallback: if they typed a real username
+        if user is None:
+            try:
+                user_obj = User.objects.get(username=username)
+                user = authenticate(request=request, username=user_obj.email, password=password)
+            except User.DoesNotExist:
+                pass
+
+        if user is None or not user.is_active:
+            return Response(
+                {"error": "Invalid credentials"},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        if not user.is_staff:
+            return Response(
+                {"error": "Only staff accounts can access the admin portal"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        refresh = RefreshToken.for_user(user)
+
+        return Response({
+            "access": str(refresh.access_token),
+            "refresh": str(refresh),
+            "user": UserSerializer(user).data,
+        }, status=status.HTTP_200_OK)
