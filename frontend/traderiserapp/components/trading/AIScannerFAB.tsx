@@ -51,7 +51,6 @@ function getIsSashi(): boolean {
 /* ------------------------------------------------------------------ */
 /*  AI scoring — uses synthetic per-market digit distributions        */
 /* ------------------------------------------------------------------ */
-// Deterministic pseudo-random from a string seed (mulberry32)
 function seededDist(seed: string): number[] {
   let h = 2166136261;
   for (let i = 0; i < seed.length; i++) {
@@ -66,7 +65,6 @@ function seededDist(seed: string): number[] {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 
-  // Bias each market slightly around 10% per digit
   const raw = Array.from({ length: 10 }, () => 8 + rand() * 6);
   const total = raw.reduce((a, b) => a + b, 0);
   return raw.map((v) => +((v / total) * 100).toFixed(2));
@@ -93,15 +91,12 @@ function scoreMarket(
   }
 
   if (category === "matches") {
-    // Matches: pick most frequent digit (rare but high payout)
-    // Differs: pick least frequent digit (very likely to differ)
     let maxIdx = 0;
     let minIdx = 0;
     pct.forEach((v, i) => {
       if (v > pct[maxIdx]) maxIdx = i;
       if (v < pct[minIdx]) minIdx = i;
     });
-    // Differs is far more consistent; AI prefers Differs on the rarest digit.
     const differsScore = 100 - pct[minIdx];
     return {
       market,
@@ -112,7 +107,7 @@ function scoreMarket(
     };
   }
 
-  // Over/Under — try every barrier and pick the strongest edge
+  // Over/Under
   let best: { kind: "over" | "under"; barrier: number; score: number } = {
     kind: "over",
     barrier: 5,
@@ -132,7 +127,7 @@ function scoreMarket(
 /* ------------------------------------------------------------------ */
 type Props = {
   markets: Market[];
-  onStarted: () => void; // opens the RunPanel modal
+  onStarted: () => void;
 };
 
 export default function AIScannerFAB({ markets, onStarted }: Props) {
@@ -157,29 +152,26 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
     setIsSashi(getIsSashi());
   }, []);
 
-  /* -------- Load an S-Digit Robot silently (REQUIRED) --------
-   *
-   * An S-Digit Robot is required to use the AI Scanner for ALL users.
-   * The scanner then routes trades based on the account type:
-   *   - Sashi user     → pass robotId so the backend runs the sashi
-   *                      engine (forced-digit sync).
-   *   - Non-sashi user → omit robotId so robotRunner falls back to
-   *                      api.placeDigitTrade — the standard endpoint
-   *                      that returns real profit/loss for regular
-   *                      accounts. This fixes the "profit/loss = 0"
-   *                      bug non-sashi users were seeing.
-   */
+  /* -------- Load only OWNED S-Digit Robots -------- */
   useEffect(() => {
     const load = async () => {
       setLoadingRobot(true);
       try {
         const { api } = await import("@/lib/api");
-        const res = await api.getRobots();
-        const list = Array.isArray(res?.data) ? (res.data as Record<string, unknown>[]) : [];
+        const res = await api.getUserRobots(); // ← only robots the user owns
+
+        const raw = (res?.data ?? res) as any;
+        const list = Array.isArray(raw)
+          ? raw
+          : Array.isArray(raw?.user_robots)
+            ? raw.user_robots
+            : [];
+
         const sDigit = list
-          .filter((r) => r.is_s_digit_robot === true)
+          .map((ur: any) => ur.robot)
+          .filter((r: any) => r && r.is_s_digit_robot === true)
           .map(
-            (r): Robot => ({
+            (r: any): Robot => ({
               id: Number(r.id),
               name: String(r.name || ""),
               is_s_digit_robot: true,
@@ -189,9 +181,15 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
                   : undefined,
             }),
           );
-        setPickedRobot(sDigit[0] || null);
+
+        // Remove duplicates
+       const unique = sDigit.filter(
+         (r: Robot, i: number, arr: Robot[]) => arr.findIndex((x) => x.id === r.id) === i,
+       );
+
+        setPickedRobot(unique[0] || null);
       } catch (err) {
-        console.error("AIScannerFAB: failed to load S-Digit robot", err);
+        console.error("AIScannerFAB: failed to load owned S-Digit robot", err);
         setPickedRobot(null);
       } finally {
         setLoadingRobot(false);
@@ -218,7 +216,6 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
     setScanning(true);
     setScanIdx(0);
 
-    // Animate through each market
     const results: ScanResult[] = [];
     for (let i = 0; i < markets.length; i++) {
       setScanIdx(i);
@@ -228,7 +225,6 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
       await new Promise((r) => setTimeout(r, 380));
     }
 
-    // Pick best
     results.sort((a, b) => b.score - a.score);
     const winner = results[0];
 
@@ -240,11 +236,6 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
       { duration: 6000 },
     );
 
-    // Decide which engine to route through:
-    //   - Sashi user + owns an S-Digit Robot → use the S-Digit robot flow
-    //     (backend forces the winning/losing digit for a "sashi sync" run)
-    //   - Everyone else → run through the normal digit-trade endpoint so
-    //     profit / loss is calculated by the real market outcome.
     const useSashiEngine = isSashi && pickedRobot !== null;
 
     startRobot({
@@ -257,10 +248,6 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
       stopLoss: stopNum,
       maxRuns: parseInt(maxRuns, 10) || 100,
       marketId: winner.market.id,
-      // Only forward robotId when the sashi engine should handle it.
-      // For non-sashi users (or users without an S-Digit Robot) we omit
-      // robotId so robotRunner falls back to api.placeDigitTrade, which
-      // returns real profit/loss for standard accounts.
       robotId: useSashiEngine ? pickedRobot!.id : undefined,
     });
 
@@ -276,7 +263,6 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
   /* -------- FAB -------- */
   return (
     <>
-      {/* Floating AI Button */}
       <button
         onClick={() => setOpen(true)}
         disabled={isRunning}
@@ -296,7 +282,6 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
         <span className="drop-shadow-md">AI</span>
       </button>
 
-      {/* Modal */}
       {open && (
         <div
           className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4"
@@ -351,7 +336,9 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
                 <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-gradient-to-r from-indigo-500 to-fuchsia-500 transition-all duration-300"
-                    style={{ width: `${((scanIdx + 1) / Math.max(1, markets.length)) * 100}%` }}
+                    style={{
+                      width: `${((scanIdx + 1) / Math.max(1, markets.length)) * 100}%`,
+                    }}
                   />
                 </div>
               </div>
@@ -457,7 +444,6 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
         </div>
       )}
 
-      {/* Extra glow keyframes */}
       <style>{`
         @keyframes aiFabPulse {
           0%, 100% { box-shadow: 0 0 25px rgba(168,85,247,0.55), 0 0 60px rgba(99,102,241,0.25); }

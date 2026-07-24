@@ -8,6 +8,7 @@ import { getPayout, isWinningDigit } from "@/lib/contracts";
 
 import TopBar from "@/components/trading/TopBar";
 import ModeTabs, { type TradeMode } from "@/components/trading/ModeTabs";
+import BulkScannerTab from "@/components/trading/BulkScannerTab";
 import PriceChart from "@/components/trading/PriceChart";
 import DigitStrip from "@/components/trading/DigitStrip";
 import StakePanel from "@/components/trading/StakePanel";
@@ -575,7 +576,16 @@ export default function TradingPage() {
         onOpenRobotPanel={() => setShowRobotPanel(true)}
       />
 
-      <ModeTabs mode={mode} onChange={(m) => { sfx.click(); setMode(m); }} />
+      {/* Bulk Scanner sits ABOVE the ModeTabs on mobile so it does not squeeze
+          the market bar sideways. On sm+ it aligns to the right of the tabs. */}
+      <div className="px-3 sm:px-5 lg:px-8 pt-2 flex flex-col sm:flex-row sm:items-center gap-2">
+        <div className="order-2 sm:order-1 flex-1 min-w-0">
+          <ModeTabs mode={mode} onChange={(m) => { sfx.click(); setMode(m); }} />
+        </div>
+        <div className="order-1 sm:order-2 self-start sm:self-auto">
+          <BulkScannerTab markets={markets} onBatchStarted={() => setShowRobotPanel(true)} />
+        </div>
+      </div>
 
       <div className="flex-1 overflow-y-auto pb-24 lg:pb-8">
         <div className="mx-auto w-full max-w-md md:max-w-2xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px] px-3 sm:px-5 lg:px-8 py-4 lg:py-6">

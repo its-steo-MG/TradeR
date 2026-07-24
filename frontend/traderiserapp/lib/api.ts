@@ -348,6 +348,19 @@ export interface Signal {
   strength?:number
 }
 
+export interface PlaceBulkTradePayload {
+  robot_id: number;
+  market_id: number;
+  trade_type_id: number;              // Rise/Fall trade-type id
+  direction: "buy" | "sell";
+  amount: number;                     // stake PER trade
+  number_of_trades: number;           // 1..max_bulk_trades (backend caps)
+  use_martingale?: boolean;
+  martingale_level?: number;
+  account_type?: "standard" | "demo";
+  total_stake?:number;
+}
+
 // Suspension interfaces (new)
 export interface SuspensionDetails {
   reason?: string;
@@ -1296,6 +1309,24 @@ export const closeMT5Position = (data: {
   body: JSON.stringify(data)
 });
 
+// ====================== BULK TRADES AI ======================
+export const placeBulkTrade = (data: {
+  robot_id: number;
+  market_id: number;
+  digit_contract_type: 'over' | 'under' | 'matches' | 'differs' | 'even' | 'odd';
+  digit_barrier?: number;
+  amount: number;
+  number_of_trades: number;
+  use_martingale?: boolean;
+  martingale_level?: number;
+  account_type?: 'standard' | 'demo';
+}) =>
+  apiRequest("/trading/trades/place-bulk/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
+
 /* ------------------------------------------------------------------ */
 /* EXPORT API OBJECT */
 /* ------------------------------------------------------------------ */
@@ -1313,6 +1344,7 @@ export const api = {
   placeTrade,
   placeDigitTrade,
   placeSRobotTrade,
+  placeBulkTrade,
   getTradeHistory,
   cancelTrade,
   getPriceHistory,

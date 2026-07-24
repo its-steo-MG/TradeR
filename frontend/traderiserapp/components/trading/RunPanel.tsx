@@ -22,19 +22,32 @@ function fmt(n: number, d = 2) {
 }
 
 function downloadCsv(rows: Transaction[]) {
-  const header = ["time", "market", "contract", "entry", "exit", "buy_price", "payout", "pnl", "result", "level"];
-  const body = rows.map((r) => [
-    new Date(r.timestamp).toISOString(),
-    r.market,
-    contractLabel(r.contractKind, r.barrier),
-    r.entrySpot,
-    r.exitSpot,
-    r.buyPrice,
-    r.payout,
-    r.pnl,
-    r.isWin ? "WIN" : "LOSS",
-    r.martingaleLevel,
-  ].join(","));
+  const header = [
+    "time",
+    "market",
+    "contract",
+    "entry",
+    "exit",
+    "buy_price",
+    "payout",
+    "pnl",
+    "result",
+    "level",
+  ];
+  const body = rows.map((r) =>
+    [
+      new Date(r.timestamp).toISOString(),
+      r.market,
+      contractLabel(r.contractKind, r.barrier),
+      r.entrySpot,
+      r.exitSpot,
+      r.buyPrice,
+      r.payout,
+      r.pnl,
+      r.isWin ? "WIN" : "LOSS",
+      r.martingaleLevel,
+    ].join(",")
+  );
   const csv = [header.join(","), ...body].join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
@@ -53,6 +66,8 @@ export function RunPanel({ open, onClose }: { open: boolean; onClose: () => void
     isRunning,
     finishedReason,
     config,
+    finishedRobotName,
+    finishedProfit,
   } = useRobotRunner();
 
   const [tab, setTab] = useState<"summary" | "transactions" | "journal">("transactions");
@@ -69,13 +84,13 @@ export function RunPanel({ open, onClose }: { open: boolean; onClose: () => void
     const totalPayout = settled.reduce((s, t) => s + t.payout, 0);
     const won = settled.filter((t) => t.isWin).length;
     const lost = settled.length - won;
-    return { 
-      totalStake, 
-      totalPayout, 
-      won, 
-      lost, 
-      pnl: sessionPnl, 
-      runs 
+    return {
+      totalStake,
+      totalPayout,
+      won,
+      lost,
+      pnl: sessionPnl,
+      runs,
     };
   }, [transactions, sessionPnl, runs]);
 
@@ -102,6 +117,10 @@ export function RunPanel({ open, onClose }: { open: boolean; onClose: () => void
   if (!open) return null;
 
   const marketName = config?.market || "S-Digit Robot";
+  const isBulkProfit =
+    finishedReason === "batch" && (finishedProfit ?? 0) >= 0;
+  const isBulkLoss =
+    finishedReason === "batch" && (finishedProfit ?? 0) < 0;
 
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/70 sm:items-center">
@@ -137,32 +156,40 @@ export function RunPanel({ open, onClose }: { open: boolean; onClose: () => void
           </div>
         </div>
 
-        {/* Status Banner - Updated with Insufficient Balance */}
+        {/* Status Banner */}
         {showBanner && finishedReason && (
           <div
             className={`mx-5 mt-4 px-5 py-4 rounded-2xl flex items-start gap-4 border ${
-              finishedReason === "target"
+              finishedReason === "target" || isBulkProfit
                 ? "bg-emerald-500/10 border-emerald-500/50 text-emerald-400"
                 : finishedReason === "insufficient"
                 ? "bg-amber-500/10 border-amber-500/50 text-amber-400"
                 : "bg-rose-500/10 border-rose-500/50 text-rose-400"
             }`}
           >
-            {finishedReason === "target" ? (
+            {finishedReason === "target" || isBulkProfit ? (
               <Trophy className="h-6 w-6 mt-0.5 flex-shrink-0" />
             ) : (
               <AlertCircle className="h-6 w-6 mt-0.5 flex-shrink-0" />
             )}
             <div className="flex-1">
               <p className="font-semibold text-lg">
-                {finishedReason === "target"
+                {finishedReason === "batch"
+                  ? isBulkProfit
+                    ? `🎉 ${finishedRobotName || marketName} completed successfully!`
+                    : `${finishedRobotName || marketName} batch finished`
+                  : finishedReason === "target"
                   ? `🎉 ${marketName} reached Target Profit!`
                   : finishedReason === "insufficient"
                   ? "Insufficient Balance"
                   : "Maximum Stop Loss Reached"}
               </p>
               <p className="text-sm mt-1 opacity-90">
-                {finishedReason === "target"
+                {finishedReason === "batch"
+                  ? isBulkProfit
+                    ? `Profit secured: +$${Math.abs(finishedProfit ?? 0).toFixed(2)}`
+                    : `Result: -$${Math.abs(finishedProfit ?? 0).toFixed(2)} · Keep going, the next batch can turn it around!`
+                  : finishedReason === "target"
                   ? `Final Profit: +$${totals.pnl.toFixed(2)}`
                   : finishedReason === "insufficient"
                   ? "Please recharge your account to continue auto-trading."
@@ -172,9 +199,9 @@ export function RunPanel({ open, onClose }: { open: boolean; onClose: () => void
           </div>
         )}
 
-        <Tabs 
-          value={tab} 
-          onValueChange={(v) => setTab(v as "summary" | "transactions" | "journal")} 
+        <Tabs
+          value={tab}
+          onValueChange={(v) => setTab(v as "summary" | "transactions" | "journal")}
           className="px-5 flex-1 flex flex-col"
         >
           <TabsList className="w-full grid grid-cols-3 bg-transparent h-auto p-0 border-b border-slate-800 rounded-none mt-2">
@@ -196,7 +223,6 @@ export function RunPanel({ open, onClose }: { open: boolean; onClose: () => void
               </Button>
             </div>
 
-            {/* Header */}
             <div className="grid grid-cols-[auto_1fr_auto] gap-x-2 px-4 pb-3 text-[11px] uppercase tracking-wide font-medium text-slate-500">
               <span className="pl-1">Type</span>
               <span className="pl-1">Entry / Exit</span>
@@ -205,10 +231,16 @@ export function RunPanel({ open, onClose }: { open: boolean; onClose: () => void
 
             <div className="max-h-[42vh] overflow-y-auto divide-y divide-slate-800/70">
               {transactions.length === 0 ? (
-                <div className="py-12 text-center text-slate-500">No trades yet. Start the robot.</div>
+                <div className="py-12 text-center text-slate-500">
+                  No trades yet. Start the robot.
+                </div>
               ) : (
                 transactions.map((t) => (
-                  <TransactionRow key={t.id} transaction={t} onClick={() => setDetail(t)} />
+                  <TransactionRow
+                    key={t.id}
+                    transaction={t}
+                    onClick={() => setDetail(t)}
+                  />
                 ))
               )}
             </div>
@@ -233,8 +265,8 @@ export function RunPanel({ open, onClose }: { open: boolean; onClose: () => void
                         t.isOpen
                           ? "text-amber-400"
                           : t.isWin
-                            ? "text-emerald-400"
-                            : "text-rose-400",
+                          ? "text-emerald-400"
+                          : "text-rose-400"
                       )}
                     />
                     <div className="flex-1">
@@ -250,11 +282,13 @@ export function RunPanel({ open, onClose }: { open: boolean; onClose: () => void
                           t.isOpen
                             ? "text-amber-400"
                             : t.isWin
-                              ? "text-emerald-400"
-                              : "text-rose-400",
+                            ? "text-emerald-400"
+                            : "text-rose-400"
                         )}
                       >
-                        {t.isOpen ? "Executing…" : `${t.isWin ? "WON" : "LOST"} $${fmt(Math.abs(t.pnl))}`}
+                        {t.isOpen
+                          ? "Executing…"
+                          : `${t.isWin ? "WON" : "LOST"} $${fmt(Math.abs(t.pnl))}`}
                       </div>
                     </div>
                   </div>
@@ -283,7 +317,7 @@ export function RunPanel({ open, onClose }: { open: boolean; onClose: () => void
 }
 
 /* =========================================================================
- * Transaction Row - Final Tight Version
+ * Transaction Row
  * ========================================================================= */
 function TransactionRow({
   transaction: t,
@@ -304,29 +338,27 @@ function TransactionRow({
           ? "bg-amber-500/[0.04] border-l-2 border-amber-400/70"
           : "border-l-2 border-transparent",
         !isOpen && (t.isWin ? "animate-flash-win" : "animate-flash-loss"),
-        "animate-trade-enter",
+        "animate-trade-enter"
       )}
     >
-      {/* 1. Contract Badge */}
       <div className="justify-self-start pl-1 flex-shrink-0">
-        <ContractBadge 
-          kind={t.contractKind} 
-          barrier={t.barrier} 
-          pulse={isOpen} 
-          size="sm" 
+        <ContractBadge
+          kind={t.contractKind}
+          barrier={t.barrier}
+          pulse={isOpen}
+          size="sm"
         />
       </div>
 
-      {/* 2. Entry / Exit - Tighter spacing */}
       <div className="text-sm leading-tight pl-1 pr-1 min-w-0">
-        {/* Entry Line */}
         <div className="flex items-center gap-1.5 text-slate-200">
           <span className="text-emerald-400 text-xs flex-shrink-0">↑</span>
           <span className="font-mono whitespace-nowrap">{fmt(t.entrySpot)}</span>
-          <span className="text-[10px] uppercase tracking-wide text-slate-500 ml-2">entry</span>
+          <span className="text-[10px] uppercase tracking-wide text-slate-500 ml-2">
+            entry
+          </span>
         </div>
 
-        {/* Exit Line */}
         {isOpen ? (
           <div className="flex items-center gap-1.5 text-amber-400 text-xs mt-1">
             <Loader2 className="h-3 w-3 animate-spin flex-shrink-0" />
@@ -336,8 +368,10 @@ function TransactionRow({
           <div className="flex items-center gap-1.5 text-slate-300 text-sm mt-1">
             <span className="text-rose-400 text-xs flex-shrink-0">↓</span>
             <span className="font-mono whitespace-nowrap">{fmt(t.exitSpot)}</span>
-            <span className="text-[10px] uppercase tracking-wide text-slate-500 ml-2">exit</span>
-            
+            <span className="text-[10px] uppercase tracking-wide text-slate-500 ml-2">
+              exit
+            </span>
+
             {typeof t.exitDigit === "number" && (
               <span className="ml-1.5 inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-md bg-slate-800 text-[11px] font-mono text-slate-300 flex-shrink-0">
                 {t.exitDigit}
@@ -347,10 +381,9 @@ function TransactionRow({
         )}
       </div>
 
-      {/* 3. Stake & P/L */}
       <div className="text-right tabular-nums justify-self-end pr-1 flex-shrink-0">
         <div className="font-medium text-slate-300 text-sm">${fmt(t.buyPrice)}</div>
-        
+
         {isOpen ? (
           <div className="text-amber-400 text-xs font-semibold mt-1 flex items-center justify-end gap-1">
             <span className="relative flex h-2 w-2">
@@ -363,7 +396,7 @@ function TransactionRow({
           <div
             className={cn(
               "text-sm font-semibold mt-1 animate-trade-settle",
-              t.pnl >= 0 ? "text-emerald-400" : "text-rose-400",
+              t.pnl >= 0 ? "text-emerald-400" : "text-rose-400"
             )}
           >
             {t.pnl >= 0 ? "+" : ""}${fmt(t.pnl)}
@@ -375,7 +408,15 @@ function TransactionRow({
 }
 
 /* ----------------------------- Helpers ----------------------------- */
-function Stat({ label, value, valueClass }: { label: string; value: string; valueClass?: string }) {
+function Stat({
+  label,
+  value,
+  valueClass,
+}: {
+  label: string;
+  value: string;
+  valueClass?: string;
+}) {
   return (
     <div>
       <div className="text-slate-500 text-xs">{label}</div>
@@ -384,15 +425,17 @@ function Stat({ label, value, valueClass }: { label: string; value: string; valu
   );
 }
 
-function SummaryView({ totals }: { 
-  totals: { 
-    totalStake: number; 
-    totalPayout: number; 
-    won: number; 
-    lost: number; 
-    pnl: number; 
+function SummaryView({
+  totals,
+}: {
+  totals: {
+    totalStake: number;
+    totalPayout: number;
+    won: number;
+    lost: number;
+    pnl: number;
     runs: number;
-  } 
+  };
 }) {
   const winRate = totals.runs ? Math.round((totals.won / totals.runs) * 100) : 0;
   return (
@@ -412,7 +455,15 @@ function SummaryView({ totals }: {
   );
 }
 
-function Row({ k, v, valueClass }: { k: string; v: string; valueClass?: string }) {
+function Row({
+  k,
+  v,
+  valueClass,
+}: {
+  k: string;
+  v: string;
+  valueClass?: string;
+}) {
   return (
     <div className="flex justify-between py-1 border-b border-slate-800 last:border-none">
       <span className="text-slate-500">{k}</span>

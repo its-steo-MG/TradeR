@@ -28,18 +28,24 @@ class RobotAdmin(admin.ModelAdmin):
         'name', 
         'is_deriv_robot', 
         'is_s_digit_robot', 
+        'is_bulk_robot',          # ← NEW
         'default_digit_contract_type',
+        'max_bulk_trades',        # ← NEW
         'price', 
         'discounted_price', 
         'effective_price', 
         'win_rate', 
         'available_for_demo'
     )
-    list_filter = ('is_deriv_robot', 'is_s_digit_robot', 'available_for_demo')
+    list_filter = (
+        'is_deriv_robot', 
+        'is_s_digit_robot', 
+        'is_bulk_robot',          # ← NEW
+        'available_for_demo'
+    )
     search_fields = ('name',)
     readonly_fields = ('effective_price',)
 
-    # Make new fields easy to edit
     fieldsets = (
         (None, {
             'fields': ('name', 'description', 'image', 'price', 'discounted_price',
@@ -50,10 +56,15 @@ class RobotAdmin(admin.ModelAdmin):
             'classes': ('collapse',),
             'description': 'Only fill deriv_access_key if is_deriv_robot = True'
         }),
-        ('S-Digit Robot Settings', {   # ← NEW SECTION
+        ('S-Digit Robot Settings', {
             'fields': ('is_s_digit_robot', 'default_digit_contract_type'),
             'classes': ('collapse',),
             'description': 'Only for S-Digit Robots (Over/Under, Matches/Differs, Even/Odd)'
+        }),
+        ('Bulk Trades AI Settings', {          # ← NEW SECTION
+            'fields': ('is_bulk_robot', 'max_bulk_trades'),
+            'classes': ('collapse',),
+            'description': 'Only for Bulk Trades AI robots. max_bulk_trades = how many trades the robot can place in one request (1-50)'
         }),
     )
 

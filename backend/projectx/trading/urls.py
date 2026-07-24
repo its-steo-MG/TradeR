@@ -11,7 +11,8 @@ from .views import (
     ResetDemoBalanceView,
     GenerateSignalView,
     PlaceDigitTradeView,
-    PlaceSRobotTradeView,          # ← NEW: S-Digit Robot Trade View
+    PlaceSRobotTradeView,
+    PlaceBulkTradeView,            # ← NEW: Bulk Trades AI
 )
 
 urlpatterns = [
@@ -25,6 +26,7 @@ urlpatterns = [
     path('reset-demo-balance/', ResetDemoBalanceView.as_view(), name='reset_demo_balance'),
     path('signals/generate/', GenerateSignalView.as_view(), name='generate_signal'),
     path('trades/place-digit/', PlaceDigitTradeView.as_view(), name='place_digit_trade'),
-    # NEW: S-Digit Robot Trade Endpoint
     path('trades/place-srobot/', PlaceSRobotTradeView.as_view(), name='place_srobot_trade'),
+    # NEW: Bulk Trades AI Endpoint
+    path('trades/place-bulk/', PlaceBulkTradeView.as_view(), name='place_bulk_trade'),
 ]

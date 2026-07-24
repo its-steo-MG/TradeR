@@ -78,6 +78,17 @@ class Robot(models.Model):
         help_text="Optional default contract type for this robot (over, under, matches, etc.)"
     )
 
+    # ==================== BULK TRADES AI ROBOT FIELDS ====================
+    is_bulk_robot = models.BooleanField(
+        default=False,
+        help_text="This is a Bulk Trades AI Robot (can place multiple trades in one request)"
+    )
+    max_bulk_trades = models.PositiveIntegerField(
+        default=10,
+        validators=[MinValueValidator(1), MaxValueValidator(50)],
+        help_text="Maximum number of trades this robot can place in one bulk request (admin can change)"
+    )
+
     def __str__(self):
         return self.name
 

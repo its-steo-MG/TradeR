@@ -61,7 +61,19 @@ type State = {
   martingaleLevel: number;
   sessionPnl: number;
   runs: number;
-  finishedReason?: "target" | "stoploss" | "maxruns" | "manual" | "insufficient";
+  finishedReason?:
+    | "target"
+    | "stoploss"
+    | "maxruns"
+    | "manual"
+    | "insufficient"
+    | "batch";
+  /** Set when a bulk batch finishes so RunPanel can show a bulk-specific banner. */
+  finishedRobotName?: string;
+  /** Signed profit for the finished bulk batch (positive = win). */
+  finishedProfit?: number;
+  /** True when the last finished run was a bulk batch (vs. a normal robot run). */
+  isBulkRun?: boolean;
 };
 
 const listeners = new Set<() => void>();
@@ -96,6 +108,9 @@ export function start(
     currentStake: config.initialStake,
     martingaleLevel: 0,
     finishedReason: undefined,
+    finishedRobotName: undefined,
+    finishedProfit: undefined,
+    isBulkRun: false,
   });
 
   placeOne();
@@ -118,6 +133,9 @@ export function reset() {
     martingaleLevel: 0,
     currentStake: 0,
     finishedReason: undefined,
+    finishedRobotName: undefined,
+    finishedProfit: undefined,
+    isBulkRun: false,
   });
 }
 
@@ -375,4 +393,273 @@ export function getSnapshot(): State {
 
 export function useRobotRunner() {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+/* ================================================================== */
+/*  BULK BATCH EXECUTION                                              */
+/*                                                                    */
+/*  All N trades in a bulk batch share:                               */
+/*    • ONE entry tick  (same entrySpot + entryDigit for every leg)   */
+/*    • ONE exit tick   (same exitSpot + exitDigit for every leg)     */
+/*                                                                    */
+/*  The server still decides each leg's win/loss and profit — but     */
+/*  visually every position enters together and exits together, the   */
+/*  way a real broker's bulk contract does.                           */
+/*                                                                    */
+/*  The finish banner in RunPanel is bulk-aware and reads             */
+/*  finishedRobotName + finishedProfit to show:                       */
+/*    win  → "{robot} has profited $X.XX successfully"                */
+/*    loss → "{robot} has posted a loss of -$X.XX — try again ..."    */
+/* ================================================================== */
+
+export type BulkBatchConfig = {
+  robotId: number;
+  robotName?: string;
+  marketId: number;
+  marketName?: string;
+  contractKind: "over" | "under" | "matches" | "differs" | "even" | "odd";
+  barrier?: number;
+  stake: number;
+  numTrades: number;
+};
+
+export async function startBulkBatch(cfg: BulkBatchConfig): Promise<{
+  wins: number;
+  losses: number;
+  totalProfit: number;
+}> {
+  if (state.isRunning) {
+    toast.error("A robot run is already in progress");
+    return { wins: 0, losses: 0, totalProfit: 0 };
+  }
+
+  const required = cfg.stake * cfg.numTrades;
+  const balance = getCurrentBalance();
+  if (balance < required) {
+    toast.error("Insufficient Balance", {
+      description: `Required: $${required.toFixed(2)} | Available: $${balance.toFixed(2)}`,
+      duration: 10000,
+    });
+    return { wins: 0, losses: 0, totalProfit: 0 };
+  }
+
+  if (cfg.marketName) tickFeed.setMarket(cfg.marketName);
+  tickFeed.start();
+
+  const robotLabel = cfg.robotName || "Bulk Robot";
+
+  setState({
+    isRunning: true,
+    config: {
+      marketId: cfg.marketId,
+      robotId: cfg.robotId,
+      market: cfg.marketName,
+      contractKind: cfg.contractKind,
+      barrier: cfg.barrier,
+      initialStake: cfg.stake,
+      multiplier: 1,
+      targetProfit: 0,
+      stopLoss: 0,
+      maxRuns: cfg.numTrades,
+    } as RobotConfig & { marketId: number; robotId?: number; market?: string },
+    currentStake: cfg.stake,
+    martingaleLevel: 0,
+    finishedReason: undefined,
+    finishedRobotName: undefined,
+    finishedProfit: undefined,
+    isBulkRun: true,
+  });
+
+  const account_type = getAccountType();
+  const usesBarrier = ["over", "under", "matches", "differs"].includes(cfg.contractKind);
+
+  // -------------------------------------------------------------
+  // 1) SHARED ENTRY TICK — snapshot ONE tick for every leg.
+  // -------------------------------------------------------------
+  const entryTickNow = tickFeed.getHistory().at(-1);
+  const entrySpot = Number((entryTickNow?.price ?? 9200).toFixed(2));
+  const entryDigit = entryTickNow?.lastDigit ?? 0;
+  const batchTs = Date.now();
+
+  // Build N open transactions with the SAME entry — Sashi-style batch open.
+  const openTxs: Transaction[] = Array.from({ length: cfg.numTrades }, (_, idx) => ({
+    id: `bulk-${batchTs}-${idx}`,
+    contractKind: cfg.contractKind,
+    barrier: cfg.barrier,
+    market: cfg.marketName || "Volatility",
+    entrySpot,
+    exitSpot: 0,
+    buyPrice: cfg.stake,
+    payout: 0,
+    pnl: 0,
+    isWin: false,
+    runIndex: idx + 1,
+    martingaleLevel: 0,
+    timestamp: batchTs,
+    isOpen: true,
+  }));
+
+  // Record open positions in the store — one refId per leg but all share entry.
+  const openIds: string[] = [];
+  openTxs.forEach((tx, idx) => {
+    const openId = newId();
+    openIds.push(openId);
+    recordBuy({
+      open: {
+        id: openId,
+        refId: `bulk-${batchTs}-${idx}`,
+        contractKind: cfg.contractKind,
+        barrier: cfg.barrier,
+        stake: Number(cfg.stake),
+        potentialPayout: 0,
+        multiplier: 0,
+        entrySpot,
+        entryDigit,
+        marketId: cfg.marketId,
+        marketName: cfg.marketName || "Volatility Market",
+        accountType: account_type,
+        createdAt: batchTs,
+        isAuto: true,
+      },
+      balanceAfter: 0,
+    });
+  });
+
+  setState({ transactions: [...openTxs, ...state.transactions] });
+  sfx.buy();
+
+  try {
+    // ONE call to the real bulk endpoint
+    const response = await api.placeBulkTrade({
+      robot_id: cfg.robotId,
+      market_id: cfg.marketId,
+      digit_contract_type: cfg.contractKind,
+      digit_barrier: usesBarrier ? cfg.barrier : undefined,
+      amount: Number(cfg.stake),
+      number_of_trades: cfg.numTrades,
+      account_type,
+    });
+
+    if (response.error) throw new Error(response.error);
+
+    const data = response.data as {
+      trades?: Array<Record<string, unknown>>;
+      last_digit?: number;
+    } | null;
+    const trades: Array<Record<string, unknown>> = Array.isArray(data?.trades)
+      ? (data!.trades as Array<Record<string, unknown>>)
+      : [];
+
+    // -------------------------------------------------------------
+    // 2) SHARED EXIT TICK — pick ONE digit for the whole batch.
+    //    Server may return one `last_digit` (preferred) or one per leg;
+    //    if it's per-leg we use the FIRST leg's digit as the shared exit,
+    //    but each leg's is_win still comes straight from the server.
+    // -------------------------------------------------------------
+    const sharedExitDigit = Number(
+      data?.last_digit ??
+        trades[0]?.last_digit_outcome ??
+        trades[0]?.last_digit ??
+        entryDigit,
+    );
+
+    tickFeed.forceNextDigit(sharedExitDigit);
+    await waitForNextTick();
+    const exitTick = tickFeed.getHistory().at(-1);
+    const exitSpot = Number((exitTick?.price ?? entrySpot).toFixed(2));
+
+    // -------------------------------------------------------------
+    // 3) Settle every leg with the SAME exit spot + exit digit.
+    // -------------------------------------------------------------
+    let wins = 0;
+    let losses = 0;
+    let totalProfit = 0;
+
+    const settledTxs: Transaction[] = openTxs.map((openTx, idx) => {
+      const t = trades[idx] ?? {};
+      const serverDigit = Number(
+        t.last_digit_outcome ?? t.last_digit ?? sharedExitDigit,
+      );
+      // Prefer server's is_win; fall back to computing from the shared exit digit.
+      let isWin = t.is_win === true;
+      if (t.is_win === undefined || t.is_win === null) {
+        isWin = isWinningDigit(
+          cfg.contractKind,
+          usesBarrier ? cfg.barrier : undefined,
+          serverDigit,
+        );
+      }
+      const rawProfit = Number(t.profit ?? t.total_profit ?? 0);
+      const profit = isWin ? Math.abs(rawProfit) : -Number(cfg.stake);
+      const payoutCredit = isWin ? Number(cfg.stake) + Math.abs(rawProfit) : 0;
+
+      if (isWin) wins++;
+      else losses++;
+      totalProfit += profit;
+
+      // Settle in the positions store — shared exit spot/digit.
+      recordSettlement({
+        openId: openIds[idx],
+        exitSpot,
+        exitDigit: sharedExitDigit,
+        outcome: isWin ? "W" : "L",
+        payout: payoutCredit,
+        profit,
+        balanceAfter: updateRealBalance(profit),
+      });
+
+      return {
+        ...openTx,
+        exitSpot,
+        payout: payoutCredit,
+        pnl: profit,
+        isWin,
+        exitDigit: sharedExitDigit,
+        isOpen: false,
+        timestamp: Date.now(),
+      };
+    });
+
+    // Splice settled transactions into state.
+    setState({
+      transactions: state.transactions.map((tx) => {
+        const replacement = settledTxs.find((s) => s.id === tx.id);
+        return replacement ?? tx;
+      }),
+      sessionPnl: +totalProfit.toFixed(2),
+      runs: settledTxs.length,
+      isRunning: false,
+      finishedReason: "batch",
+      finishedRobotName: robotLabel,
+      finishedProfit: +totalProfit.toFixed(2),
+      isBulkRun: true,
+    });
+
+    if (totalProfit >= 0) {
+      sfx.win();
+      toast.success(
+        `${robotLabel} has profited $${totalProfit.toFixed(2)} successfully 🎉`,
+        { duration: 10000 },
+      );
+    } else {
+      sfx.lose();
+      toast.error(
+        `${robotLabel} has posted a loss of -$${Math.abs(totalProfit).toFixed(2)} — try again next round`,
+        { duration: 10000 },
+      );
+    }
+
+    return { wins, losses, totalProfit };
+  } catch (err: unknown) {
+    console.error("Bulk batch failed:", err);
+    // Roll back the open transactions we optimistically added.
+    const openTxIds = new Set(openTxs.map((t) => t.id));
+    setState({
+      isRunning: false,
+      transactions: state.transactions.filter((t) => !openTxIds.has(t.id)),
+    });
+    const message = err instanceof Error ? err.message : "Bulk trade failed";
+    toast.error(message);
+    return { wins: 0, losses: 0, totalProfit: 0 };
+  }
 }

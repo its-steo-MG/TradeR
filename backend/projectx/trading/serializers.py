@@ -33,9 +33,12 @@ class RobotSerializer(serializers.ModelSerializer):
             # Deriv Premium Robot fields
             'is_deriv_robot',
             'deriv_access_key',
-            # ==================== NEW: S-Digit Robot Fields ====================
+            # S-Digit Robot Fields
             'is_s_digit_robot',
             'default_digit_contract_type',
+            # ==================== NEW: Bulk Trades AI Fields ====================
+            'is_bulk_robot',
+            'max_bulk_trades',
         ]
 
 
@@ -91,7 +94,7 @@ class TradeSerializer(serializers.ModelSerializer):
     trade_type = TradeTypeSerializer(read_only=True)
     used_robot = RobotSerializer(read_only=True)
 
-    # ==================== NEW: Digit Trading Fields ====================
+    # Digit Trading Fields
     is_digit_trade = serializers.BooleanField(read_only=True)
     digit_contract_type = serializers.CharField(read_only=True)
     digit_barrier = serializers.IntegerField(read_only=True)

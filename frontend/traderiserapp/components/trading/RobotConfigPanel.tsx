@@ -16,9 +16,7 @@ import { api } from "@/lib/api";
 import { Play } from "lucide-react";
 import { toast } from "sonner";
 
-import type {
-  DigitContractKind,
-} from "@/lib/types/positions";
+import type { DigitContractKind } from "@/lib/types/positions";
 
 type Robot = {
   id: number;
@@ -39,13 +37,18 @@ type RobotConfigFormProps = {
   onRun?: () => void;
 };
 
-export function RobotConfigForm({ selectedMarketId: propSelectedMarketId, onRun }: RobotConfigFormProps) {
+export function RobotConfigForm({
+  selectedMarketId: propSelectedMarketId,
+  onRun,
+}: RobotConfigFormProps) {
   const { isRunning } = useRobotRunner();
 
   const [robots, setRobots] = useState<Robot[]>([]);
   const [markets, setMarkets] = useState<Market[]>([]);
   const [selectedRobot, setSelectedRobot] = useState<Robot | null>(null);
-  const [selectedMarketId, setSelectedMarketId] = useState<number | null>(propSelectedMarketId || null);
+  const [selectedMarketId, setSelectedMarketId] = useState<number | null>(
+    propSelectedMarketId || null
+  );
 
   const [contractKind, setContractKind] = useState<DigitContractKind>("over");
   const [barrier, setBarrier] = useState<string>("5");
@@ -55,34 +58,40 @@ export function RobotConfigForm({ selectedMarketId: propSelectedMarketId, onRun 
   const [stopLoss, setStopLoss] = useState<string>("20");
   const [maxRuns, setMaxRuns] = useState<string>("50");
 
-  // Load only S-Digit Robots
+  // ==================== Load only OWNED S-Digit Robots ====================
   useEffect(() => {
     const fetchRobots = async () => {
       try {
-        const res = await api.getRobots();
+        const res = await api.getUserRobots(); // ← only robots the user owns
 
-        const sDigitRobots: Robot[] = Array.isArray(res?.data)
-          ? (res.data as Record<string, unknown>[])
-              .filter((r) => {
-                const robot = r as Record<string, unknown>;
-                return robot.is_s_digit_robot === true;
-              })
-              .map((r): Robot => {
-                const robot = r as Record<string, unknown>;
-                return {
-                  id: Number(robot.id),
-                  name: String(robot.name || ""),
-                  is_s_digit_robot: true,
-                  default_digit_contract_type: typeof robot.default_digit_contract_type === "string" 
-                    ? robot.default_digit_contract_type 
-                    : undefined,
-                };
-              })
-          : [];
+        const raw = (res?.data ?? res) as any;
+        const list = Array.isArray(raw)
+          ? raw
+          : Array.isArray(raw?.user_robots)
+            ? raw.user_robots
+            : [];
 
-        setRobots(sDigitRobots);
+        const sDigitRobots: Robot[] = list
+          .map((ur: any) => ur.robot)
+          .filter((r: any) => r && r.is_s_digit_robot === true)
+          .map((r: any): Robot => ({
+            id: Number(r.id),
+            name: String(r.name || ""),
+            is_s_digit_robot: true,
+            default_digit_contract_type:
+              typeof r.default_digit_contract_type === "string"
+                ? r.default_digit_contract_type
+                : undefined,
+          }));
+
+        // Remove duplicates
+        const unique = sDigitRobots.filter(
+          (r, i, arr) => arr.findIndex((x) => x.id === r.id) === i
+        );
+
+        setRobots(unique);
       } catch (error) {
-        console.error("Failed to fetch robots:", error);
+        console.error("Failed to fetch owned S-Digit robots:", error);
         setRobots([]);
       }
     };
@@ -90,7 +99,7 @@ export function RobotConfigForm({ selectedMarketId: propSelectedMarketId, onRun 
     fetchRobots();
   }, []);
 
-  // Load Volatility Markets
+  // ==================== Load Volatility Markets ====================
   useEffect(() => {
     const fetchMarkets = async () => {
       try {
@@ -118,7 +127,8 @@ export function RobotConfigForm({ selectedMarketId: propSelectedMarketId, onRun 
             const volatilityMarkets: Market[] = (data as Record<string, unknown>[])
               .filter((m) => {
                 const market = m as Record<string, unknown>;
-                const marketType = (market.market_type as Record<string, unknown>)?.name || market.name;
+                const marketType =
+                  (market.market_type as Record<string, unknown>)?.name || market.name;
                 return String(marketType || "").toLowerCase().includes("volatility");
               })
               .map((m): Market => {
@@ -140,16 +150,21 @@ export function RobotConfigForm({ selectedMarketId: propSelectedMarketId, onRun 
                 };
               });
 
-            marketList = volatilityMarkets.length ? volatilityMarkets : 
-              (data as Record<string, unknown>[]).map((m): Market => {
-                const market = m as Record<string, unknown>;
-                return {
-                  id: Number(market.id) || 0,
-                  name: String(market.name || ""),
-                  display_name: typeof market.display_name === "string" ? market.display_name : undefined,
-                  market_type: market.market_type as { name: string } | undefined,
-                };
-              });
+            marketList =
+              volatilityMarkets.length > 0
+                ? volatilityMarkets
+                : (data as Record<string, unknown>[]).map((m): Market => {
+                    const market = m as Record<string, unknown>;
+                    return {
+                      id: Number(market.id) || 0,
+                      name: String(market.name || ""),
+                      display_name:
+                        typeof market.display_name === "string"
+                          ? market.display_name
+                          : undefined,
+                      market_type: market.market_type as { name: string } | undefined,
+                    };
+                  });
           }
         }
 
@@ -187,8 +202,9 @@ export function RobotConfigForm({ selectedMarketId: propSelectedMarketId, onRun 
     if (!selectedRobot) return toast.error("Please select an S-Digit robot");
 
     const selectedMarket = markets.find((m) => m.id === selectedMarketId);
-
-    const isDigitWithBarrier = ["over", "under", "matches", "differs"].includes(contractKind);
+    const isDigitWithBarrier = ["over", "under", "matches", "differs"].includes(
+      contractKind
+    );
 
     start({
       market: selectedMarket?.name || selectedMarket?.display_name || "Volatility Market",
@@ -219,15 +235,20 @@ export function RobotConfigForm({ selectedMarketId: propSelectedMarketId, onRun 
 
       {/* Select Robot */}
       <div className="relative z-50">
-        <Label className="text-sm text-muted-foreground mb-2 block">Select S-Digit Robot</Label>
-        <Select onValueChange={handleRobotSelect} disabled={robots.length === 0}>
+        <Label className="text-sm text-muted-foreground mb-2 block">
+          Select S-Digit Robot
+        </Label>
+        <Select
+          onValueChange={handleRobotSelect}
+          disabled={robots.length === 0}
+        >
           <SelectTrigger className="w-full">
             <SelectValue placeholder="Choose your S-Digit Robot..." />
           </SelectTrigger>
           <SelectContent className="z-[10000]">
             {robots.map((robot) => (
               <SelectItem key={robot.id} value={String(robot.id)}>
-                {robot.name} {robot.is_s_digit_robot && "⭐"}
+                {robot.name} ⭐
               </SelectItem>
             ))}
           </SelectContent>
@@ -238,7 +259,9 @@ export function RobotConfigForm({ selectedMarketId: propSelectedMarketId, onRun 
         <>
           {/* Volatility Market */}
           <div className="relative z-50">
-            <Label className="text-sm text-muted-foreground mb-2 block">Volatility Market</Label>
+            <Label className="text-sm text-muted-foreground mb-2 block">
+              Volatility Market
+            </Label>
             <Select
               value={selectedMarketId?.toString() || ""}
               onValueChange={(val) => setSelectedMarketId(Number(val))}
@@ -259,9 +282,11 @@ export function RobotConfigForm({ selectedMarketId: propSelectedMarketId, onRun 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="relative z-50">
               <Label>Contract Type</Label>
-              <Select 
-                value={contractKind} 
-                onValueChange={(value) => setContractKind(value as DigitContractKind)}
+              <Select
+                value={contractKind}
+                onValueChange={(value) =>
+                  setContractKind(value as DigitContractKind)
+                }
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -386,11 +411,18 @@ export function RobotConfigForm({ selectedMarketId: propSelectedMarketId, onRun 
         </>
       )}
 
-      {!selectedRobot && (
+      {/* Empty / No robot selected messages */}
+      {robots.length === 0 ? (
+        <p className="text-center text-amber-400 text-sm py-8">
+          You don’t own any S-Digit Robot yet.
+          <br />
+          Please purchase one from the Marketplace first.
+        </p>
+      ) : !selectedRobot ? (
         <p className="text-center text-amber-400 text-sm py-8">
           Please select an S-Digit Robot to continue
         </p>
-      )}
+      ) : null}
     </div>
   );
 }
