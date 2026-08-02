@@ -117,7 +117,7 @@ export default function WelcomeV4({ onContinue }: { onContinue: () => void }) {
           </div>
         ) : (
           /* Terms Modal */
-          <div className="bg-background/95 backdrop-blur-xl border border-border rounded-2xl p-8 max-w-2xl mx-auto animate-fade-in shadow-2xl">
+          <div className="bg-background/95 backdrop-blur-xl border border-border rounded-[1.8rem] p-8 max-w-2xl mx-auto animate-fade-in shadow-2xl">
             
             {/* Header */}
             <div className="flex items-center justify-between mb-8">

@@ -171,45 +171,52 @@ export function WithdrawModal({ onClose, onSuccess, onSetMessage }: WithdrawModa
               <div>
                 <p className="text-slate-600 text-center mb-3 sm:mb-4 text-sm sm:text-base">From</p>
                 <div className="flex gap-2 sm:gap-3 justify-center mb-6 sm:mb-8 flex-wrap">
+                  {/* TradeR */}
                   <button
                     onClick={() => setSelectedAccountType("standard")}
-                    className={`px-4 sm:px-6 py-2 sm:py-3 rounded-xl text-sm sm:text-base font-semibold transition-colors ${
+                    className={`drop-on-top relative px-4 sm:px-6 py-2 sm:py-3 rounded-xl text-sm sm:text-base font-semibold transition-all ${
                       selectedAccountType === "standard"
                         ? "bg-purple-600 text-white"
                         : "bg-slate-200 text-slate-600 hover:bg-slate-300"
                     }`}
                   >
-                    TradeR
+                    <span className="relative z-[1]">TradeR</span>
                   </button>
+
+                  {/* ProFX */}
                   <button
                     onClick={() => setSelectedAccountType("pro-fx")}
                     disabled={!hasProFx}
-                    className={`px-4 sm:px-6 py-2 sm:py-3 rounded-xl text-sm sm:text-base font-semibold transition-colors ${
+                    className={`drop-on-top relative px-4 sm:px-6 py-2 sm:py-3 rounded-xl text-sm sm:text-base font-semibold transition-all ${
                       selectedAccountType === "pro-fx"
                         ? "bg-purple-600 text-white"
                         : "bg-slate-200 text-slate-600 hover:bg-slate-300"
                     } ${!hasProFx ? "opacity-50 cursor-not-allowed" : ""}`}
                   >
-                    ProFX
+                    <span className="relative z-[1]">ProFX</span>
                   </button>
+
+                  {/* MT5 */}
                   <button
                     onClick={() => setSelectedAccountType("mt5")}
                     disabled={!hasMt5}
-                    className={`px-4 sm:px-6 py-2 sm:py-3 rounded-xl text-sm sm:text-base font-semibold transition-colors ${
+                    className={`drop-on-top relative px-4 sm:px-6 py-2 sm:py-3 rounded-xl text-sm sm:text-base font-semibold transition-all ${
                       selectedAccountType === "mt5"
                         ? "bg-teal-600 text-white"
                         : "bg-slate-200 text-slate-600 hover:bg-slate-300"
                     } ${!hasMt5 ? "opacity-50 cursor-not-allowed" : ""}`}
                   >
-                    MT5
+                    <span className="relative z-[1]">MT5</span>
                   </button>
                 </div>
               </div>
+
+              {/* Next */}
               <button
                 onClick={() => setStep("mpesa")}
-                className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 sm:py-4 px-4 sm:px-6 rounded-2xl transition-colors"
+                className="drop-on-top relative w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 sm:py-4 px-4 sm:px-6 rounded-2xl transition-all"
               >
-                Next
+                <span className="relative z-[1]">Next</span>
               </button>
             </>
           )}
@@ -233,9 +240,11 @@ export function WithdrawModal({ onClose, onSuccess, onSetMessage }: WithdrawModa
               <button
                 onClick={handleSaveMpesa}
                 disabled={!mpesaNumber || isSubmitting}
-                className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white font-semibold py-3 sm:py-4 px-4 sm:px-6 rounded-2xl transition-colors"
+                className="drop-on-top relative w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white font-semibold py-3 sm:py-4 px-4 sm:px-6 rounded-2xl transition-all disabled:opacity-50"
               >
-                {isSubmitting ? "Saving..." : "Save and Continue"}
+                <span className="relative z-[1]">
+                  {isSubmitting ? "Saving..." : "Save and Continue"}
+                </span>
               </button>
             </>
           )}
@@ -263,6 +272,7 @@ export function WithdrawModal({ onClose, onSuccess, onSetMessage }: WithdrawModa
 
               {error && <p className="text-red-600 text-sm text-center">{error}</p>}
 
+              {/* Numpad */}
               <div className="grid grid-cols-3 gap-2 sm:gap-3">
                 {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((num) => (
                   <button
@@ -293,17 +303,20 @@ export function WithdrawModal({ onClose, onSuccess, onSetMessage }: WithdrawModa
                 </button>
               </div>
 
+              {/* Withdraw Button */}
               <button
                 onClick={handleInitiateWithdrawal}
                 disabled={!usdAmount || isSubmitting}
-                className="w-full bg-slate-200 hover:bg-slate-300 disabled:bg-slate-200 text-slate-600 font-semibold py-3 sm:py-4 px-4 sm:px-6 rounded-2xl transition-colors flex items-center justify-center gap-2 text-sm sm:text-base"
+                className="drop-on-top relative w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white font-semibold py-3 sm:py-4 px-4 sm:px-6 rounded-2xl transition-all flex items-center justify-center gap-2 text-sm sm:text-base disabled:opacity-50"
               >
-                {isSubmitting ? "Processing..." : "Withdraw"}
-                {!isSubmitting && (
-                  <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                )}
+                <span className="relative z-[1] flex items-center gap-2">
+                  {isSubmitting ? "Processing..." : "Withdraw"}
+                  {!isSubmitting && (
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  )}
+                </span>
               </button>
             </>
           )}

@@ -1,6 +1,10 @@
 "use client";
 
-type Props = { digits: number[]; selected: number; onSelect: (d: number) => void; };
+type Props = {
+  digits: number[];
+  selected: number;
+  onSelect: (d: number) => void;
+};
 
 export default function DigitPicker({ digits, selected, onSelect }: Props) {
   return (
@@ -9,12 +13,17 @@ export default function DigitPicker({ digits, selected, onSelect }: Props) {
         <button
           key={d}
           onClick={() => onSelect(d)}
-          className={`h-10 rounded-md text-sm font-medium transition ${
-            selected === d
-              ? "bg-blue-500 text-white"
-              : "bg-slate-800 text-slate-300 hover:bg-slate-700"
-          }`}
-        >{d}</button>
+          className={`
+            relative h-10 rounded-md text-sm font-medium transition
+            ${
+              selected === d
+                ? "drop-on-top bg-blue-500 text-white"
+                : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+            }
+          `}
+        >
+          <span className="relative z-[1]">{d}</span>
+        </button>
       ))}
     </div>
   );

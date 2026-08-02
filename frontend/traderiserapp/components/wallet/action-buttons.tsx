@@ -55,34 +55,37 @@ export function ActionButtons({
 
   return (
     <div className="space-y-4">
-      {/* Top Row: Deposit & Withdraw (side by side, as before) */}
+      {/* Top Row: Deposit & Withdraw */}
       <div className="flex gap-4">
+        {/* Deposit */}
         <button
           onClick={onDeposit}
           disabled={loading || (isDemo && hasValidWallet)}
-          className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white font-semibold py-3 px-6 rounded-xl transition-colors duration-200 shadow-md hover:shadow-lg"
+          className="drop-on-top flex-1 relative bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           title={isDemo && hasValidWallet ? "Deposits are not available in demo mode" : ""}
         >
-          Deposit
+          <span className="relative z-[1]">Deposit</span>
         </button>
+
+        {/* Withdraw */}
         <button
           onClick={onWithdraw}
           disabled={loading || (isDemo && hasValidWallet) || balance === 0}
-          className="flex-1 bg-white hover:bg-slate-50 disabled:bg-slate-200 text-slate-900 font-semibold py-3 px-6 rounded-xl border-2 border-slate-200 transition-colors duration-200 shadow-sm hover:shadow-md"
+          className="drop-on-top flex-1 relative bg-white hover:bg-slate-50 disabled:bg-slate-200 text-slate-900 font-semibold py-3 px-6 rounded-xl border-2 border-slate-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           title={balance === 0 ? "No balance available to withdraw" : isDemo && hasValidWallet ? "Withdrawals are not available in demo mode" : ""}
         >
-          Withdraw
+          <span className="relative z-[1]">Withdraw</span>
         </button>
       </div>
 
-      {/* Bottom: Transfer button (full width, clearly separated) */}
+      {/* Transfer Funds */}
       <button
         onClick={onTransfer}
         disabled={loading || (isDemo && hasValidWallet) || balance === 0}
-        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-3 px-6 rounded-xl transition-colors duration-200 shadow-md hover:shadow-lg"
+        className="drop-on-top relative w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
         title={isDemo && hasValidWallet ? "Transfers not available in demo mode" : balance === 0 ? "No balance to transfer" : ""}
       >
-        Transfer Funds
+        <span className="relative z-[1]">Transfer Funds</span>
       </button>
     </div>
   )

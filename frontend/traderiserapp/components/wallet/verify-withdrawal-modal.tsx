@@ -61,21 +61,21 @@ export function VerifyWithdrawalModal({ transactionId, onClose, onSuccess, onSet
     }
   }
 
-const handleResendOTP = async () => {
-  setIsSubmitting(true);
-  setError("");
-  try {
-    const res = await api.resendOTP(transactionId);
-    if (res.error) throw new Error(res.error);
-    onSetMessage({ type: "success", text: "New OTP sent to your email" });
-    setTimeLeft(60);
-    setCanResend(false);
-  } catch (err) {
-    onSetMessage({ type: "error", text: (err as Error).message || "Failed to resend OTP" });
-  } finally {
-    setIsSubmitting(false);
+  const handleResendOTP = async () => {
+    setIsSubmitting(true)
+    setError("")
+    try {
+      const res = await api.resendOTP(transactionId)
+      if (res.error) throw new Error(res.error)
+      onSetMessage({ type: "success", text: "New OTP sent to your email" })
+      setTimeLeft(60)
+      setCanResend(false)
+    } catch (err) {
+      onSetMessage({ type: "error", text: (err as Error).message || "Failed to resend OTP" })
+    } finally {
+      setIsSubmitting(false)
+    }
   }
-}
 
   const handleNumpadClick = (value: string) => {
     if (value === "backspace") {
@@ -86,19 +86,12 @@ const handleResendOTP = async () => {
   }
 
   const handleOkay = () => {
-  setShowSuccess(false);
-
-  // Close modal BEFORE refreshing session
-  onClose();
-
-  // Tell layout & page to refresh session
-  setTimeout(() => {
-    window.dispatchEvent(new Event("session-updated"));
-  }, 100);
-
-  // ❌ Do NOT reload — causes production logout
-};
-
+    setShowSuccess(false)
+    onClose()
+    setTimeout(() => {
+      window.dispatchEvent(new Event("session-updated"))
+    }, 100)
+  }
 
   if (showSuccess) {
     return (
@@ -109,9 +102,9 @@ const handleResendOTP = async () => {
             <p className="text-sm text-gray-600 mb-6">Withdrawal request received. Funds will be sent shortly.</p>
             <button
               onClick={handleOkay}
-              className="bg-purple-600 text-white py-2 px-4 rounded-lg"
+              className="drop-on-top relative bg-purple-600 text-white py-2.5 px-6 rounded-xl font-semibold"
             >
-              Okay
+              <span className="relative z-[1]">Okay</span>
             </button>
           </div>
         </div>
@@ -179,9 +172,11 @@ const handleResendOTP = async () => {
           <button
             onClick={handleVerifyOTP}
             disabled={otpCode.length !== 6 || isSubmitting}
-            className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white font-semibold py-3 sm:py-4 rounded-xl transition-colors"
+            className="drop-on-top relative w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white font-semibold py-3 sm:py-4 rounded-xl transition-all disabled:opacity-50"
           >
-            {isSubmitting ? "Verifying..." : "Verify and Withdraw"}
+            <span className="relative z-[1]">
+              {isSubmitting ? "Verifying..." : "Verify and Withdraw"}
+            </span>
           </button>
 
           {/* Resend Button */}

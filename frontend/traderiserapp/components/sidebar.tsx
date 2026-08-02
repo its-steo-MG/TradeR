@@ -42,11 +42,10 @@ export function Sidebar({
   const router = useRouter();
 
   const [isOpen, setIsOpen] = useState(false);
-  const [activeAccount, setActiveAccount] = useState<Account | null>(propActiveAccount ?? null);
+  const [activeAccount, setActiveAccount] = useState<Account | null>(
+    propActiveAccount ?? null
+  );
 
-  /* -------------------------------------------------
-     1. Initialise active account
-     ------------------------------------------------- */
   useEffect(() => {
     const storedId = Number(localStorage.getItem(ACTIVE_ACCOUNT_KEY));
 
@@ -54,13 +53,14 @@ export function Sidebar({
       let found = accounts.find((a) => a.id === storedId);
 
       if (!found) {
-        // Prefer Traderiser Demo when in demo mode
         if (loginType === "demo") {
-          found = accounts.find(
-            (a) => a.account_type === "demo" && a.platform === "traderiser"
-          ) || accounts.find((a) => a.account_type === "demo");
+          found =
+            accounts.find(
+              (a) => a.account_type === "demo" && a.platform === "traderiser"
+            ) || accounts.find((a) => a.account_type === "demo");
         } else {
-          found = accounts.find((a) => a.account_type === "standard") || accounts[0];
+          found =
+            accounts.find((a) => a.account_type === "standard") || accounts[0];
         }
       }
 
@@ -70,9 +70,6 @@ export function Sidebar({
     }
   }, [accounts, propActiveAccount, loginType]);
 
-  /* -------------------------------------------------
-     2. Listen for account switch
-     ------------------------------------------------- */
   useEffect(() => {
     const handler = (e: Event) => {
       const ev = e as CustomEvent<{ account: Account }>;
@@ -82,26 +79,19 @@ export function Sidebar({
     return () => window.removeEventListener("account-switch", handler);
   }, []);
 
-  /* -------------------------------------------------
-     3. Live balance updates
-     ------------------------------------------------- */
   useEffect(() => {
     const handler = (e: Event) => {
       const newBalance = (e as CustomEvent).detail;
-      setActiveAccount((prev) => (prev ? { ...prev, balance: newBalance } : prev));
+      setActiveAccount((prev) =>
+        prev ? { ...prev, balance: newBalance } : prev
+      );
     };
     window.addEventListener("balance-updated", handler);
     return () => window.removeEventListener("balance-updated", handler);
   }, []);
 
-  /* -------------------------------------------------
-     4. Close mobile menu on route change
-     ------------------------------------------------- */
   useEffect(() => setIsOpen(false), [pathname]);
 
-  /* -------------------------------------------------
-     5. Close on Escape
-     ------------------------------------------------- */
   useEffect(() => {
     const esc = (e: KeyboardEvent) => e.key === "Escape" && setIsOpen(false);
     window.addEventListener("keydown", esc);
@@ -117,23 +107,22 @@ export function Sidebar({
     setActiveAccount(account);
     localStorage.setItem(ACTIVE_ACCOUNT_KEY, String(account.id));
     onSwitchAccount?.(account);
-    window.dispatchEvent(new CustomEvent("account-switch", { detail: { account } }));
+    window.dispatchEvent(
+      new CustomEvent("account-switch", { detail: { account } })
+    );
   };
 
-  /* -------------------------------------------------
-     6. Filter accounts for display
-     FIXED: previously demo mode only matched account_type === "demo" AND
-     platform === "traderiser", which silently hid MT5 Demo from this
-     switcher even though it's meant to be visible in demo mode. And the
-     "real" branch only excluded "demo", letting "mt5-demo" leak in.
-     ------------------------------------------------- */
-  const displayedAccounts = loginType === "demo"
-    ? accounts.filter((acc) => acc.account_type === "demo" || acc.account_type === "mt5-demo")
-    : accounts.filter((acc) => acc.account_type !== "demo" && acc.account_type !== "mt5-demo");
+  const displayedAccounts =
+    loginType === "demo"
+      ? accounts.filter(
+          (acc) =>
+            acc.account_type === "demo" || acc.account_type === "mt5-demo"
+        )
+      : accounts.filter(
+          (acc) =>
+            acc.account_type !== "demo" && acc.account_type !== "mt5-demo"
+        );
 
-  /* -------------------------------------------------
-     7. Navigation Items (Platform Aware)
-     ------------------------------------------------- */
   const navItems = (() => {
     if (!activeAccount) {
       return [
@@ -142,8 +131,9 @@ export function Sidebar({
       ];
     }
 
-    // FIXED: broadened to catch MT5 Demo too, not just the standard "demo" type.
-    const isDemo = activeAccount.account_type === "demo" || activeAccount.account_type === "mt5-demo";
+    const isDemo =
+      activeAccount.account_type === "demo" ||
+      activeAccount.account_type === "mt5-demo";
     const isMt5 = activeAccount.platform === "mt5";
     const isProFx = activeAccount.account_type === "pro-fx";
 
@@ -172,7 +162,6 @@ export function Sidebar({
         { href: "/agents", label: "Agent Services", icon: Headset },
       ];
     } else {
-      // Default Traderiser (Real or Demo)
       items = [
         { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
         { href: "/trading", label: "Trading", icon: TrendingUp },
@@ -187,9 +176,6 @@ export function Sidebar({
       ];
     }
 
-    // NEW: demo accounts (standard demo or MT5 demo) should never expose the
-    // Wallet page — it's where deposits/withdrawals happen, and withdrawing
-    // fake demo money makes no sense and shouldn't be possible.
     if (isDemo) {
       items = items.filter((item) => item.href !== "/wallet");
     }
@@ -199,12 +185,16 @@ export function Sidebar({
 
   return (
     <>
-      {/* Mobile toggle */}
+      {/* Mobile toggle — kept exactly as your correct version */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="fixed top-4 left-4 z-60 md:hidden bg-gradient-to-r from-pink-500 to-pink-600 p-2 rounded-lg"
       >
-        {isOpen ? <X className="w-6 h-6 text-white" /> : <Menu className="w-6 h-6 text-white" />}
+        {isOpen ? (
+          <X className="w-6 h-6 text-white" />
+        ) : (
+          <Menu className="w-6 h-6 text-white" />
+        )}
       </button>
 
       {/* Sidebar */}
@@ -215,7 +205,13 @@ export function Sidebar({
       >
         {/* Video Header */}
         <div className="relative h-40 sm:h-36 md:h-48 w-full overflow-hidden flex-shrink-0">
-          <video autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-cover">
+          <video
+            autoPlay
+            muted
+            loop
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover"
+          >
             <source src="/sidebg.mp4" type="video/mp4" />
           </video>
           <div className="absolute inset-0 bg-gradient-to-b from-black/60 to-transparent" />
@@ -231,7 +227,8 @@ export function Sidebar({
               <div className="min-w-0">
                 <p className="text-sm font-medium text-white truncate">
                   {activeAccount.platform === "mt5" ? "MT5" : "Traderiser"} -{" "}
-                  {activeAccount.account_type.charAt(0).toUpperCase() + activeAccount.account_type.slice(1)}
+                  {activeAccount.account_type.charAt(0).toUpperCase() +
+                    activeAccount.account_type.slice(1)}
                 </p>
                 <p className="text-xs text-white/70">
                   ${Number(activeAccount.balance ?? 0).toFixed(2)}
@@ -245,7 +242,9 @@ export function Sidebar({
             <select
               value={activeAccount?.id ?? ""}
               onChange={(e) => {
-                const acc = displayedAccounts.find((a) => a.id === Number(e.target.value));
+                const acc = displayedAccounts.find(
+                  (a) => a.id === Number(e.target.value)
+                );
                 if (acc) switchAccount(acc);
               }}
               className="bg-slate-700 text-white px-3 py-2 rounded-lg w-full text-sm flex-shrink-0"
@@ -253,8 +252,9 @@ export function Sidebar({
               {displayedAccounts.map((acc) => (
                 <option key={acc.id} value={acc.id}>
                   {acc.platform === "mt5" ? "MT5" : "Traderiser"} -{" "}
-                  {acc.account_type.charAt(0).toUpperCase() + acc.account_type.slice(1)} ($
-                  {Number(acc.balance).toFixed(2)})
+                  {acc.account_type.charAt(0).toUpperCase() +
+                    acc.account_type.slice(1)}{" "}
+                  (${Number(acc.balance).toFixed(2)})
                 </option>
               ))}
             </select>
@@ -263,26 +263,41 @@ export function Sidebar({
           <nav className="flex flex-col gap-2 min-h-0">
             {navItems.map((item) => {
               const Icon = item.icon;
-              const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              const isActive =
+                pathname === item.href ||
+                pathname.startsWith(`${item.href}/`);
+
               return (
                 <Link
                   key={item.href}
                   href={item.href}
                   onClick={() => setIsOpen(false)}
-                  className={`flex items-center gap-3 px-4 py-2 sm:py-2.5 md:py-3 rounded-lg transition-all group flex-shrink-0 ${
-                    isActive
-                      ? "bg-gradient-to-r from-pink-500/30 to-pink-600/30 border border-pink-500/50 text-pink-300 shadow-lg shadow-pink-500/10"
-                      : "text-white/70 hover:text-white hover:bg-white/5 hover:border hover:border-white/10"
-                  }`}
+                  className={`
+                    relative flex items-center gap-3 px-4 py-2 sm:py-2.5 md:py-3 rounded-lg
+                    transition-all group flex-shrink-0
+                    ${
+                      isActive
+                        ? "drop-on-top bg-gradient-to-r from-pink-500/30 to-pink-600/30 border border-pink-500/50 text-pink-300 shadow-lg shadow-pink-500/10"
+                        : "text-white/70 hover:text-white hover:bg-white/5 hover:border hover:border-white/10"
+                    }
+                  `}
                 >
-                  <Icon
-                    size={20}
-                    className={isActive ? "text-pink-300 flex-shrink-0" : "text-white/70 group-hover:text-white flex-shrink-0"}
-                  />
-                  <span className="font-medium text-sm sm:text-sm md:text-base truncate">{item.label}</span>
-                  {isActive && (
-                    <div className="ml-auto w-1 h-8 bg-gradient-to-b from-pink-400 to-pink-600 rounded-full flex-shrink-0" />
-                  )}
+                  <span className="relative z-[1] flex items-center gap-3 w-full">
+                    <Icon
+                      size={20}
+                      className={
+                        isActive
+                          ? "text-pink-300 flex-shrink-0"
+                          : "text-white/70 group-hover:text-white flex-shrink-0"
+                      }
+                    />
+                    <span className="font-medium text-sm sm:text-sm md:text-base truncate">
+                      {item.label}
+                    </span>
+                    {isActive && (
+                      <div className="ml-auto w-1 h-8 bg-gradient-to-b from-pink-400 to-pink-600 rounded-full flex-shrink-0" />
+                    )}
+                  </span>
                 </Link>
               );
             })}
@@ -297,12 +312,23 @@ export function Sidebar({
             </p>
             <p className="text-xs text-white/70">Advanced Multi-Broker</p>
           </div>
+
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 px-4 py-2 sm:py-2.5 md:py-3 rounded-lg text-white/70 hover:text-red-400 hover:bg-red-500/10 transition-all w-full group text-sm md:text-base"
+            className="
+              drop-on-top relative
+              flex items-center gap-3 px-4 py-2 sm:py-2.5 md:py-3 rounded-lg
+              text-white/70 hover:text-red-400 hover:bg-red-500/10
+              transition-all w-full group text-sm md:text-base
+            "
           >
-            <LogOut size={20} className="text-white/70 group-hover:text-red-400 flex-shrink-0" />
-            <span className="font-medium truncate">Logout</span>
+            <span className="relative z-[1] flex items-center gap-3">
+              <LogOut
+                size={20}
+                className="text-white/70 group-hover:text-red-400 flex-shrink-0"
+              />
+              <span className="font-medium truncate">Logout</span>
+            </span>
           </button>
         </div>
       </aside>

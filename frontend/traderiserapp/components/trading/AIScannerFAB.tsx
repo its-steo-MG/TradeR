@@ -34,7 +34,7 @@ type ScanResult = {
 };
 
 /* ------------------------------------------------------------------ */
-/*  Helpers — detect sashi status from local session                  */
+/*  Helpers                                                           */
 /* ------------------------------------------------------------------ */
 function getIsSashi(): boolean {
   if (typeof window === "undefined") return false;
@@ -48,9 +48,6 @@ function getIsSashi(): boolean {
   }
 }
 
-/* ------------------------------------------------------------------ */
-/*  AI scoring — uses synthetic per-market digit distributions        */
-/* ------------------------------------------------------------------ */
 function seededDist(seed: string): number[] {
   let h = 2166136261;
   for (let i = 0; i < seed.length; i++) {
@@ -107,7 +104,6 @@ function scoreMarket(
     };
   }
 
-  // Over/Under
   let best: { kind: "over" | "under"; barrier: number; score: number } = {
     kind: "over",
     barrier: 5,
@@ -147,18 +143,16 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
 
   const { isRunning } = useRobotRunner();
 
-  /* -------- Detect sashi status once on mount -------- */
   useEffect(() => {
     setIsSashi(getIsSashi());
   }, []);
 
-  /* -------- Load only OWNED S-Digit Robots -------- */
   useEffect(() => {
     const load = async () => {
       setLoadingRobot(true);
       try {
         const { api } = await import("@/lib/api");
-        const res = await api.getUserRobots(); // ← only robots the user owns
+        const res = await api.getUserRobots();
 
         const raw = (res?.data ?? res) as any;
         const list = Array.isArray(raw)
@@ -182,10 +176,9 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
             }),
           );
 
-        // Remove duplicates
-       const unique = sDigit.filter(
-         (r: Robot, i: number, arr: Robot[]) => arr.findIndex((x) => x.id === r.id) === i,
-       );
+        const unique = sDigit.filter(
+          (r: Robot, i: number, arr: Robot[]) => arr.findIndex((x) => x.id === r.id) === i,
+        );
 
         setPickedRobot(unique[0] || null);
       } catch (err) {
@@ -198,7 +191,6 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
     load();
   }, []);
 
-  /* -------- Scan + trade -------- */
   const runScan = async () => {
     if (markets.length === 0) {
       toast.error("No markets available to scan");
@@ -221,7 +213,6 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
       setScanIdx(i);
       const r = scoreMarket(markets[i], category, i);
       results.push(r);
-      // eslint-disable-next-line no-await-in-loop
       await new Promise((r) => setTimeout(r, 380));
     }
 
@@ -260,26 +251,29 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
     return m ? m.display_name || m.name : "";
   }, [scanning, scanIdx, markets]);
 
-  /* -------- FAB -------- */
   return (
     <>
+      {/* FAB with liquid glass */}
       <button
         onClick={() => setOpen(true)}
         disabled={isRunning}
         aria-label="AI Scanner"
-        className={`fixed z-40 bottom-24 lg:bottom-8 left-1/2 -translate-x-1/2
-                    w-16 h-16 rounded-full flex items-center justify-center
-                    text-white font-bold text-lg tracking-wider
-                    bg-gradient-to-br from-indigo-500 via-purple-500 to-fuchsia-500
-                    shadow-[0_0_30px_rgba(168,85,247,0.65)]
-                    ring-2 ring-white/20
-                    transition-transform active:scale-95 hover:scale-105
-                    disabled:opacity-60 disabled:cursor-not-allowed
-                    ai-fab-glow`}
+        className={`
+          drop-on-top
+          fixed z-40 bottom-24 lg:bottom-8 left-1/2 -translate-x-1/2
+          w-16 h-16 rounded-full flex items-center justify-center
+          text-white font-bold text-lg tracking-wider
+          bg-gradient-to-br from-indigo-500 via-purple-500 to-fuchsia-500
+          shadow-[0_0_30px_rgba(168,85,247,0.65)]
+          ring-2 ring-white/20
+          transition-transform active:scale-95 hover:scale-105
+          disabled:opacity-60 disabled:cursor-not-allowed
+          ai-fab-glow
+        `}
       >
         <span className="absolute inset-0 rounded-full bg-purple-500/40 blur-xl -z-10 animate-pulse" />
-        <Sparkles size={14} className="absolute top-2 right-2 text-white/80" />
-        <span className="drop-shadow-md">AI</span>
+        <Sparkles size={14} className="absolute top-2 right-2 text-white/80 z-[1]" />
+        <span className="relative z-[1] drop-shadow-md">AI</span>
       </button>
 
       {open && (
@@ -344,7 +338,7 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
               </div>
             ) : (
               <div className="p-5 space-y-4">
-                {/* Category */}
+                {/* Category tabs with liquid glass on selected */}
                 <div>
                   <label className="text-xs font-semibold text-slate-400 mb-2 block uppercase tracking-wide">
                     Market Type
@@ -360,19 +354,21 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
                       <button
                         key={c.key}
                         onClick={() => setCategory(c.key)}
-                        className={`py-2.5 rounded-xl text-xs font-medium transition ${
-                          category === c.key
-                            ? "bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-white shadow-lg"
-                            : "bg-slate-800 text-slate-400 hover:text-white"
-                        }`}
+                        className={`
+                          relative py-2.5 rounded-xl text-xs font-medium transition
+                          ${
+                            category === c.key
+                              ? "drop-on-top bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-white"
+                              : "bg-slate-800 text-slate-400 hover:text-white"
+                          }
+                        `}
                       >
-                        {c.label}
+                        <span className="relative z-[1]">{c.label}</span>
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* Stake */}
                 <NumberField
                   icon={<DollarSign size={14} />}
                   label="Stake Amount"
@@ -420,17 +416,23 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
                   </div>
                 )}
 
+                {/* Scan & Trade button with liquid glass */}
                 <button
                   onClick={runScan}
                   disabled={loadingRobot || !pickedRobot}
-                  className="w-full py-3.5 rounded-2xl font-bold text-white
-                             bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500
-                             shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50
-                             transition-all active:scale-[.98] disabled:opacity-50 disabled:cursor-not-allowed
-                             flex items-center justify-center gap-2"
+                  className="
+                    drop-on-top
+                    relative w-full py-3.5 rounded-2xl font-bold text-white
+                    bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500
+                    shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50
+                    transition-all active:scale-[.98] disabled:opacity-50 disabled:cursor-not-allowed
+                    flex items-center justify-center gap-2
+                  "
                 >
-                  <Zap size={18} />
-                  Scan & Trade
+                  <span className="relative z-[1] flex items-center gap-2">
+                    <Zap size={18} />
+                    Scan & Trade
+                  </span>
                 </button>
 
                 <p className="text-[10px] text-slate-500 text-center px-4">
@@ -456,7 +458,7 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Small input helper                                                */
+/*  NumberField                                                       */
 /* ------------------------------------------------------------------ */
 function NumberField({
   icon,

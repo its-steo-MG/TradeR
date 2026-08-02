@@ -182,7 +182,7 @@ export default function ClientWrapper({ children }: { children: React.ReactNode 
       {/* KYC Floating Banner */}
       {shouldShowKycBanner && (
         <div className="fixed top-4 right-4 z-[99999] w-full max-w-sm">
-          <div className="bg-zinc-900 border border-amber-500/30 rounded-2xl shadow-2xl p-5 text-white">
+          <div className="bg-zinc-900 border border-amber-500/30 rounded-[1.8rem] shadow-2xl p-5 text-white">
             <div className="flex items-start gap-3">
               <AlertCircle className="mt-0.5 h-5 w-5 text-amber-400" />
               <div className="flex-1 min-w-0">
@@ -220,9 +220,9 @@ export default function ClientWrapper({ children }: { children: React.ReactNode 
       {/* ==================== GLOBAL PERSISTENT INCOMING CALL CARD (Staff) ==================== */}
       {incomingCall && isStaff && (
         <div className="fixed bottom-6 right-6 z-[999999] w-full max-w-sm">
-          <div className="rounded-3xl border border-green-500/40 bg-zinc-900/95 p-5 shadow-2xl backdrop-blur-xl">
+          <div className="rounded-[2.2rem] border border-green-500/40 bg-zinc-900/95 p-5 shadow-2xl backdrop-blur-xl">
             <div className="flex items-start gap-4">
-              <div className="mt-1 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-green-500/10">
+              <div className="mt-1 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-[1.8rem] bg-green-500/10">
                 <Phone className="h-6 w-6 animate-pulse text-green-400" />
               </div>
 
@@ -237,7 +237,7 @@ export default function ClientWrapper({ children }: { children: React.ReactNode 
                   <button
                     onClick={handleDeclineFromAnywhere}
                     disabled={isAnswering}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/5 py-2.5 text-sm font-medium text-white hover:bg-white/10 disabled:opacity-50"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-[1.8rem] border border-white/20 bg-white/5 py-2.5 text-sm font-medium text-white hover:bg-white/10 disabled:opacity-50"
                   >
                     <PhoneOff className="h-4 w-4" /> Decline
                   </button>
@@ -245,7 +245,7 @@ export default function ClientWrapper({ children }: { children: React.ReactNode 
                   <button
                     onClick={handleAnswerFromAnywhere}
                     disabled={isAnswering}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-green-600 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-[1.8rem] bg-green-600 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
                   >
                     <Phone className="h-4 w-4" />
                     {isAnswering ? "Opening..." : "Answer Call"}

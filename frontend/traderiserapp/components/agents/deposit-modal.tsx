@@ -29,13 +29,11 @@ interface DepositModalProps {
   onSuccess?: () => void
 }
 
-// Type for API response
 interface ApiResponse<T = unknown> {
   data?: T
   error?: string | Record<string, unknown>
 }
 
-// Type expected by createAgentDeposit function
 interface CreateDepositPayload {
   agent_id: number
   account: number
@@ -74,12 +72,19 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
     const fetchAccounts = async () => {
       try {
         setFetchError(null)
-        const res = await api.getAccount() as ApiResponse<{ user?: { accounts?: UserAccount[] } }>
+        const res = (await api.getAccount()) as ApiResponse<{
+          user?: { accounts?: UserAccount[] }
+        }>
 
-        if (res.error) throw new Error(typeof res.error === "string" ? res.error : "Failed to load accounts")
+        if (res.error)
+          throw new Error(
+            typeof res.error === "string" ? res.error : "Failed to load accounts"
+          )
 
         const allAccounts = res.data?.user?.accounts ?? []
-        const allowed = allAccounts.filter((a) => ["standard", "pro-fx"].includes(a.account_type))
+        const allowed = allAccounts.filter((a) =>
+          ["standard", "pro-fx"].includes(a.account_type)
+        )
 
         setAccounts(allowed)
         if (allowed.length > 0) {
@@ -89,7 +94,8 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
         }
       } catch (err: unknown) {
         console.error("Failed to fetch accounts:", err)
-        const message = err instanceof Error ? err.message : "Failed to load accounts"
+        const message =
+          err instanceof Error ? err.message : "Failed to load accounts"
         setFetchError(message)
       }
     }
@@ -117,9 +123,14 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
     if (!amountNum || amountNum <= 0) return toast.error("Enter a valid amount")
     if (!selectedAccount) return toast.error("Please select an account")
     if (!transactionCode.trim()) {
-      return toast.error(isBinance ? "Binance Tx Hash is required" : "Transaction code is required")
+      return toast.error(
+        isBinance ? "Binance Tx Hash is required" : "Transaction code is required"
+      )
     }
-    if ((isBinance || method === "mpesa" || method === "bank_transfer") && !screenshot) {
+    if (
+      (isBinance || method === "mpesa" || method === "bank_transfer") &&
+      !screenshot
+    ) {
       return toast.error("Screenshot proof is required")
     }
 
@@ -144,14 +155,15 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
         payload.screenshot = screenshot
       }
 
-      const res = await createAgentDeposit(payload) as ApiResponse
+      const res = (await createAgentDeposit(payload)) as ApiResponse
 
       if (res.error) {
         const errorData = res.error
         const msg =
           typeof errorData === "string"
             ? errorData
-            : Object.values(errorData).flat().join(", ") || "Failed to submit deposit"
+            : Object.values(errorData).flat().join(", ") ||
+              "Failed to submit deposit"
         throw new Error(msg)
       }
 
@@ -159,7 +171,10 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
       onSuccess?.()
       onClose()
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to submit deposit. Please try again."
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to submit deposit. Please try again."
       toast.error(message)
     } finally {
       setLoading(false)
@@ -192,11 +207,13 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
           <X className="w-6 h-6" />
         </button>
 
-        <h2 className="text-xl font-bold text-slate-900">Deposit via {agent.name}</h2>
+        <h2 className="text-xl font-bold text-slate-900">
+          Deposit via {agent.name}
+        </h2>
         <PaymentInfoDisplay method={agent.method} agent={agent} />
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Amount Input */}
+          {/* Amount */}
           <div>
             <p className="text-sm font-medium text-slate-700 mb-2">
               {isBinance ? "Amount in USD / USDT" : "Amount in KES"}
@@ -217,14 +234,16 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
             </p>
           </div>
 
-          {/* Account Selection */}
+          {/* Account */}
           {fetchError ? (
             <p className="text-red-600 text-sm">{fetchError}</p>
           ) : accounts.length === 0 ? (
             <p className="text-slate-500 text-sm">No trading accounts found</p>
           ) : (
             <div>
-              <p className="text-sm font-medium text-slate-700 mb-2">Credit to Account</p>
+              <p className="text-sm font-medium text-slate-700 mb-2">
+                Credit to Account
+              </p>
               <select
                 value={selectedAccount ?? ""}
                 onChange={(e) => setSelectedAccount(Number(e.target.value))}
@@ -239,10 +258,12 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
             </div>
           )}
 
-          {/* Transaction Field */}
+          {/* Transaction Code */}
           <div>
             <p className="text-sm font-medium text-slate-700 mb-2">
-              {isBinance ? "Binance Transaction Hash (TxID)" : "Transaction Code / Reference"}
+              {isBinance
+                ? "Binance Transaction Hash (TxID)"
+                : "Transaction Code / Reference"}
             </p>
             <input
               type="text"
@@ -253,7 +274,7 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
             />
           </div>
 
-          {/* Screenshot Upload */}
+          {/* Screenshot */}
           {(isBinance || method === "mpesa" || method === "bank_transfer") && (
             <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center space-y-2 bg-slate-50">
               {preview ? (
@@ -275,27 +296,42 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
               ) : (
                 <label className="cursor-pointer">
                   <Upload className="w-8 h-8 mx-auto mb-2 text-slate-400" />
-                  <p className="text-sm font-medium text-slate-700">Upload Proof Screenshot</p>
+                  <p className="text-sm font-medium text-slate-700">
+                    Upload Proof Screenshot
+                  </p>
                   <p className="text-xs text-slate-500 mt-1">PNG, JPG up to 5 MB</p>
-                  <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
                 </label>
               )}
             </div>
           )}
 
+          {/* Submit — Liquid Glass */}
           <button
             type="submit"
             disabled={loading || !isFormValid}
-            className="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-300 text-white font-semibold rounded-xl flex items-center justify-center gap-2"
+            className="
+              drop-on-top relative w-full py-3
+              bg-purple-600 hover:bg-purple-700 disabled:bg-slate-300
+              text-white font-semibold rounded-xl
+              flex items-center justify-center gap-2
+            "
           >
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              "Submit Deposit"
-            )}
+            <span className="relative z-[1] flex items-center gap-2">
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                "Submit Deposit"
+              )}
+            </span>
           </button>
         </form>
       </div>

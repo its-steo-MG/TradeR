@@ -23,7 +23,7 @@ export default function AgentFilters({
     { id: "mpesa", label: "M-Pesa" },
     { id: "paypal", label: "PayPal" },
     { id: "bank", label: "Bank Transfer" },
-    { id: "binance", label: "Binance" },        // ← NEW
+    { id: "binance", label: "Binance" },
   ]
 
   return (
@@ -42,29 +42,39 @@ export default function AgentFilters({
 
       {/* Payment Method Filter */}
       <div>
-        <p className="text-xs sm:text-sm font-semibold text-slate-900 mb-2 sm:mb-3">Payment Method</p>
+        <p className="text-xs sm:text-sm font-semibold text-slate-900 mb-2 sm:mb-3">
+          Payment Method
+        </p>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
+          {/* All */}
           <button
             onClick={() => onMethodChange(null)}
-            className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg border-2 transition-all font-medium text-xs sm:text-sm ${
-              selectedMethod === null
-                ? "border-purple-600 bg-purple-50 text-purple-600"
-                : "border-slate-200 bg-white text-slate-600 hover:border-purple-300"
-            }`}
+            className={`
+              relative px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg border-2 transition-all font-medium text-xs sm:text-sm
+              ${
+                selectedMethod === null
+                  ? "drop-on-top border-purple-600 bg-purple-50 text-purple-600"
+                  : "border-slate-200 bg-white text-slate-600 hover:border-purple-300"
+              }
+            `}
           >
-            All
+            <span className="relative z-[1]">All</span>
           </button>
+
           {methods.map((method) => (
             <button
               key={method.id}
               onClick={() => onMethodChange(method.id)}
-              className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg border-2 transition-all font-medium text-xs sm:text-sm whitespace-nowrap ${
-                selectedMethod === method.id
-                  ? "border-purple-600 bg-purple-50 text-purple-600"
-                  : "border-slate-200 bg-white text-slate-600 hover:border-purple-300"
-              }`}
+              className={`
+                relative px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg border-2 transition-all font-medium text-xs sm:text-sm whitespace-nowrap
+                ${
+                  selectedMethod === method.id
+                    ? "drop-on-top border-purple-600 bg-purple-50 text-purple-600"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-purple-300"
+                }
+              `}
             >
-              {method.label}
+              <span className="relative z-[1]">{method.label}</span>
             </button>
           ))}
         </div>

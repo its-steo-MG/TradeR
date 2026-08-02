@@ -10,7 +10,6 @@ import { toast } from "sonner"
 
 export type LoginType = "real" | "demo"
 
-/* ----------  Domain types with EA support ---------- */
 interface ForexRobot {
   id: number
   name: string
@@ -37,7 +36,6 @@ interface UserRobot {
   max_open_positions?: number
 }
 
-/* ----------  API response shapes ---------- */
 interface ForexRobotsResponse {
   robots: Array<{
     id: number
@@ -83,7 +81,6 @@ interface MyForexRobotsResponse {
   }>
 }
 
-/* ----------  Component ---------- */
 export default function FxProRobotsPage() {
   const [robots, setRobots] = useState<ForexRobot[]>([])
   const [myRobots, setMyRobots] = useState<UserRobot[]>([])
@@ -93,9 +90,9 @@ export default function FxProRobotsPage() {
   const [activeAccount, setActiveAccount] = useState<Account | null>(null)
   const [purchasedRobotIds, setPurchasedRobotIds] = useState<Set<number>>(new Set())
 
-  /* ----------  Load initial data ---------- */
   const loadInitialData = useCallback(async () => {
-    const loginTypeStored = (localStorage.getItem("login_type") as "real" | "demo" | null) ?? "real"
+    const loginTypeStored =
+      (localStorage.getItem("login_type") as "real" | "demo" | null) ?? "real"
     const accountType = localStorage.getItem("account_type")
     const userSessionStr = localStorage.getItem("user_session")
 
@@ -103,9 +100,13 @@ export default function FxProRobotsPage() {
 
     if (userSessionStr) {
       try {
-        const userSession = JSON.parse(userSessionStr) as { accounts?: Array<Account> }
+        const userSession = JSON.parse(userSessionStr) as {
+          accounts?: Array<Account>
+        }
         const currentAccount =
-          userSession?.accounts?.find((acc) => acc.account_type === accountType) ?? userSession?.accounts?.[0] ?? null
+          userSession?.accounts?.find((acc) => acc.account_type === accountType) ??
+          userSession?.accounts?.[0] ??
+          null
         setActiveAccount(currentAccount)
       } catch (err) {
         console.error("Failed to parse user session:", err)
@@ -120,15 +121,13 @@ export default function FxProRobotsPage() {
     loadInitialData()
   }, [loadInitialData])
 
-  /* ----------  Fetch robots ---------- */
   const fetchRobots = useCallback(async () => {
     try {
       const [availableRes, purchasedRes] = await Promise.all([
         api.getForexRobots(),
-        api.getMyForexRobots()
+        api.getMyForexRobots(),
       ])
 
-      /* ---- Available robots ---- */
       if (availableRes.data?.robots) {
         const normalized: ForexRobot[] = availableRes.data.robots.map((r) => ({
           id: r.id,
@@ -136,9 +135,15 @@ export default function FxProRobotsPage() {
           image: r.image_url ?? r.image,
           description: r.description ?? "No description",
           price: Number(r.price),
-          discounted_price: r.discounted_price ? Number(r.discounted_price) : undefined,
-          original_price: r.original_price ? Number(r.original_price) : Number(r.price),
-          effective_price: r.effective_price ? Number(r.effective_price) : Number(r.price),
+          discounted_price: r.discounted_price
+            ? Number(r.discounted_price)
+            : undefined,
+          original_price: r.original_price
+            ? Number(r.original_price)
+            : Number(r.price),
+          effective_price: r.effective_price
+            ? Number(r.effective_price)
+            : Number(r.price),
           win_rate_normal: Number(r.win_rate_normal ?? 0),
           win_rate_sashi: Number(r.win_rate_sashi ?? 0),
           is_ea: r.is_ea || false,
@@ -147,7 +152,6 @@ export default function FxProRobotsPage() {
         setRobots(normalized)
       }
 
-      /* ---- Purchased robots ---- */
       const purchasedRobotsList = purchasedRes.data?.user_robots ?? []
       const normalizedMyRobots: UserRobot[] = purchasedRobotsList.map((ur) => ({
         id: ur.id,
@@ -158,19 +162,27 @@ export default function FxProRobotsPage() {
           image: ur.robot.image_url ?? ur.robot.image,
           description: ur.robot.description ?? "No description",
           price: Number(ur.robot.price),
-          discounted_price: ur.robot.discounted_price ? Number(ur.robot.discounted_price) : undefined,
-          original_price: ur.robot.original_price ? Number(ur.robot.original_price) : Number(ur.robot.price),
-          effective_price: ur.robot.effective_price ? Number(ur.robot.effective_price) : Number(ur.robot.price),
+          discounted_price: ur.robot.discounted_price
+            ? Number(ur.robot.discounted_price)
+            : undefined,
+          original_price: ur.robot.original_price
+            ? Number(ur.robot.original_price)
+            : Number(ur.robot.price),
+          effective_price: ur.robot.effective_price
+            ? Number(ur.robot.effective_price)
+            : Number(ur.robot.price),
           win_rate_normal: Number(ur.robot.win_rate_normal ?? 0),
           win_rate_sashi: Number(ur.robot.win_rate_sashi ?? 0),
           is_ea: ur.robot.is_ea || ur.is_ea || false,
-          max_open_positions: ur.robot.max_open_positions || ur.max_open_positions || 2,
+          max_open_positions:
+            ur.robot.max_open_positions || ur.max_open_positions || 2,
         },
         is_running: ur.is_running,
         purchased_at: ur.purchased_at,
         last_trade_time: ur.last_trade_time,
         is_ea: ur.robot.is_ea || ur.is_ea || false,
-        max_open_positions: ur.robot.max_open_positions || ur.max_open_positions || 2,
+        max_open_positions:
+          ur.robot.max_open_positions || ur.max_open_positions || 2,
       }))
 
       setMyRobots(normalizedMyRobots)
@@ -182,7 +194,6 @@ export default function FxProRobotsPage() {
     }
   }, [])
 
-  /* ----------  Handlers ---------- */
   const handlePurchaseRobot = async (robotId: number) => {
     try {
       const response = await api.purchaseForexRobot(robotId)
@@ -202,7 +213,7 @@ export default function FxProRobotsPage() {
 
   const handleToggleRobot = async (userRobotId: number) => {
     try {
-      const userRobot = myRobots.find(ur => ur.id === userRobotId)
+      const userRobot = myRobots.find((ur) => ur.id === userRobotId)
       if (!userRobot) {
         toast.error("Robot not found")
         return
@@ -211,7 +222,6 @@ export default function FxProRobotsPage() {
       const isEA = userRobot.robot.is_ea || userRobot.is_ea
       const wasRunning = userRobot.is_running
 
-      // Call toggle
       const toggleResponse = await api.toggleForexRobot(userRobotId)
       if (toggleResponse.error) {
         toast.error(`Toggle failed: ${toggleResponse.error}`)
@@ -221,8 +231,9 @@ export default function FxProRobotsPage() {
       const isNowRunning = toggleResponse.data?.is_running ?? false
 
       if (!isNowRunning && isEA && wasRunning) {
-        // EA was just stopped
-        const toastId = toast.loading("Stopping EA and closing all its positions...")
+        const toastId = toast.loading(
+          "Stopping EA and closing all its positions..."
+        )
 
         try {
           const closeResponse = await api.closeEAPositions(userRobotId)
@@ -235,18 +246,21 @@ export default function FxProRobotsPage() {
         } catch (closeErr) {
           console.error("Close EA positions failed:", closeErr)
           toast.error(
-            "EA stopped, but failed to close positions. Please close them manually from Positions page.", 
+            "EA stopped, but failed to close positions. Please close them manually from Positions page.",
             { id: toastId }
           )
         }
       } else {
-        toast.success(isNowRunning 
-          ? (isEA ? "🚀 EA Bot Activated" : "Robot started") 
-          : "Robot stopped"
+        toast.success(
+          isNowRunning
+            ? isEA
+              ? "🚀 EA Bot Activated"
+              : "Robot started"
+            : "Robot stopped"
         )
       }
 
-      await fetchRobots() // Refresh UI
+      await fetchRobots()
     } catch (error) {
       console.error("Toggle error:", error)
       toast.error("Failed to toggle robot")
@@ -260,7 +274,6 @@ export default function FxProRobotsPage() {
     toast.success("Data refreshed")
   }
 
-  /* ----------  Render ---------- */
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-black">
@@ -286,36 +299,47 @@ export default function FxProRobotsPage() {
             </div>
             <button
               onClick={handleRefresh}
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+              className="drop-on-top relative p-2 hover:bg-white/10 rounded-lg transition-colors"
               title="Refresh data"
             >
-              <RefreshCw className="w-6 h-6" />
+              <span className="relative z-[1]">
+                <RefreshCw className="w-6 h-6" />
+              </span>
             </button>
           </div>
 
-          {/* Tabs */}
-          <div className="flex gap-1 mb-8 border-b border-white/10">
-            <button
-              onClick={() => setActiveTab("available")}
-              className={`px-6 py-3 font-medium transition-all ${
-                activeTab === "available"
-                  ? "text-pink-500 border-b-2 border-pink-500"
-                  : "text-white/60 hover:text-white"
-              }`}
-            >
-              Available Robots
-            </button>
-            <button
-              onClick={() => setActiveTab("purchased")}
-              className={`px-6 py-3 font-medium transition-all ${
-                activeTab === "purchased"
-                  ? "text-pink-500 border-b-2 border-pink-500"
-                  : "text-white/60 hover:text-white"
-              }`}
-            >
-              My Robots ({myRobots.length})
-            </button>
-          </div>
+          {/* Tabs — card style liquid glass */}
+<div className="flex gap-2 mb-8 p-1.5 rounded-2xl bg-slate-900/80 border border-white/10">
+  <button
+    onClick={() => setActiveTab("available")}
+    className={`
+      relative flex-1 px-6 py-3 rounded-xl font-semibold text-sm transition-all
+      ${
+        activeTab === "available"
+          ? "drop-on-top bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/25"
+          : "text-white/50 hover:text-white hover:bg-white/5"
+      }
+    `}
+  >
+    <span className="relative z-[1]">Available Robots</span>
+  </button>
+
+  <button
+    onClick={() => setActiveTab("purchased")}
+    className={`
+      relative flex-1 px-6 py-3 rounded-xl font-semibold text-sm transition-all
+      ${
+        activeTab === "purchased"
+          ? "drop-on-top bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/25"
+          : "text-white/50 hover:text-white hover:bg-white/5"
+      }
+    `}
+  >
+    <span className="relative z-[1]">
+      My Robots ({myRobots.length})
+    </span>
+  </button>
+</div>
 
           {/* Available Robots */}
           {activeTab === "available" && (
@@ -323,17 +347,33 @@ export default function FxProRobotsPage() {
               {robots.length > 0 ? (
                 robots.map((robot) => {
                   const isOwned = purchasedRobotIds.has(robot.id)
-                  const winRate = loginType === "demo" ? robot.win_rate_normal : robot.win_rate_sashi
-                  const hasDiscount = robot.discounted_price != null && robot.discounted_price > 0
+                  const winRate =
+                    loginType === "demo"
+                      ? robot.win_rate_normal
+                      : robot.win_rate_sashi
+                  const hasDiscount =
+                    robot.discounted_price != null && robot.discounted_price > 0
                   const discountPercent = hasDiscount
-                    ? Math.round(((robot.price - robot.discounted_price!) / robot.price) * 100)
+                    ? Math.round(
+                        ((robot.price - robot.discounted_price!) / robot.price) *
+                          100
+                      )
                     : 0
 
                   return (
                     <div
                       key={robot.id}
-                      className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-lg border border-white/10 overflow-hidden relative"
+                      className="relative bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl border border-white/10 overflow-hidden"
                     >
+                      {/* Soft top glass highlight */}
+                      <div
+                        className="absolute inset-x-0 top-0 h-[35%] pointer-events-none z-10"
+                        style={{
+                          background:
+                            "linear-gradient(to bottom, rgba(255,255,255,0.08) 0%, transparent 100%)",
+                        }}
+                      />
+
                       {robot.is_ea && (
                         <div className="absolute top-3 left-3 z-20 bg-emerald-500 text-white text-xs px-3 py-1 rounded-full font-bold flex items-center gap-1">
                           <Zap className="w-3 h-3" /> EA BOT
@@ -341,9 +381,11 @@ export default function FxProRobotsPage() {
                       )}
 
                       {hasDiscount && (
-                        <div className="absolute top-3 right-3 z-10 bg-gradient-to-r from-amber-500 to-orange-600 text-white px-4 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-lg">
-                          <Sparkles className="w-4 h-4" />
-                          SPECIAL OFFER - {discountPercent}% OFF
+                        <div className="drop-on-top absolute top-3 right-3 z-20 bg-gradient-to-r from-amber-500 to-orange-600 text-white px-4 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-lg">
+                          <span className="relative z-[1] flex items-center gap-1.5">
+                            <Sparkles className="w-4 h-4" />
+                            SPECIAL OFFER - {discountPercent}% OFF
+                          </span>
                         </div>
                       )}
 
@@ -355,32 +397,42 @@ export default function FxProRobotsPage() {
                         />
                       )}
 
-                      <div className="p-6">
+                      <div className="relative z-[1] p-6">
                         <h3 className="text-xl font-bold mb-2">{robot.name}</h3>
-                        <p className="text-white/70 text-sm mb-4 line-clamp-2">{robot.description}</p>
+                        <p className="text-white/70 text-sm mb-4 line-clamp-2">
+                          {robot.description}
+                        </p>
 
                         <div className="space-y-3 mb-6">
                           <div className="flex justify-between items-center">
                             <span className="text-white/60">Price:</span>
                             {hasDiscount ? (
                               <div className="flex items-center gap-2">
-                                <span className="text-white/40 line-through text-sm">${robot.price.toFixed(2)}</span>
+                                <span className="text-white/40 line-through text-sm">
+                                  ${robot.price.toFixed(2)}
+                                </span>
                                 <span className="font-bold text-green-400 text-lg">
                                   ${robot.discounted_price!.toFixed(2)}
                                 </span>
                               </div>
                             ) : (
-                              <span className="font-bold text-pink-400">${robot.price.toFixed(2)}</span>
+                              <span className="font-bold text-pink-400">
+                                ${robot.price.toFixed(2)}
+                              </span>
                             )}
                           </div>
                           <div className="flex justify-between items-center">
                             <span className="text-white/60">Win Rate:</span>
-                            <span className="font-bold text-green-400">{winRate}%</span>
+                            <span className="font-bold text-green-400">
+                              {winRate}%
+                            </span>
                           </div>
                           {robot.is_ea && (
                             <div className="flex justify-between items-center">
                               <span className="text-white/60">Max Positions:</span>
-                              <span className="font-bold text-emerald-400">{robot.max_open_positions}</span>
+                              <span className="font-bold text-emerald-400">
+                                {robot.max_open_positions}
+                              </span>
                             </div>
                           )}
                         </div>
@@ -388,23 +440,20 @@ export default function FxProRobotsPage() {
                         <button
                           onClick={() => handlePurchaseRobot(robot.id)}
                           disabled={isOwned}
-                          className={`w-full py-2 rounded-lg font-medium flex items-center justify-center gap-2 transition-all ${
-                            isOwned
-                              ? "bg-green-500/20 text-green-400 cursor-not-allowed"
-                              : "bg-pink-500 hover:bg-pink-600 text-white"
-                          }`}
+                          className={`
+                            drop-on-top relative w-full py-2.5 rounded-xl font-medium
+                            flex items-center justify-center gap-2 transition-all
+                            ${
+                              isOwned
+                                ? "bg-green-500/20 text-green-400 cursor-not-allowed"
+                                : "bg-pink-500 hover:bg-pink-600 text-white"
+                            }
+                          `}
                         >
-                          {isOwned ? (
-                            <>
-                              <ShoppingCart className="w-4 h-4" />
-                              Already Owned
-                            </>
-                          ) : (
-                            <>
-                              <ShoppingCart className="w-4 h-4" />
-                              Purchase Robot
-                            </>
-                          )}
+                          <span className="relative z-[1] flex items-center gap-2">
+                            <ShoppingCart className="w-4 h-4" />
+                            {isOwned ? "Already Owned" : "Purchase Robot"}
+                          </span>
                         </button>
                       </div>
                     </div>
@@ -424,16 +473,27 @@ export default function FxProRobotsPage() {
               {myRobots.length > 0 ? (
                 myRobots.map((userRobot) => {
                   const winRate =
-                    loginType === "demo" ? userRobot.robot.win_rate_normal : userRobot.robot.win_rate_sashi
+                    loginType === "demo"
+                      ? userRobot.robot.win_rate_normal
+                      : userRobot.robot.win_rate_sashi
                   const wasPurchasedOnSale =
-                    userRobot.robot.discounted_price != null && userRobot.robot.discounted_price > 0
+                    userRobot.robot.discounted_price != null &&
+                    userRobot.robot.discounted_price > 0
                   const isEA = userRobot.robot.is_ea
 
                   return (
                     <div
                       key={userRobot.id}
-                      className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-lg border border-white/10 overflow-hidden relative"
+                      className="relative bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl border border-white/10 overflow-hidden"
                     >
+                      <div
+                        className="absolute inset-x-0 top-0 h-[35%] pointer-events-none z-10"
+                        style={{
+                          background:
+                            "linear-gradient(to bottom, rgba(255,255,255,0.08) 0%, transparent 100%)",
+                        }}
+                      />
+
                       {isEA && (
                         <div className="absolute top-3 left-3 z-20 bg-emerald-500 text-white text-xs px-3 py-1 rounded-full font-bold flex items-center gap-1">
                           <Zap className="w-3 h-3" /> EA BOT
@@ -441,9 +501,11 @@ export default function FxProRobotsPage() {
                       )}
 
                       {wasPurchasedOnSale && (
-                        <div className="absolute top-3 right-3 z-10 bg-gradient-to-r from-amber-500/80 to-orange-600/80 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
-                          <Sparkles className="w-4 h-4" />
-                          SPECIAL OFFER
+                        <div className="drop-on-top absolute top-3 right-3 z-20 bg-gradient-to-r from-amber-500/80 to-orange-600/80 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                          <span className="relative z-[1] flex items-center gap-1">
+                            <Sparkles className="w-4 h-4" />
+                            SPECIAL OFFER
+                          </span>
                         </div>
                       )}
 
@@ -455,66 +517,91 @@ export default function FxProRobotsPage() {
                         />
                       )}
 
-                      <div className="p-6">
+                      <div className="relative z-[1] p-6">
                         <div className="flex items-start justify-between mb-4">
                           <div>
                             <h3 className="text-xl font-bold flex items-center gap-2">
                               {userRobot.robot.name}
-                              {isEA && <span className="text-emerald-400 text-xs">• EA</span>}
+                              {isEA && (
+                                <span className="text-emerald-400 text-xs">
+                                  • EA
+                                </span>
+                              )}
                             </h3>
                             <p className="text-white/60 text-sm">
-                              Purchased: {new Date(userRobot.purchased_at).toLocaleDateString()}
+                              Purchased:{" "}
+                              {new Date(
+                                userRobot.purchased_at
+                              ).toLocaleDateString()}
                             </p>
                           </div>
                           <span
                             className={`px-3 py-1 rounded-full text-xs font-bold ${
-                              userRobot.is_running ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
+                              userRobot.is_running
+                                ? "bg-green-500/20 text-green-400"
+                                : "bg-red-500/20 text-red-400"
                             }`}
                           >
                             {userRobot.is_running ? "Running" : "Stopped"}
                           </span>
                         </div>
 
-                        <p className="text-white/70 text-sm mb-4">{userRobot.robot.description}</p>
+                        <p className="text-white/70 text-sm mb-4">
+                          {userRobot.robot.description}
+                        </p>
 
                         <div className="space-y-3 mb-4">
                           <div className="flex justify-between items-center">
                             <span className="text-white/60">Win Rate:</span>
-                            <span className="font-bold text-green-400">{winRate}%</span>
+                            <span className="font-bold text-green-400">
+                              {winRate}%
+                            </span>
                           </div>
                           {isEA && (
                             <div className="flex justify-between items-center">
                               <span className="text-white/60">Max Positions:</span>
-                              <span className="font-bold text-emerald-400">{userRobot.robot.max_open_positions}</span>
+                              <span className="font-bold text-emerald-400">
+                                {userRobot.robot.max_open_positions}
+                              </span>
                             </div>
                           )}
                           {userRobot.last_trade_time && (
                             <div className="flex justify-between items-center">
                               <span className="text-white/60">Last Trade:</span>
-                              <span className="text-sm">{new Date(userRobot.last_trade_time).toLocaleString()}</span>
+                              <span className="text-sm">
+                                {new Date(
+                                  userRobot.last_trade_time
+                                ).toLocaleString()}
+                              </span>
                             </div>
                           )}
                         </div>
 
                         <button
                           onClick={() => handleToggleRobot(userRobot.id)}
-                          className={`w-full py-2 rounded-lg font-medium flex items-center justify-center gap-2 transition-all ${
-                            userRobot.is_running
-                              ? "bg-red-500/20 hover:bg-red-500/30 text-red-400"
-                              : "bg-green-500/20 hover:bg-green-500/30 text-green-400"
-                          }`}
+                          className={`
+                            drop-on-top relative w-full py-2.5 rounded-xl font-medium
+                            flex items-center justify-center gap-2 transition-all
+                            ${
+                              userRobot.is_running
+                                ? "bg-red-500/20 hover:bg-red-500/30 text-red-400"
+                                : "bg-green-500/20 hover:bg-green-500/30 text-green-400"
+                            }
+                          `}
                         >
-                          {userRobot.is_running ? (
-                            <>
-                              <Pause className="w-4 h-4" />
-                              Stop Robot
-                            </>
-                          ) : (
-                            <>
-                              <Play className="w-4 h-4" />
-                              Start Robot
-                            </>
-                          )}
+                          <span className="relative z-[1] flex items-center gap-2">
+                            {userRobot.is_running ? (
+                              <>
+                                <Pause className="w-4 h-4" />
+                                Stop Robot
+                              </>
+                            ) : (
+                              <>
+                                <Play className="w-4 h-4" />
+                                Start Robot
+                              </>
+                            )}
+                          </span>
                         </button>
                       </div>
                     </div>
@@ -522,12 +609,14 @@ export default function FxProRobotsPage() {
                 })
               ) : (
                 <div className="col-span-full text-center py-12">
-                  <p className="text-white/70">You have not purchased any robots yet</p>
+                  <p className="text-white/70">
+                    You have not purchased any robots yet
+                  </p>
                   <button
                     onClick={() => setActiveTab("available")}
-                    className="mt-4 px-4 py-2 bg-pink-500 hover:bg-pink-600 rounded-lg font-medium transition-all"
+                    className="drop-on-top relative mt-4 px-4 py-2 bg-pink-500 hover:bg-pink-600 rounded-xl font-medium transition-all"
                   >
-                    Browse Available Robots
+                    <span className="relative z-[1]">Browse Available Robots</span>
                   </button>
                 </div>
               )}

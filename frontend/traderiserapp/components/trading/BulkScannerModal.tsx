@@ -2,10 +2,6 @@
 
 /* -------------------------------------------------------------------------- */
 /*  BulkScannerModal.tsx                                                      */
-/*  AI SCANNER — visualises "cracking the markets" then hands the batch off   */
-/*  to the RobotRunner (startBulkBatch). The existing RunPanel displays every */
-/*  trade in the batch, exactly like a normal S-Digit robot run.              */
-/*  All N trades fire in PARALLEL (Promise.all) — batch at the same time.     */
 /* -------------------------------------------------------------------------- */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -50,7 +46,6 @@ type Props = {
   open: boolean;
   onClose: () => void;
   markets: Market[];
-  /** Optional — parent may open the RunPanel automatically. */
   onBatchStarted?: () => void;
 };
 
@@ -78,26 +73,22 @@ export default function BulkScannerModal({
 }: Props) {
   const isSashi = getIsSashi();
 
-  /* ---- Robots owned by user (bulk only) ---- */
   const [loadingRobots, setLoadingRobots] = useState(false);
   const [bulkRobots, setBulkRobots] = useState<Robot[]>([]);
   const [selectedRobot, setSelectedRobot] = useState<Robot | null>(null);
 
-  /* ---- Trade form ---- */
   const [category, setCategory] = useState<Category>("overunder");
   const [contract, setContract] = useState<ContractKind>("over");
   const [barrier, setBarrier] = useState<number>(5);
   const [stake, setStake] = useState<number>(1);
   const [numTrades, setNumTrades] = useState<number>(5);
 
-  /* ---- Scanner phase ---- */
   const [phase, setPhase] = useState<"idle" | "scanning">("idle");
   const [scanIndex, setScanIndex] = useState(0);
   const [scanMarket, setScanMarket] = useState<string>("");
   const [scanPct, setScanPct] = useState(0);
   const scanTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  /* ---- Load user robots when opening ---- */
   useEffect(() => {
     if (!open) return;
     setPhase("idle");
@@ -128,14 +119,12 @@ export default function BulkScannerModal({
     })();
   }, [open]);
 
-  /* ---- Keep contract in sync with category ---- */
   useEffect(() => {
     if (category === "overunder") setContract("over");
     else if (category === "matches") setContract("matches");
     else setContract("even");
   }, [category]);
 
-  /* ---- Cleanup timer on close ---- */
   useEffect(() => {
     if (!open && scanTimer.current) {
       clearInterval(scanTimer.current);
@@ -143,7 +132,6 @@ export default function BulkScannerModal({
     }
   }, [open]);
 
-  /* ---- Cap number of trades to robot max ---- */
   const maxTrades = Math.min(50, selectedRobot?.max_bulk_trades ?? 50);
   useEffect(() => {
     if (numTrades > maxTrades) setNumTrades(maxTrades);
@@ -155,7 +143,6 @@ export default function BulkScannerModal({
     return contract === "even" ? "Even" : "Odd";
   }, [category, contract, barrier]);
 
-  /* -------------------- SCAN then hand off to RobotRunner -------------------- */
   const handleScanAndTrade = async () => {
     if (!selectedRobot) {
       toast.error("Select a bulk robot first");
@@ -174,7 +161,6 @@ export default function BulkScannerModal({
     setScanIndex(0);
     setScanPct(0);
 
-    // 1) Scanning animation across all volatility markets
     const total = markets.length;
     const perTick = Math.max(120, Math.min(260, 2400 / total));
     let i = 0;
@@ -193,11 +179,8 @@ export default function BulkScannerModal({
       }, perTick);
     });
 
-    // 2) AI picks a target market (backend applies real bias when sashi)
     const chosen = markets[Math.floor(Math.random() * markets.length)];
 
-    // 3) Hand off to RobotRunner — RunPanel will display every trade live.
-    //    All N legs fire in parallel inside startBulkBatch (Promise.all).
     onClose();
     onBatchStarted?.();
 
@@ -220,7 +203,6 @@ export default function BulkScannerModal({
     });
   };
 
-  /* -------------------- RENDER -------------------- */
   if (!open) return null;
 
   return (
@@ -284,9 +266,8 @@ export default function BulkScannerModal({
               robotName={selectedRobot?.name}
             />
           ) : (
-            /* ---- IDLE / FORM ---- */
             <div className="p-5 space-y-5">
-              {/* Robot picker — Dropdown */}
+              {/* Robot picker */}
               <section>
                 <Label icon={<Rocket className="w-3.5 h-3.5" />}>Bulk Robot</Label>
                 <select
@@ -322,13 +303,16 @@ export default function BulkScannerModal({
                     <button
                       key={c.id}
                       onClick={() => setCategory(c.id)}
-                      className={`px-2 py-2.5 rounded-xl text-[11px] font-medium border transition-colors ${
-                        category === c.id
-                          ? "border-indigo-500 bg-indigo-500/15 text-indigo-300"
-                          : "border-slate-800 bg-slate-900 text-slate-400 hover:text-white"
-                      }`}
+                      className={`
+                        relative px-2 py-2.5 rounded-xl text-[11px] font-medium border transition-all
+                        ${
+                          category === c.id
+                            ? "drop-on-top border-indigo-500 bg-indigo-500/20 text-indigo-200"
+                            : "border-slate-800 bg-slate-900 text-slate-400 hover:text-white"
+                        }
+                      `}
                     >
-                      {c.label}
+                      <span className="relative z-[1]">{c.label}</span>
                     </button>
                   ))}
                 </div>
@@ -368,13 +352,16 @@ export default function BulkScannerModal({
                       <button
                         key={d}
                         onClick={() => setBarrier(d)}
-                        className={`h-9 rounded-lg text-sm font-semibold border transition-colors ${
-                          barrier === d
-                            ? "border-indigo-500 bg-indigo-500/15 text-indigo-300"
-                            : "border-slate-800 bg-slate-900 text-slate-400 hover:text-white"
-                        }`}
+                        className={`
+                          relative h-9 rounded-lg text-sm font-semibold border transition-all
+                          ${
+                            barrier === d
+                              ? "drop-on-top border-indigo-500 bg-indigo-500/20 text-indigo-200"
+                              : "border-slate-800 bg-slate-900 text-slate-400 hover:text-white"
+                          }
+                        `}
                       >
-                        {d}
+                        <span className="relative z-[1]">{d}</span>
                       </button>
                     ))}
                   </div>
@@ -402,13 +389,16 @@ export default function BulkScannerModal({
                     <button
                       key={n}
                       onClick={() => setNumTrades(n)}
-                      className={`h-9 rounded-lg text-sm font-medium border transition-colors ${
-                        numTrades === n
-                          ? "border-indigo-500 bg-indigo-500/15 text-indigo-300"
-                          : "border-slate-800 bg-slate-900 text-slate-400 hover:text-white"
-                      }`}
+                      className={`
+                        relative h-9 rounded-lg text-sm font-medium border transition-all
+                        ${
+                          numTrades === n
+                            ? "drop-on-top border-indigo-500 bg-indigo-500/20 text-indigo-200"
+                            : "border-slate-800 bg-slate-900 text-slate-400 hover:text-white"
+                        }
+                      `}
                     >
-                      {n}
+                      <span className="relative z-[1]">{n}</span>
                     </button>
                   ))}
                 </div>
@@ -441,13 +431,23 @@ export default function BulkScannerModal({
                 </div>
               </div>
 
-              {/* CTA */}
+              {/* CTA with liquid glass */}
               <button
                 onClick={handleScanAndTrade}
-                className="w-full h-14 rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white font-semibold text-base flex items-center justify-center gap-2 shadow-lg shadow-indigo-900/40 hover:brightness-110 transition-all active:scale-[0.98]"
+                className="
+                  drop-on-top
+                  relative w-full h-14 rounded-2xl
+                  bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600
+                  text-white font-semibold text-base
+                  flex items-center justify-center gap-2
+                  shadow-lg shadow-indigo-900/40 hover:brightness-110
+                  transition-all active:scale-[0.98]
+                "
               >
-                <Zap className="w-5 h-5" />
-                Scan &amp; Fire Batch
+                <span className="relative z-[1] flex items-center gap-2">
+                  <Zap className="w-5 h-5" />
+                  Scan &amp; Fire Batch
+                </span>
               </button>
             </div>
           )}
@@ -509,23 +509,29 @@ function PairPicker({
     <div className="grid grid-cols-2 gap-2">
       <button
         onClick={() => onPick(left.value)}
-        className={`h-11 rounded-xl font-semibold border transition-colors ${
-          active === left.value
-            ? "border-emerald-500 bg-emerald-500/15 text-emerald-300"
-            : "border-slate-800 bg-slate-900 text-slate-400 hover:text-white"
-        }`}
+        className={`
+          relative h-11 rounded-xl font-semibold border transition-all
+          ${
+            active === left.value
+              ? "drop-on-top border-emerald-500 bg-emerald-500/20 text-emerald-200"
+              : "border-slate-800 bg-slate-900 text-slate-400 hover:text-white"
+          }
+        `}
       >
-        {left.label}
+        <span className="relative z-[1]">{left.label}</span>
       </button>
       <button
         onClick={() => onPick(right.value)}
-        className={`h-11 rounded-xl font-semibold border transition-colors ${
-          active === right.value
-            ? "border-rose-500 bg-rose-500/15 text-rose-300"
-            : "border-slate-800 bg-slate-900 text-slate-400 hover:text-white"
-        }`}
+        className={`
+          relative h-11 rounded-xl font-semibold border transition-all
+          ${
+            active === right.value
+              ? "drop-on-top border-rose-500 bg-rose-500/20 text-rose-200"
+              : "border-slate-800 bg-slate-900 text-slate-400 hover:text-white"
+          }
+        `}
       >
-        {right.label}
+        <span className="relative z-[1]">{right.label}</span>
       </button>
     </div>
   );
