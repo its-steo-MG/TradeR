@@ -19,11 +19,30 @@ type UserRobotRaw = {
 type Props = {
   markets: Market[];
   onBatchStarted?: () => void;
+  /** Controlled open state (optional) */
+  open?: boolean;
+  /** Called when open state should change */
+  onOpenChange?: (open: boolean) => void;
 };
 
-export default function BulkScannerTab({ markets, onBatchStarted }: Props) {
+export default function BulkScannerTab({
+  markets,
+  onBatchStarted,
+  open: controlledOpen,
+  onOpenChange,
+}: Props) {
   const [hasBulk, setHasBulk] = useState(false);
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+
+  // Use controlled state if provided, otherwise fall back to internal state
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = (value: boolean) => {
+    if (onOpenChange) {
+      onOpenChange(value);
+    } else {
+      setInternalOpen(value);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;

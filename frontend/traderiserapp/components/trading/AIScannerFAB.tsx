@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Sparkles, X, Loader2, Zap, Target, ShieldAlert, DollarSign } from "lucide-react";
 import { toast } from "sonner";
 import { start as startRobot, useRobotRunner } from "@/lib/robotRunner";
@@ -124,9 +125,11 @@ function scoreMarket(
 type Props = {
   markets: Market[];
   onStarted: () => void;
+  /** Hide the floating button (e.g. when robot panel is open) */
+  hidden?: boolean;
 };
 
-export default function AIScannerFAB({ markets, onStarted }: Props) {
+export default function AIScannerFAB({ markets, onStarted, hidden = false }: Props) {
   const [open, setOpen] = useState(false);
   const [stake, setStake] = useState("1");
   const [targetProfit, setTargetProfit] = useState("10");
@@ -140,12 +143,22 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
   const [pickedRobot, setPickedRobot] = useState<Robot | null>(null);
   const [loadingRobot, setLoadingRobot] = useState(true);
   const [isSashi, setIsSashi] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   const { isRunning } = useRobotRunner();
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
     setIsSashi(getIsSashi());
   }, []);
+
+  // Close AI Scanner modal if parent tells us to hide
+  useEffect(() => {
+    if (hidden) setOpen(false);
+  }, [hidden]);
 
   useEffect(() => {
     const load = async () => {
@@ -251,200 +264,213 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
     return m ? m.display_name || m.name : "";
   }, [scanning, scanIdx, markets]);
 
-  return (
-    <>
-      {/* FAB with liquid glass */}
-      <button
-        onClick={() => setOpen(true)}
-        disabled={isRunning}
-        aria-label="AI Scanner"
-        className={`
-          drop-on-top
-          fixed z-40 bottom-24 lg:bottom-8 left-1/2 -translate-x-1/2
-          w-16 h-16 rounded-full flex items-center justify-center
-          text-white font-bold text-lg tracking-wider
-          bg-gradient-to-br from-indigo-500 via-purple-500 to-fuchsia-500
-          shadow-[0_0_30px_rgba(168,85,247,0.65)]
-          ring-2 ring-white/20
-          transition-transform active:scale-95 hover:scale-105
-          disabled:opacity-60 disabled:cursor-not-allowed
-          ai-fab-glow
-        `}
-      >
-        <span className="absolute inset-0 rounded-full bg-purple-500/40 blur-xl -z-10 animate-pulse" />
-        <Sparkles size={14} className="absolute top-2 right-2 text-white/80 z-[1]" />
-        <span className="relative z-[1] drop-shadow-md">AI</span>
-      </button>
+  // Don't show the floating button when hidden by parent or when its own modal is open
+  const showButton = mounted && !hidden && !open;
 
-      {open && (
-        <div
-          className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4"
-          onClick={() => !scanning && setOpen(false)}
-        >
-          <div
-            className="w-full sm:max-w-md bg-slate-900 border border-slate-700 sm:rounded-3xl rounded-t-3xl overflow-hidden shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="relative px-6 py-5 border-b border-slate-800 bg-gradient-to-r from-indigo-600/20 via-purple-600/20 to-fuchsia-600/20">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-fuchsia-500 flex items-center justify-center shadow-[0_0_20px_rgba(168,85,247,0.6)]">
-                  <Sparkles size={18} className="text-white" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">AI Market Scanner</h3>
-                  <p className="text-xs text-slate-400">
-                    Auto-picks the strongest market & trades it
-                  </p>
-                </div>
+  // ── FAB ───────────────────────────────────────────────────────────
+  const fab = showButton && (
+    <button
+      onClick={() => setOpen(true)}
+      disabled={isRunning}
+      aria-label="AI Scanner"
+      style={{
+        position: "fixed",
+        bottom: "6rem",
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 9999,
+        width: "4rem",
+        height: "4rem",
+      }}
+      className="
+        rounded-full flex items-center justify-center
+        text-white font-bold text-lg tracking-wider
+        bg-gradient-to-br from-indigo-500 via-purple-500 to-fuchsia-500
+        shadow-[0_0_30px_rgba(168,85,247,0.65)]
+        ring-2 ring-white/20
+        transition-transform active:scale-95 hover:scale-105
+        disabled:opacity-60 disabled:cursor-not-allowed
+        ai-fab-glow
+      "
+    >
+      <span className="absolute inset-0 rounded-full bg-purple-500/40 blur-xl -z-10 animate-pulse" />
+      <Sparkles size={14} className="absolute top-2 right-2 text-white/80 z-[1]" />
+      <span className="relative z-[1] drop-shadow-md">AI</span>
+    </button>
+  );
+
+  // ── Modal ─────────────────────────────────────────────────────────
+  const modal = open && (
+    <div
+      className="fixed inset-0 z-[99999] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4"
+      onClick={() => !scanning && setOpen(false)}
+    >
+      <div
+        className="w-full sm:max-w-md bg-slate-900 border border-slate-700 sm:rounded-3xl rounded-t-3xl overflow-hidden shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="relative px-6 py-5 border-b border-slate-800 bg-gradient-to-r from-indigo-600/20 via-purple-600/20 to-fuchsia-600/20">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-fuchsia-500 flex items-center justify-center shadow-[0_0_20px_rgba(168,85,247,0.6)]">
+              <Sparkles size={18} className="text-white" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-white">AI Market Scanner</h3>
+              <p className="text-xs text-slate-400">
+                Auto-picks the strongest market & trades it
+              </p>
+            </div>
+          </div>
+          {!scanning && (
+            <button
+              onClick={() => setOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white"
+            >
+              <X size={20} />
+            </button>
+          )}
+        </div>
+
+        {/* Body */}
+        {scanning ? (
+          <div className="p-8 flex flex-col items-center gap-5">
+            <div className="relative">
+              <Loader2 size={54} className="text-purple-400 animate-spin" />
+              <Sparkles
+                size={20}
+                className="absolute inset-0 m-auto text-fuchsia-300 animate-pulse"
+              />
+            </div>
+            <div className="text-center">
+              <div className="text-white font-semibold">Scanning markets…</div>
+              <div className="text-xs text-slate-400 mt-1 truncate max-w-[260px]">
+                {currentScanLabel}
               </div>
-              {!scanning && (
-                <button
-                  onClick={() => setOpen(false)}
-                  className="absolute top-4 right-4 text-slate-400 hover:text-white"
-                >
-                  <X size={20} />
-                </button>
-              )}
+              <div className="mt-3 text-[11px] text-slate-500">
+                {scanIdx + 1} / {markets.length}
+              </div>
+            </div>
+            <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-indigo-500 to-fuchsia-500 transition-all duration-300"
+                style={{
+                  width: `${((scanIdx + 1) / Math.max(1, markets.length)) * 100}%`,
+                }}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="p-5 space-y-4">
+            <div>
+              <label className="text-xs font-semibold text-slate-400 mb-2 block uppercase tracking-wide">
+                Market Type
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {(
+                  [
+                    { key: "overunder", label: "Over/Under" },
+                    { key: "matches", label: "Match/Diff" },
+                    { key: "evenodd", label: "Even/Odd" },
+                  ] as { key: ScanCategory; label: string }[]
+                ).map((c) => (
+                  <button
+                    key={c.key}
+                    onClick={() => setCategory(c.key)}
+                    className={`
+                      relative py-2.5 rounded-xl text-xs font-medium transition
+                      ${
+                        category === c.key
+                          ? "bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-white"
+                          : "bg-slate-800 text-slate-400 hover:text-white"
+                      }
+                    `}
+                  >
+                    <span className="relative z-[1]">{c.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {/* Body */}
-            {scanning ? (
-              <div className="p-8 flex flex-col items-center gap-5">
-                <div className="relative">
-                  <Loader2 size={54} className="text-purple-400 animate-spin" />
-                  <Sparkles
-                    size={20}
-                    className="absolute inset-0 m-auto text-fuchsia-300 animate-pulse"
-                  />
-                </div>
-                <div className="text-center">
-                  <div className="text-white font-semibold">Scanning markets…</div>
-                  <div className="text-xs text-slate-400 mt-1 truncate max-w-[260px]">
-                    {currentScanLabel}
-                  </div>
-                  <div className="mt-3 text-[11px] text-slate-500">
-                    {scanIdx + 1} / {markets.length}
-                  </div>
-                </div>
-                <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-indigo-500 to-fuchsia-500 transition-all duration-300"
-                    style={{
-                      width: `${((scanIdx + 1) / Math.max(1, markets.length)) * 100}%`,
-                    }}
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="p-5 space-y-4">
-                {/* Category tabs with liquid glass on selected */}
-                <div>
-                  <label className="text-xs font-semibold text-slate-400 mb-2 block uppercase tracking-wide">
-                    Market Type
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(
-                      [
-                        { key: "overunder", label: "Over/Under" },
-                        { key: "matches", label: "Match/Diff" },
-                        { key: "evenodd", label: "Even/Odd" },
-                      ] as { key: ScanCategory; label: string }[]
-                    ).map((c) => (
-                      <button
-                        key={c.key}
-                        onClick={() => setCategory(c.key)}
-                        className={`
-                          relative py-2.5 rounded-xl text-xs font-medium transition
-                          ${
-                            category === c.key
-                              ? "drop-on-top bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-white"
-                              : "bg-slate-800 text-slate-400 hover:text-white"
-                          }
-                        `}
-                      >
-                        <span className="relative z-[1]">{c.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+            <NumberField
+              icon={<DollarSign size={14} />}
+              label="Stake Amount"
+              value={stake}
+              onChange={setStake}
+              step="0.5"
+              min="0.5"
+              prefix="$"
+            />
 
-                <NumberField
-                  icon={<DollarSign size={14} />}
-                  label="Stake Amount"
-                  value={stake}
-                  onChange={setStake}
-                  step="0.5"
-                  min="0.5"
-                  prefix="$"
-                />
+            <div className="grid grid-cols-2 gap-3">
+              <NumberField
+                icon={<Target size={14} className="text-emerald-400" />}
+                label="Target Profit"
+                value={targetProfit}
+                onChange={setTargetProfit}
+                step="1"
+                min="0"
+                prefix="$"
+              />
+              <NumberField
+                icon={<ShieldAlert size={14} className="text-rose-400" />}
+                label="Stop Loss"
+                value={stopLoss}
+                onChange={setStopLoss}
+                step="1"
+                min="0"
+                prefix="$"
+              />
+            </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <NumberField
-                    icon={<Target size={14} className="text-emerald-400" />}
-                    label="Target Profit"
-                    value={targetProfit}
-                    onChange={setTargetProfit}
-                    step="1"
-                    min="0"
-                    prefix="$"
-                  />
-                  <NumberField
-                    icon={<ShieldAlert size={14} className="text-rose-400" />}
-                    label="Stop Loss"
-                    value={stopLoss}
-                    onChange={setStopLoss}
-                    step="1"
-                    min="0"
-                    prefix="$"
-                  />
-                </div>
-
-                {loadingRobot && (
-                  <div className="text-center text-xs text-slate-500 py-1">
-                    Loading AI engine…
-                  </div>
-                )}
-                {!loadingRobot && !pickedRobot && (
-                  <div className="text-center text-xs text-amber-400 py-1">
-                    No S-Digit Robot on your account. Purchase one to enable AI scanning.
-                  </div>
-                )}
-                {!loadingRobot && pickedRobot && !isSashi && (
-                  <div className="text-center text-[11px] text-slate-500 py-1 px-3">
-                    Standard account — trades run on the live market engine with real profit/loss.
-                  </div>
-                )}
-
-                {/* Scan & Trade button with liquid glass */}
-                <button
-                  onClick={runScan}
-                  disabled={loadingRobot || !pickedRobot}
-                  className="
-                    drop-on-top
-                    relative w-full py-3.5 rounded-2xl font-bold text-white
-                    bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500
-                    shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50
-                    transition-all active:scale-[.98] disabled:opacity-50 disabled:cursor-not-allowed
-                    flex items-center justify-center gap-2
-                  "
-                >
-                  <span className="relative z-[1] flex items-center gap-2">
-                    <Zap size={18} />
-                    Scan & Trade
-                  </span>
-                </button>
-
-                <p className="text-[10px] text-slate-500 text-center px-4">
-                  The AI scores every market in the selected category, picks the
-                  strongest edge, and auto-trades using the engine that fits
-                  your account. You can watch every trade live.
-                </p>
+            {loadingRobot && (
+              <div className="text-center text-xs text-slate-500 py-1">
+                Loading AI engine…
               </div>
             )}
+            {!loadingRobot && !pickedRobot && (
+              <div className="text-center text-xs text-amber-400 py-1">
+                No S-Digit Robot on your account. Purchase one to enable AI scanning.
+              </div>
+            )}
+            {!loadingRobot && pickedRobot && !isSashi && (
+              <div className="text-center text-[11px] text-slate-500 py-1 px-3">
+                Standard account — trades run on the live market engine with real profit/loss.
+              </div>
+            )}
+
+            <button
+              onClick={runScan}
+              disabled={loadingRobot || !pickedRobot}
+              className="
+                relative w-full py-3.5 rounded-2xl font-bold text-white
+                bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500
+                shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50
+                transition-all active:scale-[.98] disabled:opacity-50 disabled:cursor-not-allowed
+                flex items-center justify-center gap-2
+              "
+            >
+              <span className="relative z-[1] flex items-center gap-2">
+                <Zap size={18} />
+                Scan & Trade
+              </span>
+            </button>
+
+            <p className="text-[10px] text-slate-500 text-center px-4">
+              The AI scores every market in the selected category, picks the
+              strongest edge, and auto-trades using the engine that fits
+              your account. You can watch every trade live.
+            </p>
           </div>
-        </div>
-      )}
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {mounted && createPortal(fab, document.body)}
+      {mounted && createPortal(modal, document.body)}
 
       <style>{`
         @keyframes aiFabPulse {
@@ -452,6 +478,12 @@ export default function AIScannerFAB({ markets, onStarted }: Props) {
           50%      { box-shadow: 0 0 40px rgba(217,70,239,0.75), 0 0 100px rgba(168,85,247,0.4); }
         }
         .ai-fab-glow { animation: aiFabPulse 2.4s ease-in-out infinite; }
+
+        @media (min-width: 1024px) {
+          button[aria-label="AI Scanner"] {
+            bottom: 2rem !important;
+          }
+        }
       `}</style>
     </>
   );

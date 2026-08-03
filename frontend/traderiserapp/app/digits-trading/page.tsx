@@ -101,6 +101,7 @@ export default function TradingPage() {
   const [mode, setMode] = useState<TradeMode>("overunder");
   const [stake, setStake] = useState(10);
   const [barrier, setBarrier] = useState(5);
+  const [showBulkScanner, setShowBulkScanner] = useState(false);
 
   const [balance, setBalance] = useState<number>(0);
   const [activeAccount, setActiveAccount] = useState<Account | null>(null);
@@ -583,7 +584,12 @@ export default function TradingPage() {
           <ModeTabs mode={mode} onChange={(m) => { sfx.click(); setMode(m); }} />
         </div>
         <div className="order-1 sm:order-2 self-start sm:self-auto">
-          <BulkScannerTab markets={markets} onBatchStarted={() => setShowRobotPanel(true)} />
+          <BulkScannerTab
+            markets={markets}
+            onBatchStarted={() => setShowRobotPanel(true)}
+            open={showBulkScanner}
+            onOpenChange={setShowBulkScanner}
+          />
         </div>
       </div>
 
@@ -687,10 +693,11 @@ export default function TradingPage() {
         </div>
       </div>
 
-      {/* AI Scanner floating button — sits above the trade action area */}
+      {/* AI Scanner floating button — only visible on main trading view */}
       <AIScannerFAB
         markets={markets}
         onStarted={() => setShowRobotPanel(true)}
+        hidden={showRobotPanel || showBulkScanner}   // ← hides on both modals
       />
 
       <div className="lg:hidden">
