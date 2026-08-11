@@ -60,6 +60,7 @@ async function showSystemNotification(notif: MpesaNotification) {
         tag: `mpesa-${notif.id}`,
         requireInteraction: false,
         data: { notificationId: notif.id },
+        silent: false,
       });
       return;
     } catch (err) {
