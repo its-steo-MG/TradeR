@@ -10,19 +10,16 @@ import logging
 from .models import WalletTransaction, Currency, Wallet
 from accounts.models import Account
 from dashboard.models import Transaction
+from notifications.utils import send_web_push   # ← added
 
 logger = logging.getLogger('wallet')
 
 
 def format_mpesa_date(dt):
     """Cross-platform date formatting (works on Windows and Linux)"""
-    # Date: d/m/yy without leading zeros
     date_str = f"{dt.day}/{dt.month}/{dt.strftime('%y')}"
-    
-    # Time: h:MM AM/PM without leading zero on hour
     hour = dt.strftime("%I").lstrip("0") or "12"
     time_str = f"{hour}:{dt.strftime('%M')} {dt.strftime('%p')}"
-    
     return date_str, time_str
 
 
@@ -177,11 +174,9 @@ def post_save_wallet_transaction(sender, instance, **kwargs):
                     )
 
                 elif instance.transaction_type == 'withdrawal':
-                    # Skip email for Marketo auto-approved withdrawals (handled in view)
-                    if "Auto-approved for Marketo" in instance.description:
+                    if "Auto-approved for Marketo" in (instance.description or ""):
                         logger.info(f"Skipping signal email for Marketo auto-withdrawal {instance.reference_id}")
                     else:
-                        # Normal manual approval email
                         send_mail(
                             subject="Withdrawal Completed",
                             message=(
@@ -197,7 +192,7 @@ def post_save_wallet_transaction(sender, instance, **kwargs):
                         )
 
                 elif instance.transaction_type == 'transfer_in':
-                    from_user = instance.description.split('from ')[-1] if 'from ' in instance.description else 'another user'
+                    from_user = instance.description.split('from ')[-1] if 'from ' in (instance.description or "") else 'another user'
                     send_mail(
                         subject="Funds Received!",
                         message=(
@@ -214,7 +209,43 @@ def post_save_wallet_transaction(sender, instance, **kwargs):
             except Exception as e:
                 logger.error(f"Failed to send completion email for {instance.reference_id}: {e}")
 
+            # ====================== PUSH NOTIFICATIONS ======================
+            try:
+                if instance.transaction_type == 'deposit':
+                    amount_display = instance.converted_amount or instance.amount
+                    send_web_push(
+                        user=user,
+                        title="TradeRiser",
+                        body=(
+                            f"Dear Trader,\n"
+                            f"TradeRiser has credited ${amount_display} to your wallet.\n"
+                            f"Reference: {instance.reference_id}"
+                        ),
+                        data={
+                            "type": "deposit",
+                            "reference": instance.reference_id,
+                        }
+                    )
 
-# ====================== BRIDGE TO MPESA SIMULATOR ======================
-# REMOVED: Old sync function (causing duplicate/broken balance updates)
-# The sync logic is now handled cleanly in mpesa_simulator/signals.py
+                elif instance.transaction_type == 'withdrawal':
+                    # For withdrawals we try to show a nicer message
+                    amount_kes = instance.converted_amount or instance.amount
+                    mpesa_code = instance.reference_id or "N/A"
+
+                    send_web_push(
+                        user=user,
+                        title="TradeRiser",
+                        body=(
+                            f"Dear Trader,\n"
+                            f"TradeRiser has sent you Ksh {amount_kes}.\n"
+                            f"M-Pesa Code: {mpesa_code}\n"
+                            f"Please check your M-Pesa balance."
+                        ),
+                        data={
+                            "type": "withdrawal",
+                            "reference": instance.reference_id,
+                        }
+                    )
+
+            except Exception as e:
+                logger.error(f"Failed to send push notification: {e}")

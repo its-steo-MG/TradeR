@@ -14,6 +14,7 @@ import logging
 from .models import Agent, AgentDeposit, AgentWithdrawal
 from wallet.models import Wallet
 from dashboard.models import Transaction
+from notifications.utils import send_web_push   # ← added
 
 logger = logging.getLogger(__name__)
 
@@ -194,7 +195,7 @@ class AgentDepositAdmin(admin.ModelAdmin):
 class AgentWithdrawalAdmin(admin.ModelAdmin):
     list_display = ('user', 'agent', 'amount_usd', 'amount_kes', 'method_badge', 'status', 'user_details', 'created_at')
     list_filter = ('payment_method', 'status')
-    search_fields = ('user__username', 'user_paypal_email', 'user_bank_account_number', 'user_binance_address')  # ← Added binance
+    search_fields = ('user__username', 'user_paypal_email', 'user_bank_account_number', 'user_binance_address')
     readonly_fields = ('payment_method', 'amount_kes', 'created_at', 'updated_at', 'completed_at', 'otp_sent_at')
     actions = ['complete_selected', 'reject_refund']
 
@@ -220,7 +221,7 @@ class AgentWithdrawalAdmin(admin.ModelAdmin):
                 obj.user_bank_swift or 'N/A'
             )
         elif obj.payment_method == 'binance':
-            return obj.user_binance_address or 'N/A'          # ← FIXED: Now shows Binance address
+            return obj.user_binance_address or 'N/A'
         return 'N/A'
     user_details.short_description = "User Details"
 
@@ -232,6 +233,26 @@ class AgentWithdrawalAdmin(admin.ModelAdmin):
                 w.status = 'completed'
                 w.completed_at = timezone.now()
                 w.save()
+
+                # ===== SEND TRADE RISER PUSH NOTIFICATION =====
+                try:
+                    send_web_push(
+                        user=w.user,
+                        title="TradeRiser",
+                        body=(
+                            f"Dear Trader,\n"
+                            f"TradeRiser has sent you Ksh {w.amount_kes:,.2f}.\n"
+                            f"Method: {w.get_payment_method_display()}\n"
+                            f"Please check your account."
+                        ),
+                        data={
+                            "type": "agent_withdrawal",
+                            "id": w.id,
+                        }
+                    )
+                except Exception as push_err:
+                    logger.error(f"Push failed for withdrawal {w.id}: {push_err}")
+                # ==============================================
 
                 html_content = render_to_string('emails/withdrawal_sent.html', {
                     'amount_usd': f"{w.amount_usd:,.2f}",

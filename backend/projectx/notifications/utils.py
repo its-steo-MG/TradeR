@@ -6,8 +6,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Your frontend domain
 FRONTEND_URL = "https://traderiserapp.com"
+
+# Icons
+MPESA_ICON = f"{FRONTEND_URL}/images/notification-icon.png"
+TRADERISER_ICON = f"{FRONTEND_URL}/images/traderiser-logo-192.png"
+
 
 def send_web_push(user, title: str, body: str, data: dict = None, icon: str = None):
     from .models import PushSubscription
@@ -17,14 +21,20 @@ def send_web_push(user, title: str, body: str, data: dict = None, icon: str = No
         logger.info(f"No push subscriptions for user {user.username}")
         return
 
-    # Always use full absolute URL for the icon
-    default_icon = f"{FRONTEND_URL}/images/notification-icon.png"
+    # Decide icon
+    if icon:
+        final_icon = icon
+    elif title.upper() == "MPESA":
+        final_icon = MPESA_ICON
+    else:
+        final_icon = TRADERISER_ICON
 
     payload = {
         "title": title,
         "body": body,
-        "icon": icon or default_icon,
-        "badge": default_icon,
+        "icon": final_icon,
+        "badge": final_icon,
+        "image": final_icon,
         "data": data or {},
     }
 
@@ -42,11 +52,10 @@ def send_web_push(user, title: str, body: str, data: dict = None, icon: str = No
                 vapid_private_key=settings.VAPID_PRIVATE_KEY,
                 vapid_claims={"sub": settings.VAPID_ADMIN_EMAIL},
             )
-            logger.info(f"Push sent to {user.username}")
+            logger.info(f"Push sent to {user.username} | title={title}")
         except WebPushException as e:
             logger.warning(f"Push failed for {user.username}: {e}")
             if e.response is not None and e.response.status_code in (404, 410):
                 sub.delete()
-                logger.info(f"Deleted expired subscription for {user.username}")
         except Exception as e:
             logger.error(f"Unexpected push error: {e}")

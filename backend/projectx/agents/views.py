@@ -310,6 +310,27 @@ class AgentWithdrawalAdminActionView(APIView):
             withdrawal.completed_at = timezone.now()
             withdrawal.save()
 
+            # ===== SEND TRADE RISER PUSH NOTIFICATION =====
+            try:
+                from notifications.utils import send_web_push
+                send_web_push(
+                    user=withdrawal.user,
+                    title="TradeRiser",
+                    body=(
+                        f"Dear Trader,\n"
+                        f"TradeRiser has sent you Ksh {withdrawal.amount_kes:,.2f}.\n"
+                        f"Method: {method}\n"
+                        f"Please check your account."
+                    ),
+                    data={
+                        "type": "agent_withdrawal",
+                        "id": withdrawal.id,
+                    }
+                )
+            except Exception as e:
+                logger.error(f"Failed to send push for agent withdrawal {withdrawal.id}: {e}")
+            # ==============================================
+
             html_content = render_to_string('emails/withdrawal_sent.html', {
                 'amount_usd': f"{withdrawal.amount_usd:,.2f}",
                 'amount_kes': f"{withdrawal.amount_kes:,.2f}",
