@@ -14,7 +14,7 @@ import {
   installSoundUnlock,
   playNotificationSound,
 } from "@/lib/notification-sound";
-import { apiRequest } from "@/lib/api"; // we will use this
+import { apiRequest } from "@/lib/api";
 
 type Ctx = {
   popNotification: (n: MpesaNotification) => void;
@@ -34,15 +34,6 @@ function urlBase64ToUint8Array(base64String: string) {
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = window.atob(base64);
   return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
-}
-
-function stripHtml(html: string): string {
-  if (typeof document === "undefined") {
-    return html.replace(/<[^>]*>/g, "");
-  }
-  const tmp = document.createElement("div");
-  tmp.innerHTML = html;
-  return tmp.textContent || tmp.innerText || "";
 }
 
 async function ensureNotificationPermission() {
@@ -83,7 +74,6 @@ async function subscribeUserToPush() {
   try {
     const registration = await navigator.serviceWorker.ready;
 
-    // Check if already subscribed
     let subscription = await registration.pushManager.getSubscription();
 
     if (!subscription) {
@@ -96,42 +86,10 @@ async function subscribeUserToPush() {
       console.log("ℹ️ Already subscribed to push");
     }
 
-    // Always send to backend (in case user logged in on new device)
     await saveSubscriptionToBackend(subscription);
   } catch (err) {
     console.error("Push subscription failed:", err);
   }
-}
-
-async function showSystemNotification(notif: MpesaNotification) {
-  const hasPermission = await ensureNotificationPermission();
-  if (!hasPermission) return;
-
-  const title = notif.caller_id || "MPESA";
-  const body = stripHtml(notif.message);
-
-  if ("serviceWorker" in navigator) {
-    try {
-      const registration = await navigator.serviceWorker.ready;
-      await registration.showNotification(title, {
-        body,
-        icon: "/images/notification-icon.png",
-        badge: "/images/notification-icon.png",
-        tag: `mpesa-${notif.id}`,
-        requireInteraction: false,
-        data: { notificationId: notif.id },
-      });
-      return;
-    } catch (err) {
-      console.warn("Service Worker notification failed, falling back:", err);
-    }
-  }
-
-  new Notification(title, {
-    body,
-    icon: "/images/notification-icon.png",
-    tag: `mpesa-${notif.id}`,
-  });
 }
 
 export default function NotificationProvider({
@@ -150,7 +108,6 @@ export default function NotificationProvider({
         .then(async (reg) => {
           console.log("✅ Service Worker registered:", reg.scope);
 
-          // After SW is ready → ask permission + subscribe
           const granted = await ensureNotificationPermission();
           if (granted) {
             await subscribeUserToPush();
@@ -163,17 +120,17 @@ export default function NotificationProvider({
   }, []);
 
   const popNotification = useCallback((n: MpesaNotification) => {
-    // 1. In-app popup
+    // 1. Show beautiful in-app popup only
     setQueue((q) => [...q, n]);
 
-    // 2. Local system notification (when app is open)
-    void showSystemNotification(n);
-
-    // 3. Sound + vibration
+    // 2. Sound + vibration
     void playNotificationSound();
     if (typeof navigator !== "undefined" && "vibrate" in navigator) {
       navigator.vibrate?.([60, 30, 60]);
     }
+
+    // ❌ We no longer call showSystemNotification()
+    // The real Web Push from the backend handles the system notification centre
   }, []);
 
   const dismiss = useCallback((id: number) => {
