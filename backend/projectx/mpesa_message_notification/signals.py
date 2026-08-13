@@ -4,6 +4,9 @@ from django.dispatch import receiver
 from django.utils import timezone
 import pytz
 import logging
+import re
+
+from notifications.utils import send_web_push
 
 logger = logging.getLogger('mpesa_message_notification')
 
@@ -22,6 +25,13 @@ def format_mpesa_date(dt):
     return date_str, time_str
 
 
+def strip_html(html: str) -> str:
+    """Remove HTML tags for push notification body"""
+    if not html:
+        return ""
+    return re.sub(r'<[^>]+>', '', html).strip()
+
+
 @receiver(post_save, sender='mpesa_simulator.MpesaTransaction')
 def create_mpesa_notification(sender, instance, created, **kwargs):
     if not created:
@@ -29,7 +39,6 @@ def create_mpesa_notification(sender, instance, created, **kwargs):
 
     try:
         from .models import MpesaNotification
-        from mpesa_simulator.models import MpesaUser
 
         # Force refresh to get the FINAL saved data
         instance.refresh_from_db()
@@ -75,14 +84,35 @@ def create_mpesa_notification(sender, instance, created, **kwargs):
             message = f"{mpesa_id} {instance.transaction_type.capitalize()} of Ksh{instance.amount:,.2f} completed."
             notif_type = 'sent'
 
-        if not MpesaNotification.objects.filter(mpesa_transaction=instance).exists():
-            MpesaNotification.objects.create(
-                mpesa_user=instance.mpesa_user,
-                mpesa_transaction=instance,
-                notification_type=notif_type,
-                message=message,
+        # Avoid duplicate notifications
+        if MpesaNotification.objects.filter(mpesa_transaction=instance).exists():
+            return
+
+        notif = MpesaNotification.objects.create(
+            mpesa_user=instance.mpesa_user,
+            mpesa_transaction=instance,
+            notification_type=notif_type,
+            message=message,
+        )
+
+        logger.info(f"✅ Notification created → {mpesa_id}")
+
+        # ===== SEND REAL SYSTEM PUSH NOTIFICATION =====
+        try:
+            send_web_push(
+                user=instance.mpesa_user.user,
+                title=notif.caller_id or "MPESA",
+                body=strip_html(message),
+                data={
+                    "type": "mpesa",
+                    "id": notif.id,
+                    "mpesa_id": mpesa_id,
+                    "notification_type": notif_type,
+                }
             )
-            logger.info(f"✅ Notification created → {mpesa_id}")
+            logger.info(f"✅ Push notification sent → {mpesa_id}")
+        except Exception as push_error:
+            logger.error(f"Failed to send push notification: {push_error}")
 
     except Exception as e:
         logger.error(f"Failed to create notification: {e}", exc_info=True)

@@ -87,6 +87,7 @@ INSTALLED_APPS = [
     'agents',
     'customercare',
     'mt5',
+    'notifications',
     'management.apps.ManagementConfig',
     'traderpulse',
     'copy_trading.apps.CopyTradingConfig',
@@ -286,7 +287,10 @@ OPENAI_MODEL = config('OPENAI_MODEL', default='gpt-3.5-turbo')
 # Frontend URL for signals/emails
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
 
-
+# ====================== WEB PUSH (VAPID) ======================
+VAPID_PUBLIC_KEY = config('VAPID_PUBLIC_KEY')
+VAPID_PRIVATE_KEY = config('VAPID_PRIVATE_KEY')
+VAPID_ADMIN_EMAIL = "mailto:steomustadd@gmail.com"
 
 # Use Resend via Anymail 
 
