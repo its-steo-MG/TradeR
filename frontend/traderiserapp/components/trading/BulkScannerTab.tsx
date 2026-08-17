@@ -23,6 +23,8 @@ type Props = {
   open?: boolean;
   /** Called when open state should change */
   onOpenChange?: (open: boolean) => void;
+  /** Hide the pill button — used when the workspace tab drives the modal. */
+  hideTrigger?: boolean;
 };
 
 export default function BulkScannerTab({
@@ -30,6 +32,7 @@ export default function BulkScannerTab({
   onBatchStarted,
   open: controlledOpen,
   onOpenChange,
+  hideTrigger = false,
 }: Props) {
   const [hasBulk, setHasBulk] = useState(false);
   const [internalOpen, setInternalOpen] = useState(false);
@@ -67,6 +70,17 @@ export default function BulkScannerTab({
   }, []);
 
   if (!hasBulk) return null;
+
+  if (hideTrigger) {
+    return (
+      <BulkScannerModal
+        open={open}
+        onClose={() => setOpen(false)}
+        markets={markets}
+        onBatchStarted={onBatchStarted}
+      />
+    );
+  }
 
   return (
     <>

@@ -10,7 +10,7 @@ type Props = {
   highlight?: { digit: number; color: "green" | "red" } | null;
   windowSize?: number;
   onWindowChange?: (n: number) => void;
-  isRefreshing?: boolean; // NEW
+  isRefreshing?: boolean;
 };
 
 const WINDOW_OPTIONS = [50, 100, 500, 1000];
@@ -54,8 +54,9 @@ export default function DigitStrip({
         </div>
       )}
 
+      {/* Always 2 rows of 5 circles */}
       <div
-        className={`grid grid-cols-10 gap-1 px-1 transition-all duration-300 ${
+        className={`grid grid-cols-5 gap-2 sm:gap-3 px-1 transition-all duration-300 ${
           isRefreshing ? "opacity-60" : "opacity-100"
         }`}
       >
@@ -63,7 +64,7 @@ export default function DigitStrip({
           ? digits.map((i) => (
               <div
                 key={i}
-                className="relative flex flex-col items-center justify-center rounded-full aspect-square border border-slate-700 bg-slate-800/40 overflow-hidden animate-pulse"
+                className="relative flex flex-col items-center justify-center rounded-full aspect-square w-full max-w-[60px] sm:max-w-[80px] lg:max-w-[96px] border border-slate-700 bg-slate-800/40 overflow-hidden animate-pulse"
                 style={{ animationDelay: `${i * 60}ms` }}
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-slate-600/40 to-transparent animate-[shimmer_1.2s_ease-in-out_infinite]" />
@@ -83,7 +84,7 @@ export default function DigitStrip({
                 <button
                   key={i}
                   onClick={() => onSelect?.(i)}
-                  className={`relative flex flex-col items-center justify-center rounded-full aspect-square text-xs transition-all duration-300
+                  className={`relative flex flex-col items-center justify-center rounded-full aspect-square w-full max-w-[60px] sm:max-w-[80px] lg:max-w-[96px] transition-all duration-300
                     ${isSel ? "ring-2 ring-orange-400" : ""}
                     ${isCur ? "bg-slate-700/70" : "bg-transparent"}
                     border
@@ -98,9 +99,9 @@ export default function DigitStrip({
                     }
                   `}
                 >
-                  <span className="text-white font-semibold leading-none">{i}</span>
+                  <span className="text-white font-semibold text-sm sm:text-base lg:text-lg leading-none">{i}</span>
                   <span
-                    className={`text-[9px] mt-0.5 ${
+                    className={`text-[8px] sm:text-[10px] mt-0.5 ${
                       isMax ? "text-emerald-400" : isMin ? "text-rose-400" : "text-slate-400"
                     }`}
                   >

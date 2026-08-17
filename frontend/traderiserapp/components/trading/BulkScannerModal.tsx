@@ -4,7 +4,7 @@
 /*  BulkScannerModal.tsx                                                      */
 /* -------------------------------------------------------------------------- */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   X,
   Loader2,
@@ -17,6 +17,8 @@ import {
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { startBulkBatch } from "@/lib/robotRunner";
+import MarketScannerPanel from "./MarketScannerPanel";
+import type { MarketScanResult } from "@/lib/marketScan";
 
 /* ---------- Types ---------- */
 type Market = {
@@ -83,11 +85,9 @@ export default function BulkScannerModal({
   const [stake, setStake] = useState<number>(1);
   const [numTrades, setNumTrades] = useState<number>(5);
 
+  const [autoPick, setAutoPick] = useState(false);
   const [phase, setPhase] = useState<"idle" | "scanning">("idle");
-  const [scanIndex, setScanIndex] = useState(0);
-  const [scanMarket, setScanMarket] = useState<string>("");
-  const [scanPct, setScanPct] = useState(0);
-  const scanTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [executing, setExecuting] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -126,10 +126,7 @@ export default function BulkScannerModal({
   }, [category]);
 
   useEffect(() => {
-    if (!open && scanTimer.current) {
-      clearInterval(scanTimer.current);
-      scanTimer.current = null;
-    }
+    if (!open) setExecuting(false);
   }, [open]);
 
   const maxTrades = Math.min(50, selectedRobot?.max_bulk_trades ?? 50);
@@ -143,7 +140,8 @@ export default function BulkScannerModal({
     return contract === "even" ? "Even" : "Odd";
   }, [category, contract, barrier]);
 
-  const handleScanAndTrade = async () => {
+  /** Opens the real market-wide scanner. */
+  const handleScanAndTrade = () => {
     if (!selectedRobot) {
       toast.error("Select a bulk robot first");
       return;
@@ -156,51 +154,40 @@ export default function BulkScannerModal({
       toast.error("Invalid stake or trade count");
       return;
     }
-
     setPhase("scanning");
-    setScanIndex(0);
-    setScanPct(0);
+  };
 
-    const total = markets.length;
-    const perTick = Math.max(120, Math.min(260, 2400 / total));
-    let i = 0;
-    await new Promise<void>((resolve) => {
-      scanTimer.current = setInterval(() => {
-        const m = markets[i % total];
-        setScanMarket(m?.display_name || m?.name || "Volatility");
-        setScanIndex(i);
-        setScanPct(Math.min(100, Math.round(((i + 1) / total) * 100)));
-        i++;
-        if (i >= total) {
-          if (scanTimer.current) clearInterval(scanTimer.current);
-          scanTimer.current = null;
-          resolve();
-        }
-      }, perTick);
-    });
+  /** Fired by MarketScannerPanel once the user confirms the winning signal. */
+  const handleExecuteWinner = (winner: MarketScanResult) => {
+    if (!selectedRobot) return;
+    setExecuting(true);
 
-    const chosen = markets[Math.floor(Math.random() * markets.length)];
+    const kind = winner.kind as ContractKind;
+    const useBarrier = ["over", "under", "matches", "differs"].includes(kind)
+      ? winner.barrier
+      : undefined;
 
     onClose();
     onBatchStarted?.();
 
     toast.success(
-      `${selectedRobot.name} locked onto ${chosen.display_name || chosen.name} — firing ${numTrades} ${contractLabel} contracts`,
+      `${selectedRobot.name} locked onto ${winner.marketName} — firing ${numTrades} contracts (${winner.confidence}% confidence)`,
       { duration: 6000 },
     );
 
     void startBulkBatch({
       robotId: selectedRobot.id,
       robotName: selectedRobot.name,
-      marketId: chosen.id,
-      marketName: chosen.display_name || chosen.name,
-      contractKind: contract,
-      barrier: ["over", "under", "matches", "differs"].includes(contract)
-        ? barrier
-        : undefined,
+      marketId: winner.marketId,
+      marketName: winner.marketName,
+      contractKind: kind,
+      barrier: useBarrier,
       stake,
       numTrades,
     });
+
+    setExecuting(false);
+    setPhase("idle");
   };
 
   if (!open) return null;
@@ -258,13 +245,31 @@ export default function BulkScannerModal({
               </div>
             </div>
           ) : phase === "scanning" ? (
-            <ScanningView
-              scanPct={scanPct}
-              scanIndex={scanIndex}
-              scanMarket={scanMarket}
-              total={markets.length}
-              robotName={selectedRobot?.name}
-            />
+            <div className="p-4">
+              <MarketScannerPanel
+                markets={markets}
+                autoStart
+                executing={executing}
+                executeLabel={`Fire ${numTrades} contracts`}
+                restrict={
+                  autoPick
+                    ? undefined
+                    : {
+                        kinds: [contract],
+                        barrier:
+                          category === "evenodd" ? undefined : barrier,
+                      }
+                }
+                targetLabel={autoPick ? undefined : contractLabel}
+                onExecute={handleExecuteWinner}
+              />
+              <button
+                onClick={() => setPhase("idle")}
+                className="mt-4 w-full h-11 rounded-xl border border-slate-800 bg-slate-900 text-sm text-slate-300 hover:text-white"
+              >
+                Back to settings
+              </button>
+            </div>
           ) : (
             <div className="p-5 space-y-5">
               {/* Robot picker */}
@@ -431,6 +436,38 @@ export default function BulkScannerModal({
                 </div>
               </div>
 
+              {/* Scan mode */}
+              <section>
+                <Label icon={<Target className="w-3.5 h-3.5" />}>Scan Mode</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setAutoPick(false)}
+                    className={`relative px-2 py-2.5 rounded-xl text-[11px] font-medium border transition-all ${
+                      !autoPick
+                        ? "drop-on-top border-indigo-500 bg-indigo-500/20 text-indigo-200"
+                        : "border-slate-800 bg-slate-900 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <span className="relative z-[1]">My prediction ({contractLabel})</span>
+                  </button>
+                  <button
+                    onClick={() => setAutoPick(true)}
+                    className={`relative px-2 py-2.5 rounded-xl text-[11px] font-medium border transition-all ${
+                      autoPick
+                        ? "drop-on-top border-indigo-500 bg-indigo-500/20 text-indigo-200"
+                        : "border-slate-800 bg-slate-900 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <span className="relative z-[1]">Auto · best contract</span>
+                  </button>
+                </div>
+                <div className="mt-1.5 text-[10px] text-slate-500">
+                  {autoPick
+                    ? "AI sweeps every market and every contract type, then fires the strongest signal."
+                    : "AI sweeps every market looking for the one that best favours your prediction."}
+                </div>
+              </section>
+
               {/* CTA with liquid glass */}
               <button
                 onClick={handleScanAndTrade}
@@ -533,82 +570,6 @@ function PairPicker({
       >
         <span className="relative z-[1]">{right.label}</span>
       </button>
-    </div>
-  );
-}
-
-/* ---------- Scanning UI ---------- */
-function ScanningView({
-  scanPct,
-  scanIndex,
-  scanMarket,
-  total,
-  robotName,
-}: {
-  scanPct: number;
-  scanIndex: number;
-  scanMarket: string;
-  total: number;
-  robotName?: string;
-}) {
-  return (
-    <div className="p-6 flex flex-col items-center text-center gap-6">
-      <div className="relative w-40 h-40">
-        <div className="absolute inset-0 rounded-full bg-indigo-500/20 animate-ping" />
-        <div className="absolute inset-2 rounded-full bg-indigo-500/30 animate-pulse" />
-        <div className="absolute inset-6 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-2xl shadow-indigo-900/50">
-          <Sparkles className="w-10 h-10 text-white animate-spin-slow" />
-        </div>
-        <div className="absolute -inset-2 rounded-full border border-indigo-400/40 animate-[spin_3s_linear_infinite]" />
-      </div>
-
-      <div>
-        <div className="text-white font-semibold text-lg mb-1">
-          Cracking the markets…
-        </div>
-        <div className="text-xs text-slate-400">
-          {robotName ?? "AI"} is analysing volatility streams
-        </div>
-      </div>
-
-      <div className="w-full max-w-xs">
-        <div className="mx-auto inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900 border border-slate-800">
-          <Loader2 className="w-3.5 h-3.5 text-indigo-400 animate-spin" />
-          <span className="text-sm text-slate-200 truncate max-w-[220px]">
-            {scanMarket || "Volatility 100 Index"}
-          </span>
-        </div>
-      </div>
-
-      <div className="w-full max-w-xs">
-        <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
-          <div
-            className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all"
-            style={{ width: `${scanPct}%` }}
-          />
-        </div>
-        <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
-          <span>
-            Scanned {Math.min(scanIndex + 1, total)}/{total}
-          </span>
-          <span>{scanPct}%</span>
-        </div>
-      </div>
-
-      <div className="w-full max-w-xs h-8 overflow-hidden rounded-lg border border-slate-800 bg-slate-900/50 text-[11px] text-slate-500 font-mono flex items-center px-3">
-        <span className="truncate">
-          &gt; probing {scanMarket || "…"} · digit stream · entropy · trend
-        </span>
-      </div>
-
-      <div className="text-[11px] text-indigo-300/80">
-        Handing batch off to Robot Runner…
-      </div>
-
-      <style>{`
-        @keyframes spin-slow { to { transform: rotate(360deg); } }
-        .animate-spin-slow { animation: spin-slow 4s linear infinite; }
-      `}</style>
     </div>
   );
 }

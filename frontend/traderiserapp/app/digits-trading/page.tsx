@@ -20,8 +20,12 @@ import PositionsPanel from "@/components/trading/positions/PositionPanel";
 import WinLossBurst from "@/components/trading/WinLossBurst";
 import AIScannerFAB from "@/components/trading/AIScannerFAB";
 
+/* ---- NEW terminal pieces ---- */
+import TerminalTabs, { type TerminalTab } from "@/components/trading/TerminalTabs";
+import ManualTrader from "@/components/trading/ManualTrader";
+import RobotDock from "@/components/trading/RobotDock";
+
 import { RobotConfigForm } from "@/components/trading/RobotConfigPanel";
-import { RunPanel } from "@/components/trading/RunPanel";
 import { useRobotRunner } from "@/lib/robotRunner";
 
 import type { Account } from "@/types/account";
@@ -103,6 +107,9 @@ export default function TradingPage() {
   const [barrier, setBarrier] = useState(5);
   const [showBulkScanner, setShowBulkScanner] = useState(false);
 
+  /* NEW: which workspace tab is active */
+  const [terminalTab, setTerminalTab] = useState<TerminalTab>("dtrader");
+
   const [balance, setBalance] = useState<number>(0);
   const [activeAccount, setActiveAccount] = useState<Account | null>(null);
 
@@ -118,23 +125,81 @@ export default function TradingPage() {
   } | null>(null);
   const [displayedLastDigit, setDisplayedLastDigit] = useState<number | null>(null);
 
-  // NEW: refreshing flag for market switches
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Burst trigger for chart flag marker (Deriv-style)
   const burstCounter = useRef(0);
   const [burst, setBurst] = useState<
     { kind: "win" | "loss"; id: number; digit?: number | null } | null
   >(null);
 
+  /* NEW: settlement flash for the manual-trader circles */
+  const [lastResult, setLastResult] = useState<{
+    digit: number;
+    isWin: boolean;
+    id: string;
+  } | null>(null);
+
   const [statsWindow, setStatsWindow] = useState<number>(100);
   const [showRobotPanel, setShowRobotPanel] = useState(false);
+  const [dockExpanded, setDockExpanded] = useState(false);
 
   const [openPositions, setOpenPositions] = useState<OpenPosition[]>([]);
   const [closedPositions, setClosedPositions] = useState<ClosedPosition[]>([]);
   const [statement, setStatement] = useState<StatementEntry[]>([]);
 
   const { isRunning: isRobotRunning, transactions: robotTransactions = [] } = useRobotRunner();
+
+  /* ------------------------------------------------------------------
+   * Robot / bulk executions must paint the SAME win-loss badge on the
+   * chart (DTrader) and on the digit circles (Manual Trader) that a
+   * manual trade paints. We watch the runner ledger and fire a burst for
+   * every transaction that flips from open -> settled.
+   * ------------------------------------------------------------------ */
+  const seenRobotTxRef = useRef<Set<string>>(new Set());
+  const robotBootRef = useRef(false);
+
+  useEffect(() => {
+    const settled = robotTransactions.filter((t) => !t.isOpen);
+
+    // First render after mount: adopt existing history without replaying it.
+    if (!robotBootRef.current) {
+      robotBootRef.current = true;
+      settled.forEach((t) => seenRobotTxRef.current.add(String(t.id)));
+      return;
+    }
+
+    const fresh = settled
+      .filter((t) => !seenRobotTxRef.current.has(String(t.id)))
+      .sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0));
+
+    if (fresh.length === 0) return;
+    fresh.forEach((t) => seenRobotTxRef.current.add(String(t.id)));
+
+    const last = fresh[fresh.length - 1];
+    const isWin = Boolean(last.isWin);
+    const digit =
+      typeof last.exitDigit === "number"
+        ? last.exitDigit
+        : tickFeed.getHistory().at(-1)?.lastDigit ?? null;
+
+    if (digit !== null) {
+      setDisplayedLastDigit(digit);
+      setHighlightDigit({ digit, color: isWin ? "green" : "red" });
+      setTimeout(() => setHighlightDigit(null), 2500);
+    }
+
+    burstCounter.current += 1;
+    setBurst({ kind: isWin ? "win" : "loss", id: burstCounter.current, digit });
+    setLastResult({
+      digit: digit ?? 0,
+      isWin,
+      id: `robot-${last.id}-${burstCounter.current}`,
+    });
+
+    const pnl = fresh.reduce((acc, t) => acc + (Number(t.pnl) || 0), 0);
+    setNetPnl((p) => +(p + pnl).toFixed(2));
+    setHistory((h) => [...h, ...fresh.map((t) => (t.isWin ? "W" : "L") as "W" | "L")].slice(-50));
+  }, [robotTransactions]);
 
   const selectedMarket = useMemo(
     () => markets.find((m) => m.id === selectedMarketId) || null,
@@ -233,7 +298,6 @@ export default function TradingPage() {
     if (!selectedMarket) return;
     const name = selectedMarket.name || selectedMarket.display_name || "volatility-10-1s";
 
-    // Trigger the "refreshing" UI on chart + digit circles
     setIsRefreshing(true);
     setTicks([]);
     setCurrent(null);
@@ -245,8 +309,6 @@ export default function TradingPage() {
 
     let cancelled = false;
     let attempts = 0;
-
-    // Minimum visible refresh time so the animation never just flashes
     const minRefreshUntil = Date.now() + 700;
 
     const finish = (hist: Tick[]) => {
@@ -270,10 +332,7 @@ export default function TradingPage() {
       }
       attempts += 1;
       if (attempts < 30) setTimeout(hydrate, 100);
-      else {
-        // give up waiting — drop the overlay anyway
-        if (!cancelled) setIsRefreshing(false);
-      }
+      else if (!cancelled) setIsRefreshing(false);
     };
     hydrate();
 
@@ -444,6 +503,12 @@ export default function TradingPage() {
           id: burstCounter.current,
           digit: revealTick.lastDigit,
         });
+        // flash the matching circle in Manual Trader
+        setLastResult({
+          digit: revealTick.lastDigit,
+          isWin,
+          id: `${burstCounter.current}`,
+        });
 
         if (isWin) sfx.win();
         else sfx.lose();
@@ -568,6 +633,12 @@ export default function TradingPage() {
     };
   }, [mode, stake, barrier, handlePlaceTrade]);
 
+  /** Contract kind currently armed — used by the Manual Trader badge overlay. */
+  const activeKind: DigitContractKind =
+    mode === "evenodd" ? "even" : mode === "matches" ? "matches" : "over";
+
+  const isManual = terminalTab === "manual";
+
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
       <TopBar
@@ -577,36 +648,52 @@ export default function TradingPage() {
         onOpenRobotPanel={() => setShowRobotPanel(true)}
       />
 
-      {/* Bulk Scanner sits ABOVE the ModeTabs on mobile so it does not squeeze
-          the market bar sideways. On sm+ it aligns to the right of the tabs. */}
-      <div className="px-3 sm:px-5 lg:px-8 pt-2 flex flex-col sm:flex-row sm:items-center gap-2">
-        <div className="order-2 sm:order-1 flex-1 min-w-0">
-          <ModeTabs mode={mode} onChange={(m) => { sfx.click(); setMode(m); }} />
-        </div>
-        <div className="order-1 sm:order-2 self-start sm:self-auto">
-          <BulkScannerTab
-            markets={markets}
-            onBatchStarted={() => setShowRobotPanel(true)}
-            open={showBulkScanner}
-            onOpenChange={setShowBulkScanner}
-          />
-        </div>
+      {/* ---- Deriv-style workspace tabs ---- */}
+      <TerminalTabs
+        active={showBulkScanner ? "bulk" : terminalTab}
+        onChange={(t) => {
+          sfx.click();
+          if (t === "bulk") {
+            /* The Bulk Scanner tab IS the bulk robot: open the full modal
+               (market picker + bot config + your own prediction). */
+            setShowBulkScanner(true);
+            return;
+          }
+          setShowBulkScanner(false);
+          setTerminalTab(t);
+        }}
+        locked={["botbuilder", "dashboard", "analysis"]}
+        badges={{ bulk: isRobotRunning ? "LIVE" : undefined }}
+      />
+
+      <div className="px-3 sm:px-5 lg:px-8 pt-2">
+        <ModeTabs mode={mode} onChange={(m) => { sfx.click(); setMode(m); }} />
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-24 lg:pb-8">
+      {/* Bulk scanner has no top button any more — it is driven by the
+          "Bulk Scanner" workspace tab. Rendered headless (trigger hidden). */}
+      <BulkScannerTab
+        markets={markets}
+        hideTrigger
+        onBatchStarted={() => setDockExpanded(true)}
+        open={showBulkScanner}
+        onOpenChange={setShowBulkScanner}
+      />
+
+      <div className="flex-1 overflow-y-auto pb-32 lg:pb-24">
         <div className="mx-auto w-full max-w-md md:max-w-2xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px] px-3 sm:px-5 lg:px-8 py-4 lg:py-6">
           {tab === "trade" ? (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6">
               <div className="lg:col-span-8 space-y-5">
-                <div className="relative h-56 sm:h-64 md:h-80 lg:h-[480px] xl:h-[560px] rounded-3xl bg-slate-900 border border-slate-700 overflow-hidden">
-                  <div className="absolute top-4 left-4 z-20">
-                    <div className="bg-slate-950/95 backdrop-blur-md px-4 py-2 rounded-2xl flex items-center gap-3 border border-slate-700 shadow-sm">
-                      <div className="text-blue-400 text-xl">📈</div>
+                <div className="relative h-[19rem] sm:h-80 md:h-96 lg:h-[480px] xl:h-[560px] rounded-3xl bg-slate-900 border border-slate-700 overflow-hidden">
+                  <div className="absolute top-2.5 left-2.5 sm:top-4 sm:left-4 z-20 max-w-[calc(100%-1.25rem)]">
+                    <div className="bg-slate-950/95 backdrop-blur-md px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-2xl flex items-center gap-2 sm:gap-3 border border-slate-700 shadow-sm max-w-[calc(100vw-3.5rem)]">
+                      <div className="text-blue-400 text-base sm:text-xl">📈</div>
                       <select
                         value={selectedMarketId ?? ""}
                         onChange={(e) => setSelectedMarketId(Number(e.target.value))}
                         disabled={!marketsLoaded}
-                        className="bg-transparent text-white font-medium text-sm focus:outline-none cursor-pointer py-1 pr-8 min-w-[200px] md:min-w-[260px] appearance-none disabled:opacity-50"
+                        className="bg-transparent text-white font-medium text-xs sm:text-sm focus:outline-none cursor-pointer py-1 pr-5 sm:pr-8 min-w-0 max-w-[9rem] sm:max-w-none sm:min-w-[200px] md:min-w-[260px] truncate appearance-none disabled:opacity-50"
                       >
                         {markets.map((m) => (
                           <option key={m.id} value={m.id} className="bg-slate-900 text-white py-2">
@@ -617,31 +704,56 @@ export default function TradingPage() {
                       <div className="text-slate-400 pointer-events-none">▼</div>
                     </div>
                   </div>
-                  <PriceChart
-                    ticks={ticks}
-                    current={current}
-                    marketId={selectedMarketId}
-                    isRefreshing={isRefreshing}
-                  />
-                  <WinLossBurst trigger={burst} />
+
+                  {isManual ? (
+                    /* ---- MANUAL TRADER: circles replace the chart ---- */
+                    <ManualTrader
+                      pct={stats.pct}
+                      maxIdx={stats.maxIdx}
+                      minIdx={stats.minIdx}
+                      currentDigit={displayedLastDigit}
+                      price={current?.price ?? null}
+                      selected={mode === "evenodd" ? null : barrier}
+                      kind={activeKind}
+                      marketName={selectedMarket?.display_name || selectedMarket?.name}
+                      windowSize={statsWindow}
+                      lastResult={lastResult}
+                      onSelect={(d) => {
+                        sfx.click();
+                        if (mode !== "evenodd") setBarrier(d);
+                      }}
+                    />
+                  ) : (
+                    <>
+                      <PriceChart
+                        ticks={ticks}
+                        current={current}
+                        marketId={selectedMarketId}
+                        isRefreshing={isRefreshing}
+                      />
+                      <WinLossBurst trigger={burst} />
+                    </>
+                  )}
                 </div>
 
-                <DigitStrip
-                  key={`strip-${selectedMarketId ?? "none"}`}
-                  pct={stats.pct}
-                  maxIdx={stats.maxIdx}
-                  minIdx={stats.minIdx}
-                  currentDigit={displayedLastDigit}
-                  selected={mode === "overunder" || mode === "matches" ? barrier : null}
-                  highlight={highlightDigit}
-                  windowSize={statsWindow}
-                  onWindowChange={setStatsWindow}
-                  isRefreshing={isRefreshing}
-                  onSelect={(d) => {
-                    sfx.click();
-                    if (mode !== "evenodd") setBarrier(d);
-                  }}
-                />
+                {!isManual && (
+                  <DigitStrip
+                    key={`strip-${selectedMarketId ?? "none"}`}
+                    pct={stats.pct}
+                    maxIdx={stats.maxIdx}
+                    minIdx={stats.minIdx}
+                    currentDigit={displayedLastDigit}
+                    selected={mode === "overunder" || mode === "matches" ? barrier : null}
+                    highlight={highlightDigit}
+                    windowSize={statsWindow}
+                    onWindowChange={setStatsWindow}
+                    isRefreshing={isRefreshing}
+                    onSelect={(d) => {
+                      sfx.click();
+                      if (mode !== "evenodd") setBarrier(d);
+                    }}
+                  />
+                )}
 
                 <div className="hidden lg:block">
                   <HistoryStrip history={history} netPnl={netPnl} />
@@ -655,7 +767,7 @@ export default function TradingPage() {
                   <HistoryStrip history={history} netPnl={netPnl} />
                 </div>
 
-                {(mode === "overunder" || mode === "matches") && (
+                {!isManual && (mode === "overunder" || mode === "matches") && (
                   <DigitPicker
                     digits={[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}
                     selected={barrier}
@@ -693,11 +805,17 @@ export default function TradingPage() {
         </div>
       </div>
 
-      {/* AI Scanner floating button — only visible on main trading view */}
       <AIScannerFAB
         markets={markets}
-        onStarted={() => setShowRobotPanel(true)}
-        hidden={showRobotPanel || showBulkScanner}   // ← hides on both modals
+        onStarted={() => setDockExpanded(true)}
+        hidden={showRobotPanel || showBulkScanner}
+      />
+
+      {/* ---- Minimisable robot console (chart stays visible when collapsed) ---- */}
+      <RobotDock
+        onConfigure={() => setShowRobotPanel(true)}
+        hidden={showRobotPanel || showBulkScanner}
+        defaultExpanded={dockExpanded}
       />
 
       <div className="lg:hidden">
@@ -705,7 +823,7 @@ export default function TradingPage() {
       </div>
 
       <div
-        className="hidden lg:flex fixed bottom-6 right-6 z-40 bg-slate-900/95 backdrop-blur-md
+        className="hidden lg:flex fixed bottom-24 right-6 z-40 bg-slate-900/95 backdrop-blur-md
                    border border-slate-700 rounded-2xl p-1.5 shadow-2xl
                    ring-1 ring-black/40"
       >
@@ -731,6 +849,7 @@ export default function TradingPage() {
         </button>
       </div>
 
+      {/* Robot CONFIG modal only — the live run view now lives in RobotDock */}
       {showRobotPanel && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div
@@ -747,10 +866,18 @@ export default function TradingPage() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-6">
-              {isRobotRunning || robotTransactions.length > 0 ? (
-                <RunPanel open={true} onClose={() => setShowRobotPanel(false)} />
-              ) : (
-                <RobotConfigForm selectedMarketId={selectedMarketId} onRun={() => {}} />
+              <RobotConfigForm
+                selectedMarketId={selectedMarketId}
+                onRun={() => {
+                  setShowRobotPanel(false);
+                  setDockExpanded(true);
+                }}
+              />
+              {(isRobotRunning || robotTransactions.length > 0) && (
+                <p className="mt-4 text-center text-xs text-slate-400">
+                  A session is live — minimise this window and use the robot dock at the
+                  bottom to watch executions while the chart stays visible.
+                </p>
               )}
             </div>
           </div>
