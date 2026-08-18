@@ -1,14 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  Bot,
-  ChevronUp,
-  ChevronDown,
-  Square,
-  Settings2,
-  Activity,
-} from "lucide-react";
+import { ChevronUp, Square, Pause, Play } from "lucide-react";
+import * as robotRunner from "@/lib/robotRunner";
 import { useRobotRunner, stop } from "@/lib/robotRunner";
 import { RunPanel } from "./RunPanel";
 
@@ -18,9 +12,10 @@ type Props = {
   defaultExpanded?: boolean;
 };
 
-export default function RobotDock({ onConfigure, hidden, defaultExpanded }: Props) {
-  const { isRunning, transactions, sessionPnl, runs, config } = useRobotRunner();
+export default function RobotDock({ hidden, defaultExpanded }: Props) {
+  const { isRunning, transactions } = useRobotRunner();
   const [expanded, setExpanded] = useState(false);
+  const [paused, setPaused] = useState(false);
 
   useEffect(() => {
     if (defaultExpanded) setExpanded(true);
@@ -29,123 +24,80 @@ export default function RobotDock({ onConfigure, hidden, defaultExpanded }: Prop
   const hasSession = isRunning || transactions.length > 0;
   if (!hasSession || hidden) return null;
 
-  const wins = transactions.filter((t) => t.isWin).length;
-  const losses = transactions.filter((t) => !t.isWin && t.pnl !== 0).length;
-  const positive = sessionPnl >= 0;
+  const openCount = transactions.filter((t) => t.isOpen).length;
+  const closedCount = transactions.filter((t) => !t.isOpen).length;
+  const total = transactions.length || 1;
+  const progress = openCount > 0 ? 45 : Math.min(100, Math.round((closedCount / total) * 100));
+
+  const togglePause = () => {
+    const next = !paused;
+    setPaused(next);
+    const r = robotRunner as unknown as Record<string, (...args: unknown[]) => void>;
+    if (next) r["pause"]?.();
+    else (r["resume"] ?? r["start"])?.();
+  };
+
+  const barWrap =
+    "fixed inset-x-0 bottom-3 z-50 px-3 sm:px-4 pointer-events-none";
+  const barInner =
+    "pointer-events-auto mx-auto w-full rounded-2xl border border-slate-700 bg-slate-900/95 backdrop-blur-md shadow-2xl ring-1 ring-black/40";
+  const pauseBtn =
+    "flex h-10 w-[92px] shrink-0 items-center justify-center gap-1.5 rounded-bl-2xl bg-amber-500 text-[12px] font-bold text-white transition-colors hover:bg-amber-400 disabled:opacity-50";
+  const stopBtn =
+    "flex h-10 w-[92px] shrink-0 items-center justify-center gap-1.5 rounded-br-2xl bg-rose-600 text-[12px] font-bold text-white transition-colors hover:bg-rose-500 disabled:opacity-50";
+  const centerCell =
+    "flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-3";
+  const chevBtn =
+    "mx-auto flex h-7 w-full items-center justify-center rounded-t-2xl border-x border-t border-slate-800 bg-slate-900/95 text-slate-400 backdrop-blur-md hover:text-white";
 
   return (
     <>
-      {/* Collapsed dock — chart stays fully visible behind it */}
-      <div className="fixed inset-x-0 bottom-14 lg:bottom-0 z-40 px-2 sm:px-4 pb-2 pointer-events-none">
-        <div className="pointer-events-auto mx-auto w-full max-w-md md:max-w-2xl lg:max-w-4xl rounded-2xl border border-slate-700 bg-slate-900/95 backdrop-blur-md shadow-2xl ring-1 ring-black/40">
-          <div className="flex items-center gap-3 px-3 py-2.5">
-            <div className="relative shrink-0">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600">
-                <Bot className="h-4.5 w-4.5 text-white" />
-              </div>
-              {isRunning && (
-                <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse ring-2 ring-slate-900" />
-              )}
-            </div>
+      {!expanded && (
+        <div className={barWrap}>
+          <div className={barInner}>
+            {/* expand arrow */}
+            <button
+              onClick={() => setExpanded(true)}
+              title="Open run panel"
+              className={chevBtn}
+            >
+              <ChevronUp className="h-4 w-4" />
+            </button>
 
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="truncate text-[13px] font-semibold text-white">
-                  {config?.market || "Robot session"}
-                </span>
-                <span
-                  className={
-                    "shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold tracking-wide " +
-                    (isRunning
-                      ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/40"
-                      : "bg-slate-700/60 text-slate-300 border border-slate-600")
-                  }
-                >
-                  {isRunning ? "RUNNING" : "IDLE"}
-                </span>
-              </div>
-              <div className="mt-0.5 flex items-center gap-3 text-[11px] text-slate-400">
-                <span className="inline-flex items-center gap-1">
-                  <Activity className="h-3 w-3" />
-                  {runs} runs
-                </span>
-                <span className="text-emerald-400">{wins}W</span>
-                <span className="text-rose-400">{losses}L</span>
-              </div>
-            </div>
-
-            <div className="shrink-0 text-right">
-              <div
-                className={
-                  "font-mono text-sm font-bold tabular-nums " +
-                  (positive ? "text-emerald-400" : "text-rose-400")
-                }
-              >
-                {positive ? "+" : "-"}${Math.abs(sessionPnl).toFixed(2)}
-              </div>
-              <div className="text-[10px] text-slate-500">session P/L</div>
-            </div>
-
-            <div className="flex shrink-0 items-center gap-1">
-              {onConfigure && (
-                <button
-                  type="button"
-                  onClick={onConfigure}
-                  title="Configure robot"
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:text-white"
-                >
-                  <Settings2 className="h-4 w-4" />
-                </button>
-              )}
-              {isRunning && (
-                <button
-                  type="button"
-                  onClick={() => stop()}
-                  title="Stop robot"
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-rose-500/40 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20"
-                >
-                  <Square className="h-3.5 w-3.5" />
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setExpanded((v) => !v)}
-                title={expanded ? "Minimise" : "Expand trades"}
-                className="flex h-8 items-center gap-1 rounded-lg bg-blue-600 px-2.5 text-[11px] font-semibold text-white hover:bg-blue-500"
-              >
-                {expanded ? (
-                  <ChevronDown className="h-4 w-4" />
+            {/* Deriv-style minimised bar: Pause | Contract + progress | Stop */}
+            <div className="flex items-center justify-between px-2 py-2">
+              <button onClick={togglePause} className={pauseBtn}>
+                {paused ? (
+                  <Play className="h-4 w-4 fill-current" />
                 ) : (
-                  <ChevronUp className="h-4 w-4" />
+                  <Pause className="h-4 w-4 fill-current" />
                 )}
-                {expanded ? "Hide" : "Trades"}
+                {paused ? "Resume" : "Pause"}
+              </button>
+
+              <div className={centerCell}>
+                <span className="text-[11px] font-semibold text-white">Contract</span>
+                <div className="h-1.5 w-full max-w-[160px] overflow-hidden rounded-full bg-slate-800">
+                  <div
+                    className="h-full rounded-full bg-blue-500 transition-all duration-500"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </div>
+
+              <button
+                onClick={() => stop()}
+                disabled={!isRunning}
+                className={stopBtn}
+              >
+                <Square className="h-4 w-4 fill-current" />
+                Stop
               </button>
             </div>
           </div>
-
-          {/* Mini ticker of the last contracts, visible while minimised */}
-          {!expanded && transactions.length > 0 && (
-            <div className="flex items-center gap-1.5 overflow-x-auto border-t border-slate-800 px-3 py-2 no-scrollbar">
-              {transactions.slice(0, 14).map((t) => (
-                <span
-                  key={t.id}
-                  title={`${t.market} · ${t.pnl >= 0 ? "+" : ""}${t.pnl.toFixed(2)}`}
-                  className={
-                    "flex h-6 min-w-[28px] shrink-0 items-center justify-center rounded-md px-1.5 font-mono text-[10px] font-bold " +
-                    (t.isWin
-                      ? "bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30"
-                      : "bg-rose-500/15 text-rose-400 ring-1 ring-rose-500/30")
-                  }
-                >
-                  {t.isWin ? "W" : "L"}
-                </span>
-              ))}
-            </div>
-          )}
         </div>
-      </div>
+      )}
 
-      {/* Expanded — full run panel sheet */}
       <RunPanel open={expanded} onClose={() => setExpanded(false)} />
     </>
   );
