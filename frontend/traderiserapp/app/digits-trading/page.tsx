@@ -27,6 +27,7 @@ import RobotDock from "@/components/trading/RobotDock";
 
 import { RobotConfigForm } from "@/components/trading/RobotConfigPanel";
 import { useRobotRunner } from "@/lib/robotRunner";
+import { useRobotArm, useRunPanelOpen } from "@/lib/robotArm";
 
 import type { Account } from "@/types/account";
 import { api } from "@/lib/api";
@@ -639,6 +640,17 @@ export default function TradingPage() {
 
   const isManual = terminalTab === "manual";
 
+  /* Robot minimise / run-panel wiring */
+  const { armed, minimized } = useRobotArm();
+  const runPanelOpen = useRunPanelOpen();
+
+  useEffect(() => {
+    // Minimising the config panel collapses EVERYTHING into the dock.
+    if (minimized) setShowRobotPanel(false);
+    // Expanding from the dock (chevron) brings the config panel back.
+    else if (armed) setShowRobotPanel(true);
+  }, [minimized, armed]);
+
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
       <TopBar
@@ -808,13 +820,13 @@ export default function TradingPage() {
       <AIScannerFAB
         markets={markets}
         onStarted={() => setDockExpanded(true)}
-        hidden={showRobotPanel || showBulkScanner}
+        hidden={showRobotPanel || showBulkScanner || runPanelOpen}
       />
 
       {/* ---- Minimisable robot console (chart stays visible when collapsed) ---- */}
       <RobotDock
         onConfigure={() => setShowRobotPanel(true)}
-        hidden={showRobotPanel || showBulkScanner}
+        hidden={(showRobotPanel && !minimized) || showBulkScanner}
         defaultExpanded={dockExpanded}
       />
 
@@ -850,7 +862,7 @@ export default function TradingPage() {
       </div>
 
       {/* Robot CONFIG modal only — the live run view now lives in RobotDock */}
-      {showRobotPanel && (
+      {showRobotPanel && !minimized && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div
             className="w-full max-w-lg md:max-w-xl lg:max-w-3xl xl:max-w-4xl bg-slate-900 border border-slate-700 rounded-3xl overflow-hidden max-h-[95vh] flex flex-col shadow-2xl"

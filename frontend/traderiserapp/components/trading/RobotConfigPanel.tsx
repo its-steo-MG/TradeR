@@ -13,7 +13,8 @@ import {
 } from "@/components/ui/select";
 import { start, useRobotRunner } from "@/lib/robotRunner";
 import { api } from "@/lib/api";
-import { Play } from "lucide-react";
+import { armRobot, disarmRobot, useRobotArm } from "@/lib/robotArm";
+import { Play, Minimize2 } from "lucide-react";
 import { toast } from "sonner";
 
 import type { DigitContractKind } from "@/lib/types/positions";
@@ -42,6 +43,7 @@ export function RobotConfigForm({
   onRun,
 }: RobotConfigFormProps) {
   const { isRunning } = useRobotRunner();
+  const { minimized } = useRobotArm();
 
   const [robots, setRobots] = useState<Robot[]>([]);
   const [markets, setMarkets] = useState<Market[]>([]);
@@ -197,6 +199,47 @@ export function RobotConfigForm({
     }
   };
 
+  const buildConfig = () => {
+    if (!selectedMarketId) {
+      toast.error("Please select a volatility market");
+      return null;
+    }
+    if (!selectedRobot) {
+      toast.error("Please select an S-Digit robot");
+      return null;
+    }
+
+    const selectedMarket = markets.find((m) => m.id === selectedMarketId);
+    const isDigitWithBarrier = ["over", "under", "matches", "differs"].includes(
+      contractKind
+    );
+
+    return {
+      market: selectedMarket?.name || selectedMarket?.display_name || "Volatility Market",
+      contractKind,
+      barrier: isDigitWithBarrier ? Number(barrier) : undefined,
+      initialStake: Number(initialStake),
+      multiplier: Number(multiplier),
+      targetProfit: Number(targetProfit),
+      stopLoss: Number(stopLoss),
+      maxRuns: Number(maxRuns),
+      marketId: selectedMarketId,
+      robotId: selectedRobot.id,
+      robotName: selectedRobot.name,
+      marketLabel: selectedMarket?.display_name || selectedMarket?.name,
+    };
+  };
+
+  // Minimise: keep the settings ready in the dock, start later with RUN.
+  const handleMinimize = () => {
+    const cfg = buildConfig();
+    if (!cfg) return;
+    armRobot(cfg);
+    toast.success("Robot armed", {
+      description: "Tap RUN on the dock when you see your entry.",
+    });
+  };
+
   const handleRun = () => {
     if (!selectedMarketId) return toast.error("Please select a volatility market");
     if (!selectedRobot) return toast.error("Please select an S-Digit robot");
@@ -206,6 +249,7 @@ export function RobotConfigForm({
       contractKind
     );
 
+    disarmRobot();
     start({
       market: selectedMarket?.name || selectedMarket?.display_name || "Volatility Market",
       contractKind,
@@ -225,13 +269,26 @@ export function RobotConfigForm({
     });
   };
 
-  if (isRunning) {
+  // Hidden while running, or while collapsed into the RobotDock.
+  if (isRunning || minimized) {
     return null;
   }
 
   return (
     <div className="glass-card p-6 space-y-6 rounded-3xl overflow-visible">
-      <h2 className="text-2xl font-bold text-center">S-Digit Robot</h2>
+      <div className="flex items-center justify-between">
+        <span className="w-9" />
+        <h2 className="text-2xl font-bold text-center">S-Digit Robot</h2>
+        <button
+          type="button"
+          onClick={handleMinimize}
+          title="Minimise to dock"
+          className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-700 bg-slate-900/70 text-slate-300 transition-colors hover:text-white disabled:opacity-40"
+          disabled={!selectedRobot || !selectedMarketId}
+        >
+          <Minimize2 className="h-4 w-4" />
+        </button>
+      </div>
 
       {/* Select Robot */}
       <div className="relative z-50">
@@ -400,6 +457,13 @@ export function RobotConfigForm({
           </div>
 
           <div className="flex gap-3 pt-6">
+            <Button
+              variant="outline"
+              onClick={handleMinimize}
+              className="py-6 text-base rounded-2xl"
+            >
+              <Minimize2 className="mr-2 h-5 w-5" /> Minimise
+            </Button>
             <Button
               onClick={handleRun}
               className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-6 text-lg rounded-2xl"
