@@ -71,9 +71,20 @@ class RobotAdmin(admin.ModelAdmin):
 
 @admin.register(UserRobot)
 class UserRobotAdmin(admin.ModelAdmin):
-    list_display = ('user', 'robot', 'purchased_at', 'purchased_price')
-    list_filter = ('purchased_at',)
+    list_display = ('user', 'robot', 'win_rate', 'effective_win_rate_display', 'purchased_at', 'purchased_price')
+    list_filter = ('purchased_at', 'robot')
     search_fields = ('user__username', 'robot__name')
+    list_editable = ('win_rate',)
+    readonly_fields = ('purchased_at', 'purchased_price', 'effective_win_rate_display')
+    fields = ('user', 'robot', 'win_rate', 'effective_win_rate_display', 'purchased_at', 'purchased_price')
+
+    @admin.display(description='Effective win rate')
+    def effective_win_rate_display(self, obj):
+        if obj is None:
+            return '-'
+        rate = obj.get_effective_win_rate()
+        source = 'user override' if obj.win_rate is not None else 'robot default'
+        return f'{rate}% ({source})'
 
 
 @admin.register(TradingSetting)

@@ -271,49 +271,96 @@ class ForexRobotListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        account = get_trading_account(request.user)
-        if not account:
-            return Response({'error': 'No trading account found'}, status=403)
-
+        """
+        Always return all active robots (including EA).
+        EA purchase/run still require MT5 (enforced in PurchaseRobotView / ToggleRobotView).
+        Optional: ?ea_only=1 to return only EA robots.
+        """
         queryset = ForexRobot.objects.filter(is_active=True)
 
-        # Strong EA filtering based on platform
-        if account.platform != 'mt5':
-            queryset = queryset.filter(is_ea=False)
-        else:
-            # On MT5, show all, but you can prioritize EAs if you want
-            pass
+        ea_only = str(request.query_params.get("ea_only", "")).lower() in ("1", "true", "yes")
+        if ea_only:
+            queryset = queryset.filter(is_ea=True)
 
         serializer = ForexRobotSerializer(queryset, many=True)
-        return Response({'robots': serializer.data})
+        return Response({"robots": serializer.data})
 
 class PurchaseRobotView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, robot_id):
-        # Use correct account based on what user is currently using
-        account = get_trading_account(request.user)
-        if not account:
-            return Response({'error': 'No trading account found'}, status=status.HTTP_403_FORBIDDEN)
+        """
+        Purchase a forex robot.
 
+        - EA robots: ALWAYS charged against the user's MT5 wallet
+          (real preferred, then demo). Pro-FX balance is never used.
+        - Non-EA robots: use the normal trading account helper (Pro-FX first).
+        """
         try:
             robot = ForexRobot.objects.get(id=robot_id, is_active=True)
         except ForexRobot.DoesNotExist:
             return Response({'error': 'Robot not found or inactive'}, status=status.HTTP_404_NOT_FOUND)
 
-        # Block EA purchase if not on MT5
-        if robot.is_ea and account.platform != 'mt5':
-            return Response({'error': 'EA Robots can only be used on MT5 accounts'}, status=status.HTTP_400_BAD_REQUEST)
-
         if UserRobot.objects.filter(user=request.user, robot=robot).exists():
             return Response({'error': 'You already own this robot'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # ── Resolve which account / wallet to charge ──
+        if robot.is_ea:
+            # Optional client hint: 'mt5' (real) or 'mt5-demo'
+            requested_type = request.data.get('account_type')  # e.g. 'mt5' | 'mt5-demo'
+
+            mt5_qs = request.user.accounts.filter(platform='mt5')
+            if requested_type in ('mt5', 'mt5-demo'):
+                account = mt5_qs.filter(account_type=requested_type).first()
+                if not account:
+                    label = 'Real' if requested_type == 'mt5' else 'Demo'
+                    return Response(
+                        {'error': f'No MT5 {label} account found. Create one before purchasing an EA.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            else:
+                # Prefer real MT5, fall back to any MT5 account
+                account = (
+                    mt5_qs.filter(account_type='mt5').first()
+                    or mt5_qs.first()
+                )
+                if not account:
+                    return Response(
+                        {
+                            'error': (
+                                'EA robots must be purchased with an MT5 wallet. '
+                                'Please create an MT5 account first.'
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+        else:
+            account = get_trading_account(request.user)
+            if not account:
+                return Response({'error': 'No trading account found'}, status=status.HTTP_403_FORBIDDEN)
+
         usd = Currency.objects.get(code='USD')
-        wallet = Wallet.objects.get(account=account, wallet_type='main', currency=usd)
+        try:
+            wallet = Wallet.objects.get(account=account, wallet_type='main', currency=usd)
+        except Wallet.DoesNotExist:
+            return Response(
+                {'error': 'Wallet not found for the selected account'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         effective_price = robot.effective_price
 
         if wallet.balance < effective_price:
-            return Response({'error': 'Insufficient balance'}, status=status.HTTP_400_BAD_REQUEST)
+            wallet_label = 'MT5' if robot.is_ea else account.account_type
+            return Response(
+                {
+                    'error': (
+                        f'Insufficient {wallet_label} balance. '
+                        f'Need ${effective_price}, have ${wallet.balance}'
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         with transaction.atomic():
             wallet.balance -= effective_price
@@ -331,12 +378,15 @@ class PurchaseRobotView(APIView):
                 account=account,
                 amount=-effective_price,
                 transaction_type='withdrawal',
-                description=f'Purchased robot: {robot.name}'
+                description=f'Purchased robot: {robot.name}' + (' (EA / MT5 wallet)' if robot.is_ea else ''),
             )
 
         return Response({
             'message': 'Robot purchased successfully',
-            'user_robot': UserRobotSerializer(user_robot).data
+            'charged_from': 'mt5' if robot.is_ea else account.account_type,
+            'account_id': account.id,
+            'remaining_balance': str(wallet.balance),
+            'user_robot': UserRobotSerializer(user_robot).data,
         }, status=status.HTTP_201_CREATED)
 
 

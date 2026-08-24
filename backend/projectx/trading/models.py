@@ -102,12 +102,26 @@ class UserRobot(models.Model):
     robot = models.ForeignKey(Robot, on_delete=models.PROTECT)
     purchased_at = models.DateTimeField(auto_now_add=True)
     purchased_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    # Per-user win rate override. If null, falls back to robot.win_rate.
+    # Admin can set this so one user's copy of a robot behaves differently from others.
+    win_rate = models.IntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text="Per-user win rate for this purchased robot (0-100). Leave blank to use the robot's default win_rate."
+    )
 
     class Meta:
         unique_together = ('user', 'robot')
 
     def __str__(self):
         return f"{self.user.username} - {self.robot.name}"
+
+    def get_effective_win_rate(self):
+        """Return this user's win rate for the robot, or the robot default if not set."""
+        if self.win_rate is not None:
+            return self.win_rate
+        return self.robot.win_rate
 
 
 class TradingSetting(models.Model):

@@ -38,7 +38,8 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/55 backdrop-blur-md",
+        "fixed inset-0 z-50 bg-black/60 backdrop-blur-md",
+        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
         className
       )}
       {...props}
@@ -46,10 +47,6 @@ function DialogOverlay({
   )
 }
 
-/**
- * Clear Liquid Glass dialog — floating water-drop sheet with strong blur
- * and a wet light reflection along the top edge.
- */
 function DialogContent({
   className,
   children,
@@ -59,23 +56,30 @@ function DialogContent({
   showCloseButton?: boolean
 }) {
   return (
-    <DialogPortal data-slot="dialog-portal">
+    <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "liquid-glass-strong data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-[2.2rem] p-7 duration-200 sm:max-w-lg",
+          // Positioning & Centering
+          "fixed top-[50%] left-[50%] z-50 translate-x-[-50%] translate-y-[-50%]",
+          // Size
+          "w-full max-w-[calc(100%-1.5rem)] sm:max-w-lg",
+          // Style
+          "liquid-glass-strong grid gap-4 rounded-[1.75rem] p-5 sm:p-6",
+          // Animation
+          "duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
           className
         )}
         {...props}
       >
         {children}
+
         {showCloseButton && (
           <DialogPrimitive.Close
-            data-slot="dialog-close"
-            className="glass-bubble-icon absolute top-4 right-4 size-8 text-white/75 transition-all hover:text-white focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+            className="glass-bubble-icon absolute top-4 right-4 size-8 text-white/75 transition-all hover:text-white focus:outline-none disabled:pointer-events-none"
           >
-            <XIcon />
+            <XIcon className="size-4" />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
         )}
@@ -87,7 +91,6 @@ function DialogContent({
 function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
-      data-slot="dialog-header"
       className={cn("flex flex-col gap-2 text-center sm:text-left", className)}
       {...props}
     />
@@ -97,7 +100,6 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
 function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
-      data-slot="dialog-footer"
       className={cn(
         "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
         className
@@ -113,9 +115,8 @@ function DialogTitle({
 }: React.ComponentProps<typeof DialogPrimitive.Title>) {
   return (
     <DialogPrimitive.Title
-      data-slot="dialog-title"
       className={cn(
-        "text-lg leading-none font-semibold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]",
+        "text-lg font-semibold leading-none text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]",
         className
       )}
       {...props}
@@ -129,7 +130,6 @@ function DialogDescription({
 }: React.ComponentProps<typeof DialogPrimitive.Description>) {
   return (
     <DialogPrimitive.Description
-      data-slot="dialog-description"
       className={cn("text-sm text-white/70", className)}
       {...props}
     />

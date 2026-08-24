@@ -71,12 +71,16 @@ class TradeTypeSerializer(serializers.ModelSerializer):
 class UserRobotSerializer(serializers.ModelSerializer):
     robot = RobotSerializer(read_only=True)
     deriv_access_key = serializers.SerializerMethodField()
+    effective_win_rate = serializers.SerializerMethodField()
 
     def get_deriv_access_key(self, obj):
         """Return deriv_access_key only if the robot is a Deriv Premium Robot"""
         if getattr(obj.robot, 'is_deriv_robot', False) and obj.robot.deriv_access_key:
             return obj.robot.deriv_access_key
         return None
+
+    def get_effective_win_rate(self, obj):
+        return obj.get_effective_win_rate()
 
     class Meta:
         model = UserRobot
@@ -85,6 +89,8 @@ class UserRobotSerializer(serializers.ModelSerializer):
             'robot',
             'purchased_at',
             'purchased_price',
+            'win_rate',
+            'effective_win_rate',
             'deriv_access_key'
         ]
 

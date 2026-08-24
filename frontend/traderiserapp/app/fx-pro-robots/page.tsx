@@ -36,51 +36,6 @@ interface UserRobot {
   max_open_positions?: number
 }
 
-interface ForexRobotsResponse {
-  robots: Array<{
-    id: number
-    name: string
-    image_url?: string
-    image?: string
-    description?: string
-    price: string | number
-    discounted_price?: string | number
-    original_price?: string | number
-    effective_price?: string | number
-    win_rate_normal?: string | number
-    win_rate_sashi?: string | number
-    is_ea?: boolean
-    max_open_positions?: number
-  }>
-}
-
-interface MyForexRobotsResponse {
-  user_robots: Array<{
-    id: number
-    user: number
-    robot: {
-      id: number
-      name: string
-      image_url?: string
-      image?: string
-      description?: string
-      price: string | number
-      discounted_price?: string | number
-      original_price?: string | number
-      effective_price?: string | number
-      win_rate_normal?: string | number
-      win_rate_sashi?: string | number
-      is_ea?: boolean
-      max_open_positions?: number
-    }
-    is_running: boolean
-    purchased_at: string
-    last_trade_time?: string
-    is_ea?: boolean
-    max_open_positions?: number
-  }>
-}
-
 export default function FxProRobotsPage() {
   const [robots, setRobots] = useState<ForexRobot[]>([])
   const [myRobots, setMyRobots] = useState<UserRobot[]>([])
@@ -129,61 +84,107 @@ export default function FxProRobotsPage() {
       ])
 
       if (availableRes.data?.robots) {
-        const normalized: ForexRobot[] = availableRes.data.robots.map((r) => ({
-          id: r.id,
-          name: r.name,
-          image: r.image_url ?? r.image,
-          description: r.description ?? "No description",
-          price: Number(r.price),
-          discounted_price: r.discounted_price
-            ? Number(r.discounted_price)
-            : undefined,
-          original_price: r.original_price
-            ? Number(r.original_price)
-            : Number(r.price),
-          effective_price: r.effective_price
-            ? Number(r.effective_price)
-            : Number(r.price),
-          win_rate_normal: Number(r.win_rate_normal ?? 0),
-          win_rate_sashi: Number(r.win_rate_sashi ?? 0),
-          is_ea: r.is_ea || false,
-          max_open_positions: r.max_open_positions || 2,
-        }))
+        // Pro-FX page: ONLY non-EA robots (EA robots live on /ea-robots)
+        const normalized: ForexRobot[] = availableRes.data.robots
+          .filter((r: { is_ea?: boolean }) => !r.is_ea)
+          .map((r: {
+            id: number
+            name: string
+            image_url?: string
+            image?: string
+            description?: string
+            price: string | number
+            discounted_price?: string | number
+            original_price?: string | number
+            effective_price?: string | number
+            win_rate_normal?: string | number
+            win_rate_sashi?: string | number
+            is_ea?: boolean
+            max_open_positions?: number
+          }) => ({
+            id: r.id,
+            name: r.name,
+            image: r.image_url ?? r.image,
+            description: r.description ?? "No description",
+            price: Number(r.price),
+            discounted_price: r.discounted_price
+              ? Number(r.discounted_price)
+              : undefined,
+            original_price: r.original_price
+              ? Number(r.original_price)
+              : Number(r.price),
+            effective_price: r.effective_price
+              ? Number(r.effective_price)
+              : Number(r.price),
+            win_rate_normal: Number(r.win_rate_normal ?? 0),
+            win_rate_sashi: Number(r.win_rate_sashi ?? 0),
+            is_ea: false,
+            max_open_positions: r.max_open_positions || 2,
+          }))
         setRobots(normalized)
       }
 
       const purchasedRobotsList = purchasedRes.data?.user_robots ?? []
-      const normalizedMyRobots: UserRobot[] = purchasedRobotsList.map((ur) => ({
-        id: ur.id,
-        user: ur.user,
-        robot: {
-          id: ur.robot.id,
-          name: ur.robot.name,
-          image: ur.robot.image_url ?? ur.robot.image,
-          description: ur.robot.description ?? "No description",
-          price: Number(ur.robot.price),
-          discounted_price: ur.robot.discounted_price
-            ? Number(ur.robot.discounted_price)
-            : undefined,
-          original_price: ur.robot.original_price
-            ? Number(ur.robot.original_price)
-            : Number(ur.robot.price),
-          effective_price: ur.robot.effective_price
-            ? Number(ur.robot.effective_price)
-            : Number(ur.robot.price),
-          win_rate_normal: Number(ur.robot.win_rate_normal ?? 0),
-          win_rate_sashi: Number(ur.robot.win_rate_sashi ?? 0),
-          is_ea: ur.robot.is_ea || ur.is_ea || false,
+      // Pro-FX page: only show non-EA purchased robots
+      const normalizedMyRobots: UserRobot[] = purchasedRobotsList
+        .filter(
+          (ur: { is_ea?: boolean; robot?: { is_ea?: boolean } }) =>
+            !(ur.is_ea || ur.robot?.is_ea)
+        )
+        .map((ur: {
+          id: number
+          user: number
+          robot: {
+            id: number
+            name: string
+            image_url?: string
+            image?: string
+            description?: string
+            price: string | number
+            discounted_price?: string | number
+            original_price?: string | number
+            effective_price?: string | number
+            win_rate_normal?: string | number
+            win_rate_sashi?: string | number
+            is_ea?: boolean
+            max_open_positions?: number
+          }
+          is_running: boolean
+          purchased_at: string
+          last_trade_time?: string
+          is_ea?: boolean
+          max_open_positions?: number
+        }) => ({
+          id: ur.id,
+          user: ur.user,
+          robot: {
+            id: ur.robot.id,
+            name: ur.robot.name,
+            image: ur.robot.image_url ?? ur.robot.image,
+            description: ur.robot.description ?? "No description",
+            price: Number(ur.robot.price),
+            discounted_price: ur.robot.discounted_price
+              ? Number(ur.robot.discounted_price)
+              : undefined,
+            original_price: ur.robot.original_price
+              ? Number(ur.robot.original_price)
+              : Number(ur.robot.price),
+            effective_price: ur.robot.effective_price
+              ? Number(ur.robot.effective_price)
+              : Number(ur.robot.price),
+            win_rate_normal: Number(ur.robot.win_rate_normal ?? 0),
+            win_rate_sashi: Number(ur.robot.win_rate_sashi ?? 0),
+            is_ea: false,
+            max_open_positions:
+              ur.robot.max_open_positions || ur.max_open_positions || 2,
+          },
+          is_running: ur.is_running,
+          purchased_at: ur.purchased_at,
+          last_trade_time: ur.last_trade_time,
+          is_ea: false,
           max_open_positions:
             ur.robot.max_open_positions || ur.max_open_positions || 2,
-        },
-        is_running: ur.is_running,
-        purchased_at: ur.purchased_at,
-        last_trade_time: ur.last_trade_time,
-        is_ea: ur.robot.is_ea || ur.is_ea || false,
-        max_open_positions:
-          ur.robot.max_open_positions || ur.max_open_positions || 2,
-      }))
+        }))
 
       setMyRobots(normalizedMyRobots)
       setPurchasedRobotIds(new Set(normalizedMyRobots.map((ur) => ur.robot.id)))
@@ -219,9 +220,6 @@ export default function FxProRobotsPage() {
         return
       }
 
-      const isEA = userRobot.robot.is_ea || userRobot.is_ea
-      const wasRunning = userRobot.is_running
-
       const toggleResponse = await api.toggleForexRobot(userRobotId)
       if (toggleResponse.error) {
         toast.error(`Toggle failed: ${toggleResponse.error}`)
@@ -229,37 +227,7 @@ export default function FxProRobotsPage() {
       }
 
       const isNowRunning = toggleResponse.data?.is_running ?? false
-
-      if (!isNowRunning && isEA && wasRunning) {
-        const toastId = toast.loading(
-          "Stopping EA and closing all its positions..."
-        )
-
-        try {
-          const closeResponse = await api.closeEAPositions(userRobotId)
-          const closedCount = closeResponse.data?.closed_count || 0
-
-          toast.success(
-            `✅ EA Robot stopped. Closed ${closedCount} open position(s).`,
-            { id: toastId }
-          )
-        } catch (closeErr) {
-          console.error("Close EA positions failed:", closeErr)
-          toast.error(
-            "EA stopped, but failed to close positions. Please close them manually from Positions page.",
-            { id: toastId }
-          )
-        }
-      } else {
-        toast.success(
-          isNowRunning
-            ? isEA
-              ? "🚀 EA Bot Activated"
-              : "Robot started"
-            : "Robot stopped"
-        )
-      }
-
+      toast.success(isNowRunning ? "Robot started" : "Robot stopped")
       await fetchRobots()
     } catch (error) {
       console.error("Toggle error:", error)
@@ -288,14 +256,15 @@ export default function FxProRobotsPage() {
 
       <main className="flex-1 overflow-y-auto md:ml-0">
         <div className="p-4 md:p-8 max-w-7xl mx-auto">
-          {/* Header */}
           <div className="mb-8 flex items-center justify-between">
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <Zap className="w-8 h-8 text-pink-500" />
                 <h1 className="text-3xl font-bold">FX Pro Robots</h1>
               </div>
-              <p className="text-white/60">Buy and manage automated trading bots</p>
+              <p className="text-white/60">
+                Buy and manage Pro-FX automated trading bots (non-EA)
+              </p>
             </div>
             <button
               onClick={handleRefresh}
@@ -308,40 +277,38 @@ export default function FxProRobotsPage() {
             </button>
           </div>
 
-          {/* Tabs — card style liquid glass */}
-<div className="flex gap-2 mb-8 p-1.5 rounded-2xl bg-slate-900/80 border border-white/10">
-  <button
-    onClick={() => setActiveTab("available")}
-    className={`
-      relative flex-1 px-6 py-3 rounded-xl font-semibold text-sm transition-all
-      ${
-        activeTab === "available"
-          ? "drop-on-top bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/25"
-          : "text-white/50 hover:text-white hover:bg-white/5"
-      }
-    `}
-  >
-    <span className="relative z-[1]">Available Robots</span>
-  </button>
+          <div className="flex gap-2 mb-8 p-1.5 rounded-2xl bg-slate-900/80 border border-white/10">
+            <button
+              onClick={() => setActiveTab("available")}
+              className={`
+                relative flex-1 px-6 py-3 rounded-xl font-semibold text-sm transition-all
+                ${
+                  activeTab === "available"
+                    ? "drop-on-top bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/25"
+                    : "text-white/50 hover:text-white hover:bg-white/5"
+                }
+              `}
+            >
+              <span className="relative z-[1]">Available Robots</span>
+            </button>
 
-  <button
-    onClick={() => setActiveTab("purchased")}
-    className={`
-      relative flex-1 px-6 py-3 rounded-xl font-semibold text-sm transition-all
-      ${
-        activeTab === "purchased"
-          ? "drop-on-top bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/25"
-          : "text-white/50 hover:text-white hover:bg-white/5"
-      }
-    `}
-  >
-    <span className="relative z-[1]">
-      My Robots ({myRobots.length})
-    </span>
-  </button>
-</div>
+            <button
+              onClick={() => setActiveTab("purchased")}
+              className={`
+                relative flex-1 px-6 py-3 rounded-xl font-semibold text-sm transition-all
+                ${
+                  activeTab === "purchased"
+                    ? "drop-on-top bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/25"
+                    : "text-white/50 hover:text-white hover:bg-white/5"
+                }
+              `}
+            >
+              <span className="relative z-[1]">
+                My Robots ({myRobots.length})
+              </span>
+            </button>
+          </div>
 
-          {/* Available Robots */}
           {activeTab === "available" && (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {robots.length > 0 ? (
@@ -365,7 +332,6 @@ export default function FxProRobotsPage() {
                       key={robot.id}
                       className="relative bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl border border-white/10 overflow-hidden"
                     >
-                      {/* Soft top glass highlight */}
                       <div
                         className="absolute inset-x-0 top-0 h-[35%] pointer-events-none z-10"
                         style={{
@@ -373,12 +339,6 @@ export default function FxProRobotsPage() {
                             "linear-gradient(to bottom, rgba(255,255,255,0.08) 0%, transparent 100%)",
                         }}
                       />
-
-                      {robot.is_ea && (
-                        <div className="absolute top-3 left-3 z-20 bg-emerald-500 text-white text-xs px-3 py-1 rounded-full font-bold flex items-center gap-1">
-                          <Zap className="w-3 h-3" /> EA BOT
-                        </div>
-                      )}
 
                       {hasDiscount && (
                         <div className="drop-on-top absolute top-3 right-3 z-20 bg-gradient-to-r from-amber-500 to-orange-600 text-white px-4 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-lg">
@@ -427,14 +387,6 @@ export default function FxProRobotsPage() {
                               {winRate}%
                             </span>
                           </div>
-                          {robot.is_ea && (
-                            <div className="flex justify-between items-center">
-                              <span className="text-white/60">Max Positions:</span>
-                              <span className="font-bold text-emerald-400">
-                                {robot.max_open_positions}
-                              </span>
-                            </div>
-                          )}
                         </div>
 
                         <button
@@ -467,7 +419,6 @@ export default function FxProRobotsPage() {
             </div>
           )}
 
-          {/* Purchased Robots */}
           {activeTab === "purchased" && (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {myRobots.length > 0 ? (
@@ -479,7 +430,6 @@ export default function FxProRobotsPage() {
                   const wasPurchasedOnSale =
                     userRobot.robot.discounted_price != null &&
                     userRobot.robot.discounted_price > 0
-                  const isEA = userRobot.robot.is_ea
 
                   return (
                     <div
@@ -493,12 +443,6 @@ export default function FxProRobotsPage() {
                             "linear-gradient(to bottom, rgba(255,255,255,0.08) 0%, transparent 100%)",
                         }}
                       />
-
-                      {isEA && (
-                        <div className="absolute top-3 left-3 z-20 bg-emerald-500 text-white text-xs px-3 py-1 rounded-full font-bold flex items-center gap-1">
-                          <Zap className="w-3 h-3" /> EA BOT
-                        </div>
-                      )}
 
                       {wasPurchasedOnSale && (
                         <div className="drop-on-top absolute top-3 right-3 z-20 bg-gradient-to-r from-amber-500/80 to-orange-600/80 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
@@ -520,13 +464,8 @@ export default function FxProRobotsPage() {
                       <div className="relative z-[1] p-6">
                         <div className="flex items-start justify-between mb-4">
                           <div>
-                            <h3 className="text-xl font-bold flex items-center gap-2">
+                            <h3 className="text-xl font-bold">
                               {userRobot.robot.name}
-                              {isEA && (
-                                <span className="text-emerald-400 text-xs">
-                                  • EA
-                                </span>
-                              )}
                             </h3>
                             <p className="text-white/60 text-sm">
                               Purchased:{" "}
@@ -557,14 +496,6 @@ export default function FxProRobotsPage() {
                               {winRate}%
                             </span>
                           </div>
-                          {isEA && (
-                            <div className="flex justify-between items-center">
-                              <span className="text-white/60">Max Positions:</span>
-                              <span className="font-bold text-emerald-400">
-                                {userRobot.robot.max_open_positions}
-                              </span>
-                            </div>
-                          )}
                           {userRobot.last_trade_time && (
                             <div className="flex justify-between items-center">
                               <span className="text-white/60">Last Trade:</span>

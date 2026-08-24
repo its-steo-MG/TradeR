@@ -813,15 +813,20 @@ export const getForexRobots = () =>
   apiRequest<{ robots: ForexRobot[] }>("/forex/robots/")
 export const getMyForexRobots = () =>
   apiRequest<{ user_robots: UserRobot[] }>("/forex/my-robots/")
-export const purchaseForexRobot = (robotId: number) =>
+export const purchaseForexRobot = (
+  robotId: number,
+  options?: { account_type?: "mt5" | "mt5-demo" | string }
+) =>
   apiRequest<{
     message: string;
     user_robot: UserRobot;
-    purchased_price?: number;
-    discounted?: boolean;
+    charged_from?: string;
+    remaining_balance?: string;
   }>(`/forex/robots/${robotId}/purchase/`, {
-    method: "POST"
-  })
+    method: "POST",
+    body: JSON.stringify(options ?? {}),
+  });
+
 export const toggleForexRobot = (
   userRobotId: number,
   config?: { stake?: number; pair_id?: number; timeframe?: string }

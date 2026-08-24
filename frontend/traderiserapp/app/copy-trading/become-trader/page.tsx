@@ -59,12 +59,12 @@ export default function BecomeTraderPage() {
     return (
       <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-700">
         <Card className="glass-card border-emerald-500/20">
-          <CardContent className="p-12 text-center space-y-6">
+          <CardContent className="p-4 sm:p-6 sm:p-12 text-center space-y-6">
             <div className="w-20 h-20 mx-auto bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full flex items-center justify-center">
               <CheckCircle2 size={40} className="text-white" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-3xl font-bold">Application Submitted!</h2>
+              <h2 className="text-2xl sm:text-3xl font-bold">Application Submitted!</h2>
               <p className="text-white/60 text-lg">
                 Your application to become a signal provider is under review. We will notify you within 24-48 hours.
               </p>
@@ -107,7 +107,7 @@ export default function BecomeTraderPage() {
       {/* Benefits Grid */}
       <div className="grid md:grid-cols-3 gap-4">
         <Card className="glass-card border-white/5">
-          <CardContent className="p-6 space-y-3">
+          <CardContent className="p-4 sm:p-6 space-y-3">
             <div className="w-12 h-12 bg-pink-500/10 rounded-xl flex items-center justify-center">
               <DollarSign size={24} className="text-pink-400" />
             </div>
@@ -119,7 +119,7 @@ export default function BecomeTraderPage() {
         </Card>
 
         <Card className="glass-card border-white/5">
-          <CardContent className="p-6 space-y-3">
+          <CardContent className="p-4 sm:p-6 space-y-3">
             <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center">
               <Users size={24} className="text-blue-400" />
             </div>
@@ -131,7 +131,7 @@ export default function BecomeTraderPage() {
         </Card>
 
         <Card className="glass-card border-white/5">
-          <CardContent className="p-6 space-y-3">
+          <CardContent className="p-4 sm:p-6 space-y-3">
             <div className="w-12 h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center">
               <Zap size={24} className="text-emerald-400" />
             </div>
@@ -218,7 +218,7 @@ export default function BecomeTraderPage() {
             </div>
 
             {/* Allocation Settings */}
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
               {/* Min Allocation */}
               <div className="space-y-2">
                 <Label htmlFor="min_allocation" className="text-white/80">
@@ -321,7 +321,7 @@ export default function BecomeTraderPage() {
 
       {/* Expected Timeline */}
       <Card className="glass-card border-white/5">
-        <CardContent className="p-6">
+        <CardContent className="p-4 sm:p-6">
           <h3 className="font-bold text-lg mb-4">What Happens Next?</h3>
           <div className="space-y-4">
             <div className="flex gap-4">

@@ -155,7 +155,7 @@ export function Sidebar({
       items = [
         { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
         { href: "/mt5", label: "MT5 Trading", icon: TrendingUp },
-        { href: "/fx-pro-robots", label: "Pro-Robots", icon: Bot },
+        { href: "/ea-robots", label: "EA Robots", icon: Zap },
         { href: "/wallet", label: "Wallet", icon: WalletIcon },
         { href: "/profile", label: "Profile", icon: User },
         { href: "/customercare", label: "Customer Care", icon: MessageSquare },

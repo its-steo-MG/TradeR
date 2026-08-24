@@ -63,11 +63,18 @@ class PurchaseRobotView(APIView):
                 if robot.available_for_demo:
                     user_robot, created = UserRobot.objects.get_or_create(
                         user=request.user, 
-                        robot=robot
+                        robot=robot,
+                        defaults={
+                            'purchased_price': Decimal('0.00'),
+                            'win_rate': robot.win_rate,
+                        }
                     )
                     if created:
-                        user_robot.purchased_price = Decimal('0.00')
-                        user_robot.save()
+                        pass  # defaults already applied
+                    elif user_robot.win_rate is None:
+                        # Backfill if older record had no per-user rate
+                        user_robot.win_rate = robot.win_rate
+                        user_robot.save(update_fields=['win_rate'])
 
                     response_data = {
                         'message': 'Robot assigned for demo use',
@@ -101,9 +108,12 @@ class PurchaseRobotView(APIView):
                 description=description
             )
 
-            user_robot = UserRobot.objects.create(user=request.user, robot=robot)
-            user_robot.purchased_price = effective_price
-            user_robot.save()
+            user_robot = UserRobot.objects.create(
+                user=request.user,
+                robot=robot,
+                purchased_price=effective_price,
+                win_rate=robot.win_rate,  # copy robot default; admin can override later
+            )
 
             response_data = {
                 'message': 'Robot purchased successfully',
@@ -188,13 +198,19 @@ class PlaceTradeView(APIView):
             effective_sashi = user.is_sashi or is_demo
 
             used_robot = None
+            user_robot_obj = None  # for per-user win_rate
             if robot_id:
                 robot = Robot.objects.get(id=robot_id)
                 if is_demo:
                     if not robot.available_for_demo:
                         return Response({'error': 'Robot not available for demo'}, status=status.HTTP_400_BAD_REQUEST)
+                    user_robot_obj, _ = UserRobot.objects.get_or_create(
+                        user=user,
+                        robot=robot,
+                        defaults={'purchased_price': Decimal('0.00'), 'win_rate': robot.win_rate},
+                    )
                 else:
-                    UserRobot.objects.get(user=user, robot=robot)
+                    user_robot_obj = UserRobot.objects.get(user=user, robot=robot)
                 used_robot = robot
 
             martingale_mult = TradingSetting.get_instance().martingale_multiplier
@@ -207,8 +223,14 @@ class PlaceTradeView(APIView):
             account.balance = account.balance - current_amount
 
             if used_robot:
-                robot_rate = used_robot.win_rate / 100.0
-                win_prob = min(0.90, robot_rate)
+                # Prefer this user's UserRobot.win_rate; fall back to robot default
+                if user_robot_obj is not None:
+                    effective_rate = user_robot_obj.get_effective_win_rate()
+                else:
+                    effective_rate = used_robot.win_rate
+                robot_rate = effective_rate / 100.0
+                # Admin-controlled: allow full 0-100% for per-user override
+                win_prob = max(0.0, min(1.0, robot_rate))
             else:
                 win_prob = 0.80 if (effective_sashi and martingale_level == 0) else 0.95 if effective_sashi else 0.20
 

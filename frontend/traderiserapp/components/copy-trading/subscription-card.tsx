@@ -77,7 +77,7 @@ export function SubscriptionCard({ subscription, onUpdate }: SubscriptionCardPro
 
   return (
     <Card className={`glass-card transition-all ${subscription.is_active ? "border-emerald-500/20 hover:border-emerald-500/40" : "border-white/5 opacity-70"}`}>
-      <CardContent className="p-6 space-y-4">
+      <CardContent className="p-4 sm:p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Avatar className="w-12 h-12 border-2 border-pink-500/30">
@@ -92,7 +92,7 @@ export function SubscriptionCard({ subscription, onUpdate }: SubscriptionCardPro
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
           <div className="bg-white/5 p-3 rounded-lg space-y-1 text-center">
             <div className="flex items-center justify-center gap-1 text-white/40">
               <DollarSign size={12} />
@@ -134,7 +134,7 @@ export function SubscriptionCard({ subscription, onUpdate }: SubscriptionCardPro
         </div>
       </CardContent>
 
-      <CardFooter className="p-6 pt-0 flex gap-3">
+      <CardFooter className="p-4 sm:p-6 pt-0 flex flex-col sm:flex-row gap-2 sm:gap-3">
         {subscription.is_active ? (
           <Button
             onClick={handlePause}

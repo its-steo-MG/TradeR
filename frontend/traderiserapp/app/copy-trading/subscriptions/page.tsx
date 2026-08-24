@@ -99,7 +99,7 @@ export default function SubscriptionsPage() {
     return (
       <div className="space-y-8 animate-in fade-in duration-700">
         <Skeleton className="h-32 bg-white/5" />
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="h-48 bg-white/5" />
           ))}
@@ -121,9 +121,9 @@ export default function SubscriptionsPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         <Card className="glass-card border-white/5">
-          <CardContent className="p-6 space-y-2">
+          <CardContent className="p-4 sm:p-6 space-y-2">
             <div className="flex items-center gap-2 text-blue-400">
               <Users size={18} />
               <span className="text-sm text-white/50 uppercase font-semibold">
@@ -138,7 +138,7 @@ export default function SubscriptionsPage() {
         </Card>
 
         <Card className="glass-card border-white/5">
-          <CardContent className="p-6 space-y-2">
+          <CardContent className="p-4 sm:p-6 space-y-2">
             <div className="flex items-center gap-2 text-amber-400">
               <TrendingUp size={18} />
               <span className="text-sm text-white/50 uppercase font-semibold">
@@ -151,7 +151,7 @@ export default function SubscriptionsPage() {
         </Card>
 
         <Card className="glass-card border-white/5">
-          <CardContent className="p-6 space-y-2">
+          <CardContent className="p-4 sm:p-6 space-y-2">
             <div className="flex items-center gap-2 text-pink-400">
               <TrendingUp size={18} />
               <span className="text-sm text-white/50 uppercase font-semibold">
@@ -183,7 +183,7 @@ export default function SubscriptionsPage() {
             <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
             Active Subscriptions
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             {activeSubscriptions.map((sub) => (
               <SubscriptionCard
                 key={sub.id}
@@ -202,7 +202,7 @@ export default function SubscriptionsPage() {
             <span className="w-2 h-2 bg-white/30 rounded-full" />
             Paused Subscriptions
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             {pausedSubscriptions.map((sub) => (
               <SubscriptionCard
                 key={sub.id}
