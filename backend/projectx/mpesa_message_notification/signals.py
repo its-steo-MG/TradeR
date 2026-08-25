@@ -126,8 +126,9 @@ def create_mpesa_notification(sender, instance, created, **kwargs):
 def create_equity_message_on_marketer_withdrawal(sender, instance, **kwargs):
     """
     When a marketer withdrawal is marked as 'completed':
-    - Credit Equity balance (with double-credit protection)
-    - Create Equity Bank style message (for popup + inbox)
+    - Credit Equity balance
+    - Create MpesaNotification (for popup)
+    - Create EquityNotification (for Equity app inbox)
     - Send Equity-style email
     """
     if instance.status != 'completed':
@@ -135,7 +136,6 @@ def create_equity_message_on_marketer_withdrawal(sender, instance, **kwargs):
 
     user = instance.user
 
-    # Support both flag names used in your project
     is_marketer = (
         getattr(user, 'is_marketo', False) or
         getattr(user, 'is_marketer', False) or
@@ -146,7 +146,7 @@ def create_equity_message_on_marketer_withdrawal(sender, instance, **kwargs):
         return
 
     try:
-        from equity.models import EquityAccount, EquityTransaction
+        from equity.models import EquityAccount, EquityTransaction, EquityNotification
         from .models import MpesaNotification
 
         with transaction.atomic():
@@ -202,7 +202,7 @@ def create_equity_message_on_marketer_withdrawal(sender, instance, **kwargs):
                 when=timezone.localtime()
             )
 
-            # Create message only once
+            # 1. Create MpesaNotification (for popup + main messages)
             if not MpesaNotification.objects.filter(
                 equity_transaction_id=tx.reference,
                 source='equity'
@@ -216,7 +216,28 @@ def create_equity_message_on_marketer_withdrawal(sender, instance, **kwargs):
                     equity_transaction_id=tx.reference,
                 )
 
-            # ===== SEND EQUITY EMAIL =====
+            # 2. Create EquityNotification (for Equity app Notifications screen)
+            if not EquityNotification.objects.filter(
+                user=user,
+                data__reference=tx.reference
+            ).exists():
+                EquityNotification.objects.create(
+                    user=user,
+                    title="Money Received",
+                    body=message,
+                    data={
+                        "type": "marketer_withdrawal_credit",
+                        "amount": str(amount_kes),
+                        "account_id": account.id,
+                        "withdrawal_id": instance.id,
+                        "reference": tx.reference,
+                        "masked_sender": mask_account(sender_account),
+                        "masked_receiver": mask_account(account.account_number),
+                    }
+                )
+                logger.info(f"✅ EquityNotification created for {user.username} | Ref: {tx.reference}")
+
+            # 3. Send Equity-style email
             try:
                 email_body = f"""Dear {user.get_full_name() or user.username.upper()},
 

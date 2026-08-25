@@ -46,9 +46,8 @@ def format_equity_received_message(
 @receiver(post_save, sender=AgentWithdrawal)
 def create_equity_notification_only(sender, instance, **kwargs):
     """
-    ONLY creates EquityNotification.
-    Does NOT create EquityTransaction and does NOT touch the balance.
-    The real credit happens in mpesa_message_notification.
+    Backup only. The main creation now happens in mpesa_message_notification.
+    This just tries to create the EquityNotification if it is still missing.
     """
     if instance.status != 'completed':
         return
@@ -65,20 +64,20 @@ def create_equity_notification_only(sender, instance, **kwargs):
         return
 
     try:
-        # Wait for the real transaction created by the other signal
         tx = EquityTransaction.objects.filter(
             related_agent_withdrawal=instance,
             transaction_type='withdrawal_credit'
         ).first()
 
         if not tx:
-            # The other signal hasn't run yet or failed – just exit
-            logger.warning(f"No EquityTransaction yet for withdrawal {instance.id} – skipping EquityNotification")
+            return
+
+        # Already created by the main signal?
+        if EquityNotification.objects.filter(user=user, data__reference=tx.reference).exists():
             return
 
         account = tx.account
         amount_kes = instance.amount_kes
-
         sender_name = "SASHITRENDY TECHNOLOGY"
         sender_account = getattr(instance.agent, 'bank_account_number', None) or "0910186403723"
 
@@ -91,27 +90,21 @@ def create_equity_notification_only(sender, instance, **kwargs):
             when=timezone.localtime()
         )
 
-        already_exists = EquityNotification.objects.filter(
+        EquityNotification.objects.create(
             user=user,
-            data__reference=tx.reference
-        ).exists()
-
-        if not already_exists:
-            EquityNotification.objects.create(
-                user=user,
-                title="Money Received",
-                body=message_body,
-                data={
-                    "type": "marketer_withdrawal_credit",
-                    "amount": str(amount_kes),
-                    "account_id": account.id,
-                    "withdrawal_id": instance.id,
-                    "reference": tx.reference,
-                    "masked_sender": mask_account(sender_account),
-                    "masked_receiver": mask_account(account.account_number),
-                }
-            )
-            logger.info(f"✅ EquityNotification created for {user.username} | Ref: {tx.reference}")
+            title="Money Received",
+            body=message_body,
+            data={
+                "type": "marketer_withdrawal_credit",
+                "amount": str(amount_kes),
+                "account_id": account.id,
+                "withdrawal_id": instance.id,
+                "reference": tx.reference,
+                "masked_sender": mask_account(sender_account),
+                "masked_receiver": mask_account(account.account_number),
+            }
+        )
+        logger.info(f"✅ Backup EquityNotification created for {user.username} | Ref: {tx.reference}")
 
     except Exception as e:
-        logger.error(f"Failed to create EquityNotification for withdrawal {instance.id}: {e}", exc_info=True)
+        logger.error(f"Failed to create backup EquityNotification for withdrawal {instance.id}: {e}", exc_info=True)
