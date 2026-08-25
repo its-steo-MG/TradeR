@@ -2,16 +2,13 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from django.db.models import Q
 from .models import MpesaNotification
 from .serializers import MpesaNotificationSerializer
 from accounts.authentication import SuspendedUserJWTAuthentication
-from rest_framework.permissions import IsAuthenticated
-from accounts.authentication import SuspendedUserJWTAuthentication
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from mpesa_simulator.models import MpesaUser
+
 
 class MpesaNotificationsView(APIView):
     permission_classes = [IsAuthenticated]
@@ -19,13 +16,22 @@ class MpesaNotificationsView(APIView):
 
     def get(self, request):
         try:
-            notifications = MpesaNotification.objects.filter(
-                mpesa_user=request.user.mpesa_user
-            )[:50]
+            # Return both M-Pesa + Equity messages for this user
+            q = Q(user=request.user)
+
+            if hasattr(request.user, 'mpesa_user') and request.user.mpesa_user:
+                q |= Q(mpesa_user=request.user.mpesa_user)
+
+            notifications = (
+                MpesaNotification.objects
+                .filter(q)
+                .order_by('-created_at')[:50]
+            )
             serializer = MpesaNotificationSerializer(notifications, many=True)
             return Response(serializer.data)
-        except Exception:
-            return Response({'error': 'M-Pesa not connected'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 
 class MarkNotificationReadView(APIView):
     permission_classes = [IsAuthenticated]
@@ -33,32 +39,29 @@ class MarkNotificationReadView(APIView):
 
     def post(self, request, pk):
         try:
-            notification = MpesaNotification.objects.get(
-                pk=pk, 
-                mpesa_user=request.user.mpesa_user
-            )
+            q = Q(pk=pk, user=request.user)
+            if hasattr(request.user, 'mpesa_user') and request.user.mpesa_user:
+                q |= Q(pk=pk, mpesa_user=request.user.mpesa_user)
+
+            notification = MpesaNotification.objects.get(q)
             notification.is_read = True
-            notification.save()
+            notification.save(update_fields=['is_read'])
             return Response({'status': 'read'})
         except MpesaNotification.DoesNotExist:
             return Response({'error': 'Notification not found'}, status=status.HTTP_404_NOT_FOUND)
-        
+
+
 class ConnectMessagesView(APIView):
     permission_classes = [IsAuthenticated]
     authentication_classes = [SuspendedUserJWTAuthentication]
 
     def post(self, request):
-        """Mark messages as connected for the user"""
-        try:
-            # You can add logic here later (e.g. create a flag in User or MpesaUser)
-            # For now, we just return success so frontend stops showing "Connect" button
-            return Response({
-                'status': 'success',
-                'message': 'Messages connected successfully'
-            })
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        
+        return Response({
+            'status': 'success',
+            'message': 'Messages connected successfully'
+        })
+
+
 class MpesaMessagesLoginView(APIView):
     permission_classes = []
 

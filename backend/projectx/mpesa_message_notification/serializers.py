@@ -1,9 +1,10 @@
 from rest_framework import serializers
 from .models import MpesaNotification
 
+
 class MpesaNotificationSerializer(serializers.ModelSerializer):
-    mpesa_id = serializers.CharField(source='mpesa_transaction.mpesa_id', read_only=True)
-    transaction_type = serializers.CharField(source='mpesa_transaction.transaction_type', read_only=True)
+    mpesa_id = serializers.CharField(source='mpesa_transaction.mpesa_id', read_only=True, allow_null=True)
+    transaction_type = serializers.CharField(source='mpesa_transaction.transaction_type', read_only=True, allow_null=True)
     
     class Meta:
         model = MpesaNotification
@@ -15,6 +16,11 @@ class MpesaNotificationSerializer(serializers.ModelSerializer):
             'caller_id',
             'is_read',
             'created_at',
-            'transaction_type'
+            'transaction_type',
+            'source',
+            'equity_transaction_id',
         ]
-        read_only_fields = ['mpesa_id', 'notification_type', 'message', 'caller_id', 'created_at']
+        read_only_fields = [
+            'mpesa_id', 'notification_type', 'message', 
+            'caller_id', 'created_at', 'source', 'equity_transaction_id'
+        ]

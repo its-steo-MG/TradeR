@@ -47,6 +47,7 @@ CORS_ALLOWED_ORIGINS = [
     'https://traderiserapp.com',
     'https://traderiserdigister.vercel.app',
     'https://messages-apktrader.vercel.app',
+    'https://https://equity-mobile-kenya.vercel.app',
    
 ]
 # REQUIRED FOR DJANGO ADMIN POST/DELETE FROM FRONTEND
@@ -65,6 +66,7 @@ CSRF_TRUSTED_ORIGINS = [
     'https://traderiserapp.com',
     'https://traderiserdigister.vercel.app',
     'https://messages-apktrader.vercel.app',
+    'https://https://equity-mobile-kenya.vercel.app',
   
 ]
 
@@ -87,6 +89,7 @@ INSTALLED_APPS = [
     'agents',
     'customercare',
     'mt5',
+    'equity',
     'notifications',
     'management.apps.ManagementConfig',
     'traderpulse',
