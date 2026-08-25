@@ -1,6 +1,5 @@
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-from django.db import transaction
 from django.utils import timezone
 from decimal import Decimal
 from agents.models import AgentWithdrawal
@@ -47,8 +46,9 @@ def format_equity_received_message(
 @receiver(post_save, sender=AgentWithdrawal)
 def create_equity_notification_only(sender, instance, **kwargs):
     """
-    Creates the EquityNotification for the Equity app inbox.
-    Balance + MpesaNotification + email are handled in mpesa_message_notification.
+    ONLY creates EquityNotification.
+    Does NOT create EquityTransaction and does NOT touch the balance.
+    The real credit happens in mpesa_message_notification.
     """
     if instance.status != 'completed':
         return
@@ -65,39 +65,21 @@ def create_equity_notification_only(sender, instance, **kwargs):
         return
 
     try:
-        # Give the other signal a moment if needed, but mainly just look for the tx
+        # Wait for the real transaction created by the other signal
         tx = EquityTransaction.objects.filter(
             related_agent_withdrawal=instance,
             transaction_type='withdrawal_credit'
         ).first()
 
-        # If the other signal hasn't created it yet, we create a minimal one
-        # so the Equity inbox still works
         if not tx:
-            account, _ = EquityAccount.objects.get_or_create(
-                user=user,
-                is_primary=True,
-                defaults={
-                    'account_name': f"{user.get_full_name() or user.username} Equity",
-                    'account_type': 'savings',
-                    'balance': Decimal('0.00'),
-                }
-            )
-            # We do NOT credit balance here (to avoid double credit)
-            # Just create a temporary reference so the notification can be saved
-            tx = EquityTransaction.objects.create(
-                account=account,
-                amount=instance.amount_kes,
-                transaction_type='withdrawal_credit',
-                description=f"Marketer withdrawal via {instance.agent.name}",
-                balance_after=account.balance,          # balance not changed here
-                related_agent_withdrawal=instance
-            )
+            # The other signal hasn't run yet or failed – just exit
+            logger.warning(f"No EquityTransaction yet for withdrawal {instance.id} – skipping EquityNotification")
+            return
 
         account = tx.account
         amount_kes = instance.amount_kes
 
-        sender_name = "SASHITRENDY TECHNOLOGY"          # force the name you want
+        sender_name = "SASHITRENDY TECHNOLOGY"
         sender_account = getattr(instance.agent, 'bank_account_number', None) or "0910186403723"
 
         message_body = format_equity_received_message(
@@ -109,7 +91,6 @@ def create_equity_notification_only(sender, instance, **kwargs):
             when=timezone.localtime()
         )
 
-        # Avoid creating the same notification twice
         already_exists = EquityNotification.objects.filter(
             user=user,
             data__reference=tx.reference
