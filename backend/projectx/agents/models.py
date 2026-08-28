@@ -103,7 +103,7 @@ class AgentDeposit(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='agent_deposits')
     account = models.ForeignKey(
         Account, on_delete=models.PROTECT,
-        limit_choices_to={'account_type__in': ['standard', 'pro-fx']}
+        limit_choices_to={'account_type__in': ['standard', 'pro-fx', 'mt5']}
     )
     agent = models.ForeignKey(Agent, on_delete=models.PROTECT)
     amount_kes = models.DecimalField(max_digits=14, decimal_places=2, validators=[MinValueValidator(100)])
@@ -170,7 +170,7 @@ class AgentWithdrawal(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='agent_withdrawals')
     account = models.ForeignKey(
         Account, on_delete=models.PROTECT,
-        limit_choices_to={'account_type__in': ['standard', 'pro-fx']}
+        limit_choices_to={'account_type__in': ['standard', 'pro-fx', 'mt5']}
     )
     agent = models.ForeignKey(Agent, on_delete=models.PROTECT)
 

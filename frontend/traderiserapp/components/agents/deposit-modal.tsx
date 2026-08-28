@@ -49,6 +49,7 @@ const formatAccountLabel = (type: string, balance: number | string | undefined) 
   const map: Record<string, string> = {
     standard: "TradR Account",
     "pro-fx": "Pro-FX Account",
+    mt5: "MT5 Account",
   }
   const name = map[type] ?? type
   const safeBalance = balance ?? 0
@@ -83,7 +84,7 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
 
         const allAccounts = res.data?.user?.accounts ?? []
         const allowed = allAccounts.filter((a) =>
-          ["standard", "pro-fx"].includes(a.account_type)
+          ["standard", "pro-fx", "mt5"].includes(a.account_type)
         )
 
         setAccounts(allowed)

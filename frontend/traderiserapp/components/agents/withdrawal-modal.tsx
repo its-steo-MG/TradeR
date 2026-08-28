@@ -47,7 +47,7 @@ export default function WithdrawalModal({
           res.data as { user?: { accounts?: UserAccount[] } }
         )?.user?.accounts ?? []) as UserAccount[]
         const allowed = accountsData.filter((a: UserAccount) =>
-          ["standard", "pro-fx"].includes(a.account_type)
+          ["standard", "pro-fx", "mt5"].includes(a.account_type)
         )
         setAccounts(allowed)
         if (allowed[0]) setAccountId(allowed[0].id)
@@ -195,7 +195,7 @@ export default function WithdrawalModal({
                 >
                   {accounts.map((a) => (
                     <option key={a.id} value={a.id}>
-                      {a.account_type === "standard" ? "TradR" : "Pro-FX"} • $
+                      {a.account_type === "standard" ? "TradR" : a.account_type === "pro-fx" ? "Pro-FX" : "MT5"} • $
                       {a.balance}
                     </option>
                   ))}

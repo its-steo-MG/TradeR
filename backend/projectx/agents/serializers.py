@@ -38,7 +38,7 @@ class AgentDepositSerializer(serializers.ModelSerializer):
         error_messages={'required': 'Agent ID is required'}
     )
     account = serializers.PrimaryKeyRelatedField(
-        queryset=Account.objects.all(),
+        queryset=Account.objects.filter(account_type__in=['standard', 'pro-fx', 'mt5']),
         required=True,
         error_messages={'required': 'Account ID is required'}
     )
@@ -161,7 +161,7 @@ class AgentWithdrawalSerializer(serializers.ModelSerializer):
         error_messages={'required': 'Agent ID is required'}
     )
     account = serializers.PrimaryKeyRelatedField(
-        queryset=Account.objects.filter(account_type__in=['standard', 'pro-fx']),
+        queryset=Account.objects.filter(account_type__in=['standard', 'pro-fx', 'mt5']),
         required=True,
         error_messages={'required': 'Account ID is required'}
     )
