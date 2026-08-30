@@ -24,10 +24,11 @@ import AIScannerFAB from "@/components/trading/AIScannerFAB";
 import TerminalTabs, { type TerminalTab } from "@/components/trading/TerminalTabs";
 import ManualTrader from "@/components/trading/ManualTrader";
 import RobotDock from "@/components/trading/RobotDock";
+import AnalysisTool from "@/components/trading/analysis/AnalysisTool";
 
 import { RobotConfigForm } from "@/components/trading/RobotConfigPanel";
 import { useRobotRunner } from "@/lib/robotRunner";
-import { useRobotArm, useRunPanelOpen } from "@/lib/robotArm";
+import { armRobot, useRobotArm, useRunPanelOpen } from "@/lib/robotArm";
 
 import type { Account } from "@/types/account";
 import { api } from "@/lib/api";
@@ -639,6 +640,7 @@ export default function TradingPage() {
     mode === "evenodd" ? "even" : mode === "matches" ? "matches" : "over";
 
   const isManual = terminalTab === "manual";
+  const isAnalysis = terminalTab === "analysis";
 
   /* Robot minimise / run-panel wiring */
   const { armed, minimized } = useRobotArm();
@@ -674,13 +676,15 @@ export default function TradingPage() {
           setShowBulkScanner(false);
           setTerminalTab(t);
         }}
-        locked={["botbuilder", "dashboard", "analysis"]}
+        locked={["botbuilder", "dashboard"]}
         badges={{ bulk: isRobotRunning ? "LIVE" : undefined }}
       />
 
-      <div className="px-3 sm:px-5 lg:px-8 pt-2">
-        <ModeTabs mode={mode} onChange={(m) => { sfx.click(); setMode(m); }} />
-      </div>
+      {!isAnalysis && (
+        <div className="px-3 sm:px-5 lg:px-8 pt-2">
+          <ModeTabs mode={mode} onChange={(m) => { sfx.click(); setMode(m); }} />
+        </div>
+      )}
 
       {/* Bulk scanner has no top button any more — it is driven by the
           "Bulk Scanner" workspace tab. Rendered headless (trigger hidden). */}
@@ -694,7 +698,54 @@ export default function TradingPage() {
 
       <div className="flex-1 overflow-y-auto pb-32 lg:pb-24">
         <div className="mx-auto w-full max-w-md md:max-w-2xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px] px-3 sm:px-5 lg:px-8 py-4 lg:py-6">
-          {tab === "trade" ? (
+          {isAnalysis ? (
+            <AnalysisTool
+              activeMarket={selectedMarket?.name ?? undefined}
+              onUseSignal={(cfg, sig) => {
+                sfx.click();
+
+                // Keep DTrader's controls synchronized, but remain on Analysis.
+                if (sig.family === "evenodd") setMode("evenodd");
+                else if (sig.family === "overunder") setMode("overunder");
+                else setMode("matches");
+                if (typeof sig.barrier === "number") setBarrier(sig.barrier);
+
+                const signalMarket = markets.find((market) => market.name === sig.market);
+                const marketId = signalMarket?.id ?? cfg.marketId ?? selectedMarketId;
+
+                // A robot and market are required by the existing Sashi runner.
+                // QuickArm uses the robot already saved by RobotConfigPanel.
+                if (cfg.robotId === null || marketId === null) {
+                  setShowRobotPanel(true);
+                  return;
+                }
+
+                armRobot({
+                  market: cfg.market,
+                  contractKind: cfg.contractKind,
+                  ...(cfg.barrier === null ? {} : { barrier: cfg.barrier }),
+                  initialStake: cfg.initialStake,
+                  multiplier: cfg.multiplier,
+                  targetProfit: cfg.targetProfit,
+                  stopLoss: cfg.stopLoss,
+                  maxRuns: cfg.maxRuns,
+                  marketId,
+                  robotId: cfg.robotId,
+                  robotName: cfg.robotName,
+                  marketLabel:
+                    cfg.marketLabel ??
+                    signalMarket?.display_name ??
+                    signalMarket?.name ??
+                    cfg.market,
+                });
+
+                // Ensure the modal is closed and the bottom dock is collapsed
+                // with its RUN button visible over the Analysis workspace.
+                setShowRobotPanel(false);
+                setDockExpanded(false);
+              }}
+            />
+          ) : tab === "trade" ? (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6">
               <div className="lg:col-span-8 space-y-5">
                 <div className="relative h-[19rem] sm:h-80 md:h-96 lg:h-[480px] xl:h-[560px] rounded-3xl bg-slate-900 border border-slate-700 overflow-hidden">

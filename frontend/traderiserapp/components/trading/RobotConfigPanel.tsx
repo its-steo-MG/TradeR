@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,8 +14,15 @@ import {
 import { start, useRobotRunner } from "@/lib/robotRunner";
 import { api } from "@/lib/api";
 import { armRobot, disarmRobot, useRobotArm } from "@/lib/robotArm";
-import { Play, Minimize2 } from "lucide-react";
+import { Play, Minimize2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
+
+import {
+  clearRobotDraft,
+  getRobotDraft,
+  markConfigured,
+  saveRobotDraft,
+} from "@/lib/robotConfigStore";
 
 import type { DigitContractKind } from "@/lib/types/positions";
 
@@ -45,27 +52,61 @@ export function RobotConfigForm({
   const { isRunning } = useRobotRunner();
   const { minimized } = useRobotArm();
 
+  // ---- Hydrate from the saved draft so re-opening never starts afresh ----
+  const draft = useRef(getRobotDraft()).current;
+
   const [robots, setRobots] = useState<Robot[]>([]);
   const [markets, setMarkets] = useState<Market[]>([]);
-  const [selectedRobot, setSelectedRobot] = useState<Robot | null>(null);
+  const [selectedRobot, setSelectedRobot] = useState<Robot | null>(
+    draft.robotId
+      ? { id: draft.robotId, name: draft.robotName || "S-Digit Robot", is_s_digit_robot: true }
+      : null,
+  );
   const [selectedMarketId, setSelectedMarketId] = useState<number | null>(
-    propSelectedMarketId || null
+    draft.marketId ?? propSelectedMarketId ?? null,
   );
 
-  const [contractKind, setContractKind] = useState<DigitContractKind>("over");
-  const [barrier, setBarrier] = useState<string>("5");
-  const [initialStake, setInitialStake] = useState<string>("1.0");
-  const [multiplier, setMultiplier] = useState<string>("2");
-  const [targetProfit, setTargetProfit] = useState<string>("10");
-  const [stopLoss, setStopLoss] = useState<string>("20");
-  const [maxRuns, setMaxRuns] = useState<string>("50");
+  const [contractKind, setContractKind] = useState<DigitContractKind>(
+    draft.contractKind as DigitContractKind,
+  );
+  const [barrier, setBarrier] = useState<string>(draft.barrier);
+  const [initialStake, setInitialStake] = useState<string>(draft.initialStake);
+  const [multiplier, setMultiplier] = useState<string>(draft.multiplier);
+  const [targetProfit, setTargetProfit] = useState<string>(draft.targetProfit);
+  const [stopLoss, setStopLoss] = useState<string>(draft.stopLoss);
+  const [maxRuns, setMaxRuns] = useState<string>(draft.maxRuns);
+
+  // ---- Persist every change immediately ----
+  useEffect(() => {
+    saveRobotDraft({
+      robotId: selectedRobot?.id ?? null,
+      robotName: selectedRobot?.name ?? null,
+      marketId: selectedMarketId,
+      contractKind,
+      barrier,
+      initialStake,
+      multiplier,
+      targetProfit,
+      stopLoss,
+      maxRuns,
+    });
+  }, [
+    selectedRobot,
+    selectedMarketId,
+    contractKind,
+    barrier,
+    initialStake,
+    multiplier,
+    targetProfit,
+    stopLoss,
+    maxRuns,
+  ]);
 
   // ==================== Load only OWNED S-Digit Robots ====================
   useEffect(() => {
     const fetchRobots = async () => {
       try {
-        const res = await api.getUserRobots(); // ← only robots the user owns
-
+        const res = await api.getUserRobots();
         const raw = (res?.data ?? res) as any;
         const list = Array.isArray(raw)
           ? raw
@@ -86,12 +127,16 @@ export function RobotConfigForm({
                 : undefined,
           }));
 
-        // Remove duplicates
         const unique = sDigitRobots.filter(
-          (r, i, arr) => arr.findIndex((x) => x.id === r.id) === i
+          (r, i, arr) => arr.findIndex((x) => x.id === r.id) === i,
         );
 
         setRobots(unique);
+
+        // Re-attach the full robot object saved in the draft.
+        setSelectedRobot((prev) =>
+          prev ? unique.find((r) => r.id === prev.id) ?? prev : prev,
+        );
       } catch (error) {
         console.error("Failed to fetch owned S-Digit robots:", error);
         setRobots([]);
@@ -120,7 +165,6 @@ export function RobotConfigForm({
           const response = await fetch(`${baseURL}/trading/markets/`, {
             headers: { Authorization: `Bearer ${token}` },
           });
-
           if (!response.ok) throw new Error("Failed to fetch markets");
 
           const data: unknown = await response.json();
@@ -172,9 +216,12 @@ export function RobotConfigForm({
 
         setMarkets(marketList);
 
-        if (!selectedMarketId && marketList.length > 0) {
-          setSelectedMarketId(marketList[0].id);
-        }
+        // Only auto-pick when nothing was previously chosen.
+        setSelectedMarketId((prev) =>
+          prev && marketList.some((m) => m.id === prev)
+            ? prev
+            : (marketList[0]?.id ?? prev ?? null),
+        );
       } catch (err) {
         console.error("Failed to fetch markets:", err);
         const fallback: Market[] = [
@@ -182,20 +229,22 @@ export function RobotConfigForm({
           { id: 4, name: "volatility-100-1s", display_name: "Volatility 100 (1s) Index" },
         ];
         setMarkets(fallback);
-        setSelectedMarketId(fallback[0].id);
+        setSelectedMarketId((prev) => prev ?? fallback[0].id);
       }
     };
 
     fetchMarkets();
-  }, [selectedMarketId]);
+    // Fetch once — re-fetching on selection change wiped the user's choice.
+  }, []);
 
   const handleRobotSelect = (robotId: string) => {
     const robot = robots.find((r) => r.id === Number(robotId));
-    if (robot) {
-      setSelectedRobot(robot);
-      if (robot.default_digit_contract_type) {
-        setContractKind(robot.default_digit_contract_type as DigitContractKind);
-      }
+    if (!robot) return;
+    setSelectedRobot(robot);
+    // Only apply the robot default the FIRST time it is picked, so it never
+    // overwrites a contract type the user has already tuned.
+    if (robot.default_digit_contract_type && !getRobotDraft().configured) {
+      setContractKind(robot.default_digit_contract_type as DigitContractKind);
     }
   };
 
@@ -211,7 +260,7 @@ export function RobotConfigForm({
 
     const selectedMarket = markets.find((m) => m.id === selectedMarketId);
     const isDigitWithBarrier = ["over", "under", "matches", "differs"].includes(
-      contractKind
+      contractKind,
     );
 
     return {
@@ -234,6 +283,7 @@ export function RobotConfigForm({
   const handleMinimize = () => {
     const cfg = buildConfig();
     if (!cfg) return;
+    markConfigured();
     armRobot(cfg);
     toast.success("Robot armed", {
       description: "Tap RUN on the dock when you see your entry.",
@@ -241,43 +291,58 @@ export function RobotConfigForm({
   };
 
   const handleRun = () => {
-    if (!selectedMarketId) return toast.error("Please select a volatility market");
-    if (!selectedRobot) return toast.error("Please select an S-Digit robot");
+    const cfg = buildConfig();
+    if (!cfg) return;
 
-    const selectedMarket = markets.find((m) => m.id === selectedMarketId);
-    const isDigitWithBarrier = ["over", "under", "matches", "differs"].includes(
-      contractKind
-    );
-
+    markConfigured();
     disarmRobot();
     start({
-      market: selectedMarket?.name || selectedMarket?.display_name || "Volatility Market",
-      contractKind,
-      barrier: isDigitWithBarrier ? Number(barrier) : undefined,
-      initialStake: Number(initialStake),
-      multiplier: Number(multiplier),
-      targetProfit: Number(targetProfit),
-      stopLoss: Number(stopLoss),
-      maxRuns: Number(maxRuns),
-      marketId: selectedMarketId,
-      robotId: selectedRobot.id,
+      market: cfg.market,
+      contractKind: cfg.contractKind,
+      barrier: cfg.barrier,
+      initialStake: cfg.initialStake,
+      multiplier: cfg.multiplier,
+      targetProfit: cfg.targetProfit,
+      stopLoss: cfg.stopLoss,
+      maxRuns: cfg.maxRuns,
+      marketId: cfg.marketId,
+      robotId: cfg.robotId,
     });
 
     onRun?.();
     toast.success("Robot started successfully!", {
-      description: `Trading on ${selectedMarket?.display_name || selectedMarket?.name}`,
+      description: `Trading on ${cfg.marketLabel}`,
     });
   };
 
+  const handleResetSetup = () => {
+    clearRobotDraft();
+    const d = getRobotDraft();
+    setSelectedRobot(null);
+    setContractKind(d.contractKind as DigitContractKind);
+    setBarrier(d.barrier);
+    setInitialStake(d.initialStake);
+    setMultiplier(d.multiplier);
+    setTargetProfit(d.targetProfit);
+    setStopLoss(d.stopLoss);
+    setMaxRuns(d.maxRuns);
+    toast.message("Setup cleared");
+  };
+
   // Hidden while running, or while collapsed into the RobotDock.
-  if (isRunning || minimized) {
-    return null;
-  }
+  if (isRunning || minimized) return null;
 
   return (
     <div className="glass-card p-6 space-y-6 rounded-3xl overflow-visible">
       <div className="flex items-center justify-between">
-        <span className="w-9" />
+        <button
+          type="button"
+          onClick={handleResetSetup}
+          title="Start a fresh setup"
+          className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-700 bg-slate-900/70 text-slate-400 transition-colors hover:text-white"
+        >
+          <RotateCcw className="h-4 w-4" />
+        </button>
         <h2 className="text-2xl font-bold text-center">S-Digit Robot</h2>
         <button
           type="button"
@@ -290,12 +355,13 @@ export function RobotConfigForm({
         </button>
       </div>
 
-      {/* Select Robot */}
+      {/* Select Robot — value is controlled so the saved robot stays selected */}
       <div className="relative z-50">
         <Label className="text-sm text-muted-foreground mb-2 block">
           Select S-Digit Robot
         </Label>
         <Select
+          value={selectedRobot ? String(selectedRobot.id) : ""}
           onValueChange={handleRobotSelect}
           disabled={robots.length === 0}
         >
@@ -314,7 +380,6 @@ export function RobotConfigForm({
 
       {selectedRobot && (
         <>
-          {/* Volatility Market */}
           <div className="relative z-50">
             <Label className="text-sm text-muted-foreground mb-2 block">
               Volatility Market
@@ -341,9 +406,7 @@ export function RobotConfigForm({
               <Label>Contract Type</Label>
               <Select
                 value={contractKind}
-                onValueChange={(value) =>
-                  setContractKind(value as DigitContractKind)
-                }
+                onValueChange={(value) => setContractKind(value as DigitContractKind)}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -475,7 +538,6 @@ export function RobotConfigForm({
         </>
       )}
 
-      {/* Empty / No robot selected messages */}
       {robots.length === 0 ? (
         <p className="text-center text-amber-400 text-sm py-8">
           You don’t own any S-Digit Robot yet.

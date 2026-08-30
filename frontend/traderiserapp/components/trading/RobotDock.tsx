@@ -111,7 +111,7 @@ export default function RobotDock({ hidden, defaultExpanded }: Props) {
           : isRunning
             ? "Waiting for contract"
             : isArmed
-              ? `Ready — on ${armed?.marketLabel || armed?.market}`
+              ? `Ready`
               : "Contract";
 
   const labelColor =
