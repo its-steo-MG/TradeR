@@ -955,6 +955,30 @@ export const resendAgentOTP = (transactionId: number) =>
 export const getAgentDeposits = () => apiRequest<{ deposits: AgentDeposit[] }>("/deposits/my-deposits/")
 export const getAgentWithdrawals = () => apiRequest<{ withdrawals: AgentWithdrawal[] }>("/withdrawals/my-withdrawals/")
 
+export const getTransactionHistory = (params?: { account_id?: string | number; limit?: number }) => {
+  const query = new URLSearchParams()
+  if (params?.account_id && params.account_id !== "all") {
+    query.append("account_id", String(params.account_id))
+  }
+  if (params?.limit) {
+    query.append("limit", String(params.limit))
+  }
+  const qs = query.toString()
+  return apiRequest<{
+    count: number
+    results: {
+      id: number
+      account_id: number
+      account_type?: string
+      amount: string
+      type: string
+      description: string
+      created_at: string
+      created_at_formatted: string
+    }[]
+  }>(`/agents/transactions/${qs ? `?${qs}` : ""}`)
+}
+
 /* ------------------------------------------------------------------ */
 /* CUSTOMER CARE (USER + ADMIN)  – only this section was updated */
 /* ------------------------------------------------------------------ */
@@ -1394,6 +1418,7 @@ export const api = {
   resendAgentOTP,
   getAgentDeposits,
   getAgentWithdrawals,
+  getTransactionHistory,
   getChatThread,
   sendChatMessage,
   markMessagesAsRead,

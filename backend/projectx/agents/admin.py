@@ -14,7 +14,8 @@ import logging
 from .models import Agent, AgentDeposit, AgentWithdrawal
 from wallet.models import Wallet
 from dashboard.models import Transaction
-from notifications.utils import send_web_push   # ← added
+from notifications.utils import send_web_push
+from agents.utils import generate_withdrawal_receipt_pdf   # ← clean import
 
 logger = logging.getLogger(__name__)
 
@@ -40,13 +41,13 @@ class AgentDepositForm(forms.ModelForm):
 @admin.register(AgentDeposit)
 class AgentDepositAdmin(admin.ModelAdmin):
     form = AgentDepositForm
-    list_display = ('user', 'agent', 'amount_kes', 'amount_usd_display', 
-                   'method_badge', 'proof', 'status', 'verified_at')
+    list_display = ('user', 'agent', 'amount_kes', 'amount_usd_display',
+                    'method_badge', 'proof', 'status', 'verified_at')
     list_filter = ('payment_method', 'status', 'agent__method')
-    search_fields = ('user__username', 'transaction_code', 'paypal_transaction_id', 
-                    'bank_reference', 'binance_tx_hash')
-    readonly_fields = ('payment_method', 'amount_usd', 'created_at', 
-                      'updated_at', 'verified_at', 'verified_by')
+    search_fields = ('user__username', 'transaction_code', 'paypal_transaction_id',
+                     'bank_reference', 'binance_tx_hash')
+    readonly_fields = ('payment_method', 'amount_usd', 'created_at',
+                       'updated_at', 'verified_at', 'verified_by')
     actions = ['verify_selected', 'reject_selected']
 
     def amount_usd_display(self, obj):
@@ -67,23 +68,17 @@ class AgentDepositAdmin(admin.ModelAdmin):
         if obj.paypal_transaction_id:
             url = f"https://www.paypal.com/activity/payment/{obj.paypal_transaction_id}"
             return format_html('<a href="{}" target="_blank">PayPal Tx</a>', url)
-
         elif obj.binance_tx_hash:
             explorer_url = f"https://bscscan.com/tx/{obj.binance_tx_hash}"
             return format_html(
                 '<a href="{}" target="_blank">Binance Tx</a><br><small>{}</small>',
                 explorer_url, obj.binance_tx_hash[:16] + "..."
             )
-
         elif obj.screenshot:
             return format_html('<a href="{}" target="_blank">View Proof</a>', obj.screenshot.url)
-
         return "—"
     proof.short_description = "Proof"
 
-    # =========================================
-    # VERIFY SELECTED – CREDITS WALLET
-    # =========================================
     def verify_selected(self, request, queryset):
         updated = 0
         errors = []
@@ -152,9 +147,6 @@ class AgentDepositAdmin(admin.ModelAdmin):
 
     verify_selected.short_description = "Verify & Credit Selected"
 
-    # =========================================
-    # REJECT SELECTED
-    # =========================================
     def reject_selected(self, request, queryset):
         updated = 0
         errors = []
@@ -228,13 +220,14 @@ class AgentWithdrawalAdmin(admin.ModelAdmin):
     def complete_selected(self, request, queryset):
         updated = 0
         errors = []
+
         for w in queryset.filter(status='otp_verified'):
             try:
                 w.status = 'completed'
                 w.completed_at = timezone.now()
                 w.save()
 
-                # ===== SEND TRADE RISER PUSH NOTIFICATION =====
+                # Push notification
                 try:
                     send_web_push(
                         user=w.user,
@@ -252,28 +245,51 @@ class AgentWithdrawalAdmin(admin.ModelAdmin):
                     )
                 except Exception as push_err:
                     logger.error(f"Push failed for withdrawal {w.id}: {push_err}")
-                # ==============================================
 
-                html_content = render_to_string('emails/withdrawal_sent.html', {
-                    'amount_usd': f"{w.amount_usd:,.2f}",
-                    'amount_kes': f"{w.amount_kes:,.2f}",
-                    'method': w.get_payment_method_display(),
-                    'agent_name': w.agent.name,
-                })
-
-                email = EmailMultiAlternatives(
-                    subject="Withdrawal Completed!",
-                    body="Your funds have been sent.",
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    to=[w.user.email]
+                # Create final transaction record
+                Transaction.objects.create(
+                    account=w.account,
+                    amount=-w.amount_usd,
+                    transaction_type='withdrawal',
+                    description=f"Withdrawal completed via {w.agent.name} ({w.get_payment_method_display()})"
                 )
-                email.attach_alternative(html_content, "text/html")
-                email.send(fail_silently=False)
+
+                # === GENERATE + ATTACH RECEIPT ===
+                try:
+                    pdf_buffer = generate_withdrawal_receipt_pdf(w)
+
+                    html_content = render_to_string('emails/withdrawal_sent.html', {
+                        'amount_usd': f"{w.amount_usd:,.2f}",
+                        'amount_kes': f"{w.amount_kes:,.2f}",
+                        'method': w.get_payment_method_display(),
+                        'agent_name': w.agent.name,
+                    })
+
+                    email = EmailMultiAlternatives(
+                        subject="Withdrawal Sent Successfully! – Your Receipt",
+                        body="Your funds have been transferred. Please find your transaction receipt attached.",
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        to=[w.user.email]
+                    )
+                    email.attach_alternative(html_content, "text/html")
+                    email.attach(
+                        f"TradeRiser_Receipt_WD-{w.id}.pdf",
+                        pdf_buffer.getvalue(),
+                        "application/pdf"
+                    )
+                    email.send(fail_silently=False)
+
+                    logger.info(f"Receipt email sent successfully for withdrawal {w.id}")
+
+                except Exception as email_err:
+                    logger.error(f"Failed to send receipt email for withdrawal {w.id}: {email_err}")
+                    errors.append(f"Withdrawal {w.id}: Email/PDF failed → {str(email_err)}")
 
                 updated += 1
 
             except Exception as e:
                 errors.append(f"Withdrawal {w.id}: {str(e)}")
+                logger.error(f"Complete failed for withdrawal {w.id}: {e}")
 
         if updated:
             self.message_user(request, f"{updated} withdrawal(s) marked as sent.", messages.SUCCESS)

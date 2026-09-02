@@ -7,6 +7,7 @@ from .views import (
     AgentWithdrawalAdminActionView,      # <-- NEW
     AgentWithdrawalRequestView,
     AgentWithdrawalVerifyView,
+    TransactionHistoryView,
 )
 
 urlpatterns = [
@@ -16,4 +17,5 @@ urlpatterns = [
     path('withdraw/request/', AgentWithdrawalRequestView.as_view(), name='agent_withdraw_request'),
     path('withdraw/verify/', AgentWithdrawalVerifyView.as_view(), name='agent_withdraw_verify'),
     path('withdraw/admin-action/', AgentWithdrawalAdminActionView.as_view(), name='agent_withdraw_admin'),
+    path('transactions/', TransactionHistoryView.as_view(), name='transaction_history'),
 ]

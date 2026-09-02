@@ -15,6 +15,8 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 import logging
 
+from agents.utils import generate_withdrawal_receipt_pdf
+
 logger = logging.getLogger(__name__)
 ADMIN_EMAIL = "steomustadd@gmail.com"
 
@@ -281,7 +283,6 @@ class AgentWithdrawalVerifyView(APIView):
                 f"   • SWIFT: {withdrawal.user_bank_swift or 'N/A'}"
             )
         elif withdrawal.payment_method == 'binance':
-            # === FIXED: Now properly shows Binance address ===
             return f"   • Binance Address: {withdrawal.user_binance_address or 'Not provided'}"
         else:  # mpesa
             phone = getattr(withdrawal.user, 'phone', 'Not set')
@@ -310,7 +311,7 @@ class AgentWithdrawalAdminActionView(APIView):
             withdrawal.completed_at = timezone.now()
             withdrawal.save()
 
-            # ===== SEND TRADE RISER PUSH NOTIFICATION =====
+            # Push notification
             try:
                 from notifications.utils import send_web_push
                 send_web_push(
@@ -329,24 +330,45 @@ class AgentWithdrawalAdminActionView(APIView):
                 )
             except Exception as e:
                 logger.error(f"Failed to send push for agent withdrawal {withdrawal.id}: {e}")
-            # ==============================================
 
-            html_content = render_to_string('emails/withdrawal_sent.html', {
-                'amount_usd': f"{withdrawal.amount_usd:,.2f}",
-                'amount_kes': f"{withdrawal.amount_kes:,.2f}",
-                'method': method,
-                'agent_name': withdrawal.agent.name,
-                'user_details': self._get_user_details(withdrawal)
-            })
-
-            email = EmailMultiAlternatives(
-                subject="Withdrawal Sent Successfully!",
-                body="Your funds have been transferred.",
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                to=[withdrawal.user.email]
+            # Create final transaction record
+            Transaction.objects.create(
+                account=withdrawal.account,
+                amount=-withdrawal.amount_usd,
+                transaction_type='withdrawal',
+                description=f"Withdrawal completed via {withdrawal.agent.name} ({method})"
             )
-            email.attach_alternative(html_content, "text/html")
-            email.send(fail_silently=False)
+
+            # === GENERATE + ATTACH RECEIPT ===
+            try:
+                pdf_buffer = generate_withdrawal_receipt_pdf(withdrawal)
+
+                html_content = render_to_string('emails/withdrawal_sent.html', {
+                    'amount_usd': f"{withdrawal.amount_usd:,.2f}",
+                    'amount_kes': f"{withdrawal.amount_kes:,.2f}",
+                    'method': method,
+                    'agent_name': withdrawal.agent.name,
+                    'user_details': self._get_user_details(withdrawal)
+                })
+
+                email = EmailMultiAlternatives(
+                    subject="Withdrawal Sent Successfully! – Your Receipt",
+                    body="Your funds have been transferred. Please find your transaction receipt attached.",
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=[withdrawal.user.email]
+                )
+                email.attach_alternative(html_content, "text/html")
+                email.attach(
+                    f"TradeRiser_Receipt_WD-{withdrawal.id}.pdf",
+                    pdf_buffer.getvalue(),
+                    "application/pdf"
+                )
+                email.send(fail_silently=False)
+
+                logger.info(f"Receipt email sent successfully for withdrawal {withdrawal.id}")
+
+            except Exception as email_err:
+                logger.error(f"Failed to send receipt email for withdrawal {withdrawal.id}: {email_err}")
 
             logger.info(f"Withdrawal {withdrawal.id} completed for {withdrawal.user.username}")
             return Response({"message": f"Withdrawal completed – {method} sent"})
@@ -386,3 +408,52 @@ class AgentWithdrawalAdminActionView(APIView):
 
             logger.info(f"Withdrawal {withdrawal.id} rejected and refunded for {withdrawal.user.username}")
             return Response({"message": "Withdrawal rejected & refunded"})
+
+    def _get_user_details(self, withdrawal):
+        if withdrawal.payment_method == 'paypal':
+            return f"   • PayPal Email: {withdrawal.user_paypal_email}"
+        elif withdrawal.payment_method == 'bank_transfer':
+            return (
+                f"   • Bank: {withdrawal.user_bank_name}\n"
+                f"   • Account Name: {withdrawal.user_bank_account_name}\n"
+                f"   • Account Number: {withdrawal.user_bank_account_number}\n"
+                f"   • SWIFT: {withdrawal.user_bank_swift or 'N/A'}"
+            )
+        elif withdrawal.payment_method == 'binance':
+            return f"   • Binance Address: {withdrawal.user_binance_address or 'Not provided'}"
+        else:  # mpesa
+            phone = getattr(withdrawal.user, 'phone', 'Not set')
+            return f"   • M-Pesa Phone: {phone}"
+
+
+class TransactionHistoryView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        account_id = request.query_params.get("account_id")
+        limit = int(request.query_params.get("limit", 50))
+
+        qs = Transaction.objects.filter(account__user=request.user).select_related("account")
+
+        if account_id:
+            qs = qs.filter(account_id=account_id)
+
+        qs = qs.order_by("-created_at")[:limit]
+
+        data = []
+        for t in qs:
+            data.append({
+                "id": t.id,
+                "account_id": t.account_id,
+                "account_type": t.account.account_type if hasattr(t.account, "account_type") else None,
+                "amount": str(t.amount),
+                "type": t.transaction_type,
+                "description": t.description or "",
+                "created_at": t.created_at.isoformat(),
+                "created_at_formatted": timezone.localtime(t.created_at).strftime("%d %b %Y, %H:%M"),
+            })
+
+        return Response({
+            "count": len(data),
+            "results": data
+        })
