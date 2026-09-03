@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Withdrawal Completed - TradeRiser</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f6f9; padding: 30px 16px;">
+    <tr>
+      <td align="center">
+        <table width="100%" style="max-width:500px; background-color:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,0.1);">
+          
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #10b981 0%, #34d399 100%); padding: 32px 30px; text-align:center;">
+              <img src="https://grandview-storage.s3.eu-north-1.amazonaws.com/assets/static/images/traderiser-logo-white.png" 
+                   alt="TradeRiser" 
+                   height="42" 
+                   style="display:block; margin:0 auto 12px;">
+              <h1 style="margin:0; color:#ffffff; font-size:24px; font-weight:700;">🎉 Money Sent!</h1>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding: 36px 30px; text-align:center; color:#1e293b;">
+              <p style="margin:0 0 8px; font-size:16px;">
+                Hi <strong>{{ username }}</strong>,
+              </p>
+              <p style="margin:0 0 24px; color:#64748b; font-size:15px;">
+                Your withdrawal has been successfully processed.
+              </p>
+
+              <div style="font-size:64px; margin: 10px 0 16px;">✅</div>
+
+              <p style="margin:0 0 6px; font-size:32px; font-weight:700; color:#10b981;">
+                ${{ amount }}
+              </p>
+              <p style="margin:0 0 24px; font-size:18px; color:#34d399;">
+                ≈ {{ converted_amount }} KSH
+              </p>
+
+              <p style="margin:0 0 8px; color:#64748b; font-size:14px;">
+                Sent to: <strong>{{ mpesa_phone }}</strong>
+              </p>
+              <p style="margin:0 0 28px; color:#64748b; font-size:14px;">
+                Reference: <strong>{{ reference_id }}</strong>
+              </p>
+
+              <p style="margin:0; color:#94a3b8; font-size:13px;">
+                The funds should appear in your M-Pesa shortly.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background:#f1f5f9; padding: 22px 30px; text-align:center;">
+              <p style="margin:0 0 6px; color:#64748b; font-size:12px;">
+                Need help? Contact 
+                <a href="mailto:support@traderiser.com" style="color:#10b981; text-decoration:none;">support@traderiser.com</a>
+              </p>
+              <p style="margin:0; color:#94a3b8; font-size:12px;">
+                © {{ year }} TradeRiser. All rights reserved.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

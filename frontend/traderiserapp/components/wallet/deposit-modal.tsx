@@ -17,7 +17,12 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
   const [selectedAccountType, setSelectedAccountType] = useState<"standard" | "pro-fx" | "mt5">(
     (localStorage.getItem("account_type") as "standard" | "pro-fx" | "mt5") || "standard"
   );
+  
+  // ========== NEW: Currency input mode ==========
+  const [inputMode, setInputMode] = useState<"KES" | "USD">("KES");
   const [kesAmount, setKesAmount] = useState("");
+  const [usdAmount, setUsdAmount] = useState("");
+  
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -26,8 +31,18 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
   const [hasMt5, setHasMt5] = useState(false);
 
   const conversionRate = 130.0;
-  const usdAmount = (Number.parseFloat(kesAmount) / conversionRate).toFixed(2);
-  const minimumDeposit = 5;
+  const minimumDeposit = 5; // in USD
+
+  // Keep both values in sync
+  useEffect(() => {
+    if (inputMode === "KES") {
+      const kes = Number.parseFloat(kesAmount) || 0;
+      setUsdAmount(kes > 0 ? (kes / conversionRate).toFixed(2) : "");
+    } else {
+      const usd = Number.parseFloat(usdAmount) || 0;
+      setKesAmount(usd > 0 ? (usd * conversionRate).toFixed(0) : "");
+    }
+  }, [kesAmount, usdAmount, inputMode]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -62,12 +77,15 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
   }, []);
 
   const handleNumpadClick = (value: string) => {
+    const current = inputMode === "KES" ? kesAmount : usdAmount;
+    const setter = inputMode === "KES" ? setKesAmount : setUsdAmount;
+
     if (value === "backspace") {
-      setKesAmount(kesAmount.slice(0, -1));
-    } else if (value === "." && !kesAmount.includes(".")) {
-      setKesAmount(kesAmount + value);
-    } else {
-      setKesAmount(kesAmount + value);
+      setter(current.slice(0, -1));
+    } else if (value === "." && !current.includes(".")) {
+      setter(current + value);
+    } else if (value !== ".") {
+      setter(current + value);
     }
   };
 
@@ -84,16 +102,19 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
       return;
     }
 
-    const usd = Number.parseFloat(usdAmount);
+    const usd = Number.parseFloat(usdAmount) || 0;
     if (usd < minimumDeposit) {
       setError(`Minimum deposit is $${minimumDeposit}`);
       return;
     }
 
+    // Always send KES amount to backend
+    const kesToSend = Number.parseFloat(kesAmount) || 0;
+
     setIsSubmitting(true);
     try {
       const res = await api.deposit({
-        amount: Number(kesAmount),
+        amount: kesToSend,
         account_type: selectedAccountType,
         wallet_type: "main",
         currency: "KSH",
@@ -135,7 +156,6 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
               <div>
                 <p className="text-slate-600 text-center mb-3 sm:mb-4 text-sm sm:text-base">To</p>
                 <div className="flex gap-2 sm:gap-3 justify-center mb-6 sm:mb-8 flex-wrap">
-                  {/* TradeR */}
                   <button
                     onClick={() => setSelectedAccountType("standard")}
                     className={`drop-on-top relative px-4 sm:px-6 py-2 sm:py-3 rounded-xl text-sm sm:text-base font-semibold transition-all ${
@@ -147,7 +167,6 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
                     <span className="relative z-[1]">TradeR</span>
                   </button>
 
-                  {/* ProFX */}
                   <button
                     onClick={() => setSelectedAccountType("pro-fx")}
                     disabled={!hasProFx}
@@ -160,7 +179,6 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
                     <span className="relative z-[1]">ProFX</span>
                   </button>
 
-                  {/* MT5 */}
                   <button
                     onClick={() => setSelectedAccountType("mt5")}
                     disabled={!hasMt5}
@@ -175,7 +193,6 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
                 </div>
               </div>
 
-              {/* Next Button */}
               <button
                 onClick={() => setStep("amount")}
                 className="drop-on-top relative w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 sm:py-4 px-4 sm:px-6 rounded-2xl transition-all flex items-center justify-center gap-2 text-sm sm:text-base"
@@ -193,17 +210,51 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
           {/* Step 2: Amount */}
           {step === "amount" && (
             <>
+              {/* ========== CURRENCY SWITCHER ========== */}
+              <div className="flex justify-center mb-4">
+                <div className="inline-flex bg-slate-100 rounded-xl p-1">
+                  <button
+                    onClick={() => setInputMode("KES")}
+                    className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
+                      inputMode === "KES"
+                        ? "bg-purple-600 text-white shadow-sm"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    KES
+                  </button>
+                  <button
+                    onClick={() => setInputMode("USD")}
+                    className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
+                      inputMode === "USD"
+                        ? "bg-purple-600 text-white shadow-sm"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    USD
+                  </button>
+                </div>
+              </div>
+
               <div>
-                <p className="text-slate-600 text-center mb-2 text-sm sm:text-base">You Pay</p>
+                <p className="text-slate-600 text-center mb-2 text-sm sm:text-base">
+                  {inputMode === "KES" ? "You Pay" : "You Get"}
+                </p>
                 <div className="text-2xl sm:text-3xl font-bold text-slate-900 text-center mb-1">
-                  {formatCurrency(kesAmount || "0")} KES
+                  {inputMode === "KES"
+                    ? `${formatCurrency(kesAmount || "0")} KES`
+                    : `${formatCurrency(usdAmount || "0.00")} USD`}
                 </div>
                 <p className="text-center text-slate-500 text-xs sm:text-sm mb-4 sm:mb-6">
                   Conversion rate: 1 USD = {formatCurrency(conversionRate)} KES
                 </p>
-                <p className="text-slate-600 text-center mb-2 text-sm sm:text-base">You Get</p>
+                <p className="text-slate-600 text-center mb-2 text-sm sm:text-base">
+                  {inputMode === "KES" ? "You Get" : "You Pay"}
+                </p>
                 <div className="text-2xl sm:text-3xl font-bold text-slate-900 text-center mb-6 sm:mb-8">
-                  {formatCurrency(usdAmount || "0.00")} USD
+                  {inputMode === "KES"
+                    ? `${formatCurrency(usdAmount || "0.00")} USD`
+                    : `${formatCurrency(kesAmount || "0")} KES`}
                 </div>
               </div>
 
@@ -258,7 +309,7 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
               {/* Deposit Button */}
               <button
                 onClick={handleProceed}
-                disabled={!kesAmount || isSubmitting}
+                disabled={!(kesAmount || usdAmount) || isSubmitting}
                 className="drop-on-top relative w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white font-semibold py-3 sm:py-4 px-4 sm:px-6 rounded-2xl transition-all flex items-center justify-center gap-2 text-sm sm:text-base disabled:opacity-50"
               >
                 <span className="relative z-[1] flex items-center gap-2">

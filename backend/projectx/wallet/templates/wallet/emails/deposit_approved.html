@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Deposit Approved - TradeRiser</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f6f9; padding: 30px 16px;">
+    <tr>
+      <td align="center">
+        <table width="100%" style="max-width:500px; background-color:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,0.1);">
+          
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%); padding: 32px 30px; text-align:center;">
+              <img src="https://grandview-storage.s3.eu-north-1.amazonaws.com/assets/static/images/traderiser-logo-white.png" 
+                   alt="TradeRiser" 
+                   height="42" 
+                   style="display:block; margin:0 auto 12px;">
+              <h1 style="margin:0; color:#ffffff; font-size:24px; font-weight:700;">Deposit Approved!</h1>
+              <p style="margin:8px 0 0; color:#bfdbfe; font-size:14px;">Your funds have been credited</p>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding: 36px 30px; color:#1e293b;">
+              <p style="margin:0 0 20px; font-size:16px;">
+                Hi <strong>{{ username }}</strong>,
+              </p>
+              <p style="margin:0 0 24px; color:#64748b; font-size:15px; line-height:1.5;">
+                Great news! Your deposit has been verified and added to your account.
+              </p>
+
+              <!-- Amount highlight -->
+              <div style="background:#eff6ff; border-radius:12px; padding: 24px; text-align:center; margin: 0 0 24px;">
+                <p style="margin:0 0 6px; color:#2563eb; font-size:28px; font-weight:700;">
+                  ${{ converted_amount }}
+                </p>
+                <p style="margin:0; color:#64748b; font-size:14px;">Credited to your USD Wallet</p>
+              </div>
+
+              <!-- Details -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc; border-radius:12px; margin: 0 0 28px;">
+                <tr>
+                  <td style="padding: 18px 20px;">
+                    <p style="margin:0 0 10px; font-size:14px; color:#64748b;">
+                      <span style="color:#94a3b8;">Deposited:</span> 
+                      <strong style="color:#1e293b;">{{ amount }} {{ currency }}</strong>
+                    </p>
+                    <p style="margin:0 0 10px; font-size:14px; color:#64748b;">
+                      <span style="color:#94a3b8;">Account:</span> 
+                      <strong style="color:#1e293b;">{{ account_type }}</strong>
+                    </p>
+                    <p style="margin:0; font-size:14px; color:#64748b;">
+                      <span style="color:#94a3b8;">Reference:</span> 
+                      <strong style="color:#1e293b;">{{ reference_id }}</strong>
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Button -->
+              <table cellpadding="0" cellspacing="0" style="margin: 0 auto;">
+                <tr>
+                  <td style="background-color:#2563eb; border-radius:8px;">
+                    <a href="https://traderiserapp.com/" 
+                       style="display:inline-block; padding:14px 28px; color:#ffffff; text-decoration:none; font-weight:600; font-size:15px;">
+                      Go to Dashboard
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background:#f1f5f9; padding: 22px 30px; text-align:center;">
+              <p style="margin:0 0 6px; color:#64748b; font-size:12px;">
+                Need help? Contact 
+                <a href="mailto:support@traderiser.com" style="color:#2563eb; text-decoration:none;">support@traderiser.com</a>
+              </p>
+              <p style="margin:0; color:#94a3b8; font-size:12px;">
+                © {{ year }} TradeRiser. All rights reserved.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

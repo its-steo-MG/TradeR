@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your OTP Code - TradeRiser</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f6f9; padding: 30px 16px;">
+    <tr>
+      <td align="center">
+        <table width="100%" style="max-width:500px; background-color:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,0.1);">
+          
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #7c3aed 0%, #ec4899 100%); padding: 32px 30px; text-align:center;">
+              <img src="https://grandview-storage.s3.eu-north-1.amazonaws.com/assets/static/images/traderiser-logo-white.png" 
+                   alt="TradeRiser" 
+                   height="42" 
+                   style="display:block; margin:0 auto 12px;">
+              <h1 style="margin:0; color:#ffffff; font-size:24px; font-weight:700;">🔐 Your OTP Code</h1>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding: 36px 30px; text-align:center; color:#1e293b;">
+              <p style="margin:0 0 8px; font-size:16px;">
+                Hi <strong>{{ username }}</strong>,
+              </p>
+              <p style="margin:0 0 28px; color:#64748b; font-size:15px; line-height:1.5;">
+                You requested a one-time password. Use the code below to continue.
+              </p>
+
+              <!-- OTP Box -->
+              <div style="background: linear-gradient(135deg, #f5f3ff 0%, #fdf2f8 100%); border-radius:14px; padding: 28px 20px; margin: 0 0 28px;">
+                <p style="margin:0 0 10px; color:#7c3aed; font-size:13px; letter-spacing:1px; text-transform:uppercase; font-weight:600;">
+                  Your OTP Code
+                </p>
+                <p style="margin:0; font-size:42px; font-weight:700; letter-spacing:10px; color:#7c3aed; font-family: 'Courier New', monospace;">
+                  {{ otp_code }}
+                </p>
+              </div>
+
+              <p style="margin:0 0 8px; color:#64748b; font-size:14px;">
+                <strong>Purpose:</strong> {{ purpose }}
+              </p>
+              <p style="margin:0 0 8px; color:#64748b; font-size:14px;">
+                <strong>Reference:</strong> {{ reference_id }}
+              </p>
+              <p style="margin:0 0 24px; color:#64748b; font-size:14px;">
+                <strong>Amount:</strong> {{ amount }}
+              </p>
+
+              <p style="margin:0; color:#94a3b8; font-size:13px; line-height:1.5;">
+                This code expires in <strong>5 minutes</strong>.<br>
+                Never share this OTP with anyone.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background:#f1f5f9; padding: 22px 30px; text-align:center;">
+              <p style="margin:0 0 6px; color:#64748b; font-size:12px;">
+                Need help? Reply to this email or contact 
+                <a href="mailto:support@traderiser.com" style="color:#7c3aed; text-decoration:none;">support@traderiser.com</a>
+              </p>
+              <p style="margin:0; color:#94a3b8; font-size:12px;">
+                © {{ year }} TradeRiser. All rights reserved.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

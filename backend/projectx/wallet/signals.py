@@ -4,6 +4,7 @@ from django.db import transaction
 from django.conf import settings
 from django.utils import timezone
 from django.core.mail import send_mail
+from django.template.loader import render_to_string
 from decimal import Decimal
 import logging
 
@@ -154,9 +155,20 @@ def post_save_wallet_transaction(sender, instance, **kwargs):
                     description=f"{desc_prefix}: {instance.reference_id}"
                 )
 
-            # ====================== SUCCESS EMAILS ======================
+            # ====================== SUCCESS EMAILS (ONLY EMAIL PART CHANGED) ======================
             try:
                 if instance.transaction_type == 'deposit':
+                    context = {
+                        'username': user.username,
+                        'amount': instance.amount,
+                        'currency': instance.currency.code,
+                        'converted_amount': instance.converted_amount or credit_amount,
+                        'account_type': wallet.account.account_type.title(),
+                        'reference_id': instance.reference_id,
+                        'year': timezone.now().year,
+                    }
+                    html_message = render_to_string('wallet/emails/deposit_approved.html', context)
+
                     send_mail(
                         subject="Deposit Approved & Credited!",
                         message=(
@@ -170,6 +182,7 @@ def post_save_wallet_transaction(sender, instance, **kwargs):
                         ),
                         from_email=settings.DEFAULT_FROM_EMAIL,
                         recipient_list=[user.email],
+                        html_message=html_message,
                         fail_silently=True
                     )
 
@@ -177,6 +190,16 @@ def post_save_wallet_transaction(sender, instance, **kwargs):
                     if "Auto-approved for Marketo" in (instance.description or ""):
                         logger.info(f"Skipping signal email for Marketo auto-withdrawal {instance.reference_id}")
                     else:
+                        context = {
+                            'username': user.username,
+                            'amount': instance.amount,
+                            'converted_amount': instance.converted_amount,
+                            'mpesa_phone': instance.mpesa_phone or 'your M-Pesa',
+                            'reference_id': instance.reference_id,
+                            'year': timezone.now().year,
+                        }
+                        html_message = render_to_string('wallet/emails/withdrawal_completed.html', context)
+
                         send_mail(
                             subject="Withdrawal Completed",
                             message=(
@@ -188,6 +211,7 @@ def post_save_wallet_transaction(sender, instance, **kwargs):
                             ),
                             from_email=settings.DEFAULT_FROM_EMAIL,
                             recipient_list=[user.email],
+                            html_message=html_message,
                             fail_silently=True
                         )
 

@@ -5,17 +5,16 @@ from django import forms
 from django.utils import timezone
 from django.urls import reverse
 from django.utils.html import format_html
-from botocore.exceptions import ClientError
 from django.conf import settings
 from django.contrib import messages
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
 import boto3
 from botocore.exceptions import ClientError
-from django.conf import settings
 import logging
-from .models import User, Account, SuspensionEvidence,KYCSubmission
+from .models import User, Account, SuspensionEvidence, KYCSubmission
 
 logger = logging.getLogger(__name__)
-
 
 
 # ====================== Forms ======================
@@ -155,6 +154,7 @@ class CustomUserAdmin(UserAdmin):
             self.message_user(request, f"Generated referral code {obj.referral_code} for {obj.username}")
         super().save_model(request, obj, form, change)
 
+
 # ====================== KYC Admin ======================
 class KYCSubmissionAdmin(admin.ModelAdmin):
     list_display = ('user_link', 'status', 'submitted_at', 'reviewed_at', 
@@ -202,6 +202,54 @@ class KYCSubmissionAdmin(admin.ModelAdmin):
         return self._get_signed_url(obj.proof_of_address)
     view_proof_of_address.short_description = 'Proof of Address'
 
+    def _send_kyc_email(self, user, approved: bool):
+        """Send professional branded KYC status email using Django templates."""
+        context = {
+            'username': user.username,
+            'dashboard_url': 'https://traderiserapp.com/',
+            'year': timezone.now().year,
+        }
+
+        if approved:
+            subject = "Your TradeRiser KYC Verification Has Been Approved"
+            template_name = 'accounts/emails/kyc_approved.html'
+            plain_message = (
+                f"Hello {user.username},\n\n"
+                "Congratulations! Your identity verification (KYC) has been successfully reviewed and approved.\n\n"
+                "You now have full access to all verified features on TradeRiser, including higher "
+                "withdrawal limits and additional account types where applicable.\n\n"
+                "Thank you for completing the verification process.\n\n"
+                "Go to Dashboard: https://traderiserapp.com/\n\n"
+                "Best regards,\nTradeRiser Team"
+            )
+        else:
+            subject = "Update on Your TradeRiser KYC Submission"
+            template_name = 'accounts/emails/kyc_rejected.html'
+            plain_message = (
+                f"Hello {user.username},\n\n"
+                "We have carefully reviewed the documents you submitted for identity verification (KYC). "
+                "Unfortunately, your submission has been rejected at this time.\n\n"
+                "Please ensure your documents are clear, valid, and match the details on your account. "
+                "You may submit a new KYC application with updated documents at any time.\n\n"
+                "Submit KYC Again: https://traderiserapp.com/\n\n"
+                "Best regards,\nTradeRiser Team"
+            )
+
+        try:
+            html_message = render_to_string(template_name, context)
+            send_mail(
+                subject=subject,
+                message=plain_message,
+                from_email=None,
+                recipient_list=[user.email],
+                html_message=html_message,
+                fail_silently=False,
+            )
+            logger.info(f"KYC {'approval' if approved else 'rejection'} email sent to {user.email}")
+        except Exception as e:
+            logger.error(f"Failed to send KYC email to {user.email}: {e}")
+            raise
+
     @admin.action(description="Approve selected KYC submissions")
     def approve_kyc(self, request, queryset):
         updated = 0
@@ -214,8 +262,15 @@ class KYCSubmissionAdmin(admin.ModelAdmin):
 
                 submission.user.kyc_status = 'approved'
                 submission.user.save()
+
+                # SEND THE EMAIL
+                self._send_kyc_email(submission.user, approved=True)
                 updated += 1
-        self.message_user(request, f"{updated} KYC submission(s) approved.", messages.SUCCESS)
+        self.message_user(
+            request,
+            f"{updated} KYC submission(s) approved and notification emails sent.",
+            messages.SUCCESS
+        )
 
     @admin.action(description="Reject selected KYC submissions")
     def reject_kyc(self, request, queryset):
@@ -229,10 +284,16 @@ class KYCSubmissionAdmin(admin.ModelAdmin):
 
                 submission.user.kyc_status = 'rejected'
                 submission.user.save()
-                updated += 1
-        self.message_user(request, f"{updated} KYC submission(s) rejected.", messages.SUCCESS)
 
-    # Optional: Allow deleting KYC submissions
+                # SEND THE EMAIL
+                self._send_kyc_email(submission.user, approved=False)
+                updated += 1
+        self.message_user(
+            request,
+            f"{updated} KYC submission(s) rejected and notification emails sent.",
+            messages.SUCCESS
+        )
+
     def delete_selected(self, request, queryset):
         deleted = 0
         for submission in queryset:
@@ -240,6 +301,7 @@ class KYCSubmissionAdmin(admin.ModelAdmin):
             deleted += 1
         self.message_user(request, f"{deleted} KYC submission(s) deleted.", messages.SUCCESS)
     delete_selected.short_description = "Delete selected KYC submissions"
+
 
 # ====================== Register Models ======================
 admin.site.register(User, CustomUserAdmin)

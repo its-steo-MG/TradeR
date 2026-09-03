@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KYC Approved - TradeRiser</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f3f4f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6; padding: 32px 16px;">
+        <tr>
+            <td align="center">
+                <table width="100%" style="max-width:560px; background-color:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 4px 6px rgba(0,0,0,0.05);">
+                    
+                    <!-- Header / Logo -->
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #1e40af 0%, #2563eb 100%); padding: 28px 32px; text-align:center;">
+                            <!-- IMPORTANT: Use a PUBLIC https URL. localhost will NOT work in real emails -->
+                            <img src="https://grandview-storage.s3.eu-north-1.amazonaws.com/assets/static/images/traderiser-logo-white.png" 
+                             alt="TradeRiser" 
+                             height="42" 
+                             style="display:block; margin:0 auto 8px;">
+                            <p style="margin:6px 0 0; color:#bfdbfe; font-size:13px; letter-spacing:1px;">
+                                NEXT-GEN TRADING PLATFORM
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Body -->
+                    <tr>
+                        <td style="padding: 36px 32px 24px;">
+                            <p style="margin:0 0 8px; color:#6b7280; font-size:14px;">
+                                Hello <strong style="color:#111827;">{{ username }}</strong>,
+                            </p>
+
+                            <div style="margin: 24px 0; padding: 16px 20px; background-color:#f0fdf4; border-left:4px solid #16a34a; border-radius:0 8px 8px 0;">
+                                <p style="margin:0; color:#111827; font-size:16px; line-height:1.5;">
+                                    Congratulations! Your identity verification (KYC) has been successfully reviewed and <strong>approved</strong>.
+                                </p>
+                            </div>
+
+                            <p style="margin:0 0 16px; color:#374151; font-size:15px; line-height:1.6;">
+                                You now have full access to all verified features on TradeRiser, including higher withdrawal limits and additional account types where applicable.
+                            </p>
+
+                            <p style="margin:0 0 24px; color:#374151; font-size:15px; line-height:1.6;">
+                                Thank you for completing the verification process. We are excited to have you trading with us.
+                            </p>
+
+                            <p style="margin:0 0 8px; color:#6b7280; font-size:13px;">
+                                Status: <span style="color:#16a34a; font-weight:600; text-transform:uppercase;">Approved</span>
+                            </p>
+
+                            <!-- CTA Button -->
+                            <table cellpadding="0" cellspacing="0" style="margin: 28px 0 8px;">
+                                <tr>
+                                    <td style="background-color:#2563eb; border-radius:8px;">
+                                        <a href="{{ dashboard_url }}" 
+                                           style="display:inline-block; padding:14px 28px; color:#ffffff; text-decoration:none; font-weight:600; font-size:15px;">
+                                            Go to Dashboard
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding: 24px 32px; background-color:#f9fafb; border-top:1px solid #e5e7eb;">
+                            <p style="margin:0 0 8px; color:#6b7280; font-size:13px; line-height:1.5;">
+                                If you have any questions, reply to this email or contact our support team at 
+                                <a href="mailto:support@traderiser.com" style="color:#2563eb; text-decoration:none;">support@traderiser.com</a>.
+                            </p>
+                            <p style="margin:16px 0 0; color:#9ca3af; font-size:12px;">
+                                © {{ year }} TradeRiser. All rights reserved.<br>
+                                This is an automated message regarding your account verification.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

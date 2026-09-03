@@ -16,6 +16,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
 from rest_framework.pagination import PageNumberPagination
+from django.template.loader import render_to_string
 
 from .models import Wallet, WalletTransaction, MpesaNumber, Currency, ExchangeRate, OTPCode
 from .serializers import (
@@ -294,17 +295,27 @@ class WithdrawalOTPView(APIView):
             )
 
         try:
+            context = {
+                'username': request.user.username,
+                'otp_code': otp_code,
+                'purpose': 'Withdrawal',
+                'reference_id': reference_id,
+                'amount': f"${amount} USD (≈ {converted_amount:.2f} KSH)",
+                'year': timezone.now().year,
+            }
+            html_message = render_to_string('wallet/emails/otp_email.html', context)
+
             send_mail(
                 subject="Your TradeRiser Withdrawal OTP",
-                message=(f"Hi {request.user.username},\n\n"
-                         f"Your OTP for withdrawing ${amount} USD (≈ {converted_amount:.2f} KSh)\n"
-                         f"from your {account_type.title()} account (Ref: {reference_id}) is:\n\n"
-                         f"{otp_code}\n\n"
-                         f"This OTP expires in 5 minutes.\n"
-                         f"If you did not request this, please contact support immediately.\n\n"
-                         f"TradeRiser Team"),
+                message=(
+                    f"Hi {request.user.username},\n\n"
+                    f"Your OTP for withdrawing ${amount} USD is: {otp_code}\n"
+                    f"It expires in 5 minutes.\n\n"
+                    f"TradeRiser Team"
+                ),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[request.user.email],
+                html_message=html_message,
                 fail_silently=False,
             )
         except Exception as e:
@@ -424,6 +435,17 @@ class VerifyWithdrawalOTPView(APIView):
     def _send_delayed_emails(self, trans: WalletTransaction, user_email: str, account_type: str):
         time.sleep(5)
         try:
+            # HTML version for user
+            context = {
+                'username': trans.wallet.account.user.username,
+                'amount': trans.amount,
+                'converted_amount': trans.converted_amount,
+                'mpesa_phone': trans.mpesa_phone or 'your M-Pesa',
+                'reference_id': trans.reference_id,
+                'year': timezone.now().year,
+            }
+            html_message = render_to_string('wallet/emails/withdrawal_completed.html', context)
+
             send_mail(
                 subject="Withdrawal Completed Successfully",
                 message=(f"Hi {trans.wallet.account.user.username},\n\n"
@@ -435,6 +457,7 @@ class VerifyWithdrawalOTPView(APIView):
                          f"Thank you for using TradeRiser!"),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[user_email],
+                html_message=html_message,
                 fail_silently=False,
             )
             send_mail(
@@ -594,15 +617,43 @@ class MpesaCallbackView(APIView):
                     description=f"Approved: {trans.reference_id}"
                 )
 
-                send_mail(
-                    "Deposit Approved!",
-                    f"Hi {user.username},\n\nYour deposit of KSh {trans.amount} has been approved.\n"
-                    f"${trans.converted_amount} USD credited to your {wallet.account.account_type} account.\n"
-                    f"Reference: {trans.reference_id}",
-                    settings.DEFAULT_FROM_EMAIL,
-                    [user.email],
-                    fail_silently=False
-                )
+                # HTML Deposit Approved email
+                try:
+                    context = {
+                        'username': user.username,
+                        'amount': trans.amount,
+                        'currency': 'KSH',
+                        'converted_amount': trans.converted_amount,
+                        'account_type': wallet.account.account_type.title(),
+                        'reference_id': trans.reference_id,
+                        'year': timezone.now().year,
+                    }
+                    html_message = render_to_string('wallet/emails/deposit_approved.html', context)
+
+                    send_mail(
+                        subject="Deposit Approved & Credited!",
+                        message=(
+                            f"Hi {user.username},\n\n"
+                            f"Your deposit of KSh {trans.amount} has been approved.\n"
+                            f"${trans.converted_amount} USD credited to your {wallet.account.account_type} account.\n"
+                            f"Reference: {trans.reference_id}"
+                        ),
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        recipient_list=[user.email],
+                        html_message=html_message,
+                        fail_silently=False
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to send deposit approved HTML email: {e}")
+                    send_mail(
+                        "Deposit Approved!",
+                        f"Hi {user.username},\n\nYour deposit of KSh {trans.amount} has been approved.\n"
+                        f"${trans.converted_amount} USD credited to your {wallet.account.account_type} account.\n"
+                        f"Reference: {trans.reference_id}",
+                        settings.DEFAULT_FROM_EMAIL,
+                        [user.email],
+                        fail_silently=False
+                    )
 
                 send_mail(
                     "Deposit Completed (Auto)",
@@ -664,14 +715,27 @@ class ResendOTPView(APIView):
             )
 
         try:
+            context = {
+                'username': request.user.username,
+                'otp_code': otp_code,
+                'purpose': 'Withdrawal (Resent)',
+                'reference_id': wallet_transaction.reference_id,
+                'amount': f"${wallet_transaction.amount} USD",
+                'year': timezone.now().year,
+            }
+            html_message = render_to_string('wallet/emails/otp_email.html', context)
+
             send_mail(
-                subject="Withdrawal OTP (Resent)",
-                message=(f"Hi {request.user.username},\n\n"
-                         f"Your new OTP for withdrawing {wallet_transaction.amount} USD "
-                         f"from {wallet_transaction.wallet.account.account_type} account "
-                         f"(Ref: {wallet_transaction.reference_id}) is: {otp_code}"),
+                subject="Withdrawal OTP (Resent) - TradeRiser",
+                message=(
+                    f"Hi {request.user.username},\n\n"
+                    f"Your new OTP is: {otp_code}\n"
+                    f"It expires in 5 minutes.\n\n"
+                    f"TradeRiser Team"
+                ),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[request.user.email],
+                html_message=html_message,
                 fail_silently=False,
             )
         except Exception as e:
@@ -776,16 +840,27 @@ class InitiateTransferView(APIView):
             )
 
         try:
+            context = {
+                'username': request.user.username,
+                'otp_code': otp.code,
+                'purpose': 'Transfer',
+                'reference_id': reference_id,
+                'amount': f"${amount} USD",
+                'year': timezone.now().year,
+            }
+            html_message = render_to_string('wallet/emails/otp_email.html', context)
+
             send_mail(
-                subject="Your Transfer OTP Code",
-                message=(f"Hi {request.user.username},\n\n"
-                         f"Your OTP for transferring ${amount} USD (Ref: {reference_id}) is:\n\n"
-                         f"{otp.code}\n\n"
-                         f"This code expires in 5 minutes.\n"
-                         f"If you didn't initiate this, contact support immediately.\n\n"
-                         f"TradeRiser Team"),
+                subject="Your TradeRiser Transfer OTP",
+                message=(
+                    f"Hi {request.user.username},\n\n"
+                    f"Your OTP for transferring ${amount} USD is: {otp.code}\n"
+                    f"It expires in 5 minutes.\n\n"
+                    f"TradeRiser Team"
+                ),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[request.user.email],
+                html_message=html_message,
                 fail_silently=False,
             )
         except Exception as e:
