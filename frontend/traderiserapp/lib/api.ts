@@ -1355,6 +1355,94 @@ export const placeBulkTrade = (data: {
     body: JSON.stringify(data),
   });
 
+export interface EliteRobotConfig {
+  id: number
+  robot: number
+  robot_name?: string
+  timeframe: string
+  stake: string | number
+  target_profit: string | number
+  target_market: string
+  config_code?: string
+  code_used?: boolean
+  is_running?: boolean
+  current_profit?: string | number
+  status_message?: string
+  last_entry?: string
+  run_started_at?: string | null
+  expected_duration_hours?: number
+  created_at?: string
+  updated_at?: string
+}
+
+export interface EliteRunStatus {
+  is_running: boolean
+  current_profit: string | number
+  target_profit: string | number
+  status_message: string
+  last_entry: string
+  progress_percent: number
+  time_remaining_seconds: number
+  target_reached: boolean
+  stake?: string | number
+  market?: string
+  timeframe?: string
+}
+
+export const getEliteConfig = () =>
+  apiRequest<{ config: EliteRobotConfig | null }>("/trading/elite/config/")
+
+export const saveEliteConfig = (data: {
+  timeframe: string
+  stake: number
+  target_profit: number
+  target_market: string
+}) =>
+  apiRequest<{
+    message: string
+    config: EliteRobotConfig
+    config_code: string
+    email_sent: boolean
+  }>("/trading/elite/config/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  })
+
+export const validateEliteCode = (config_code: string) =>
+  apiRequest<{
+    valid: boolean
+    config: EliteRobotConfig
+  }>("/trading/elite/validate-code/", {
+    method: "POST",
+    body: JSON.stringify({ config_code }),
+  })
+
+export const startEliteRun = (account_type: string = "standard") =>
+  apiRequest<{
+    message: string
+    config: EliteRobotConfig
+    expected_duration_seconds: number
+  }>("/trading/elite/start/", {
+    method: "POST",
+    body: JSON.stringify({ account_type }),
+  })
+
+export const getEliteStatus = (account_type: string = "standard") =>
+  apiRequest<EliteRunStatus>(`/trading/elite/status/?account_type=${account_type}`)
+
+export const resetEliteRun = () =>
+  apiRequest<{ message: string; config: EliteRobotConfig }>("/trading/elite/reset/", {
+    method: "POST",
+    body: JSON.stringify({}),
+  })
+
+export const stopEliteRun = () =>
+  apiRequest<{ message: string; current_profit: string | number }>("/trading/elite/stop/", {
+    method: "POST",
+    body: JSON.stringify({}),
+  })
+
+
 
 /* ------------------------------------------------------------------ */
 /* EXPORT API OBJECT */
@@ -1451,4 +1539,11 @@ export const api = {
   getMT5Positions,
   openMT5Position,
   closeMT5Position,
+  getEliteConfig,
+  saveEliteConfig,
+  validateEliteCode,
+  startEliteRun,
+  getEliteStatus,
+  resetEliteRun,
+  stopEliteRun,
 }

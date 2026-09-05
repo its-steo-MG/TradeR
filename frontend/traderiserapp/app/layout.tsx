@@ -1,23 +1,24 @@
 // app/layout.tsx
 import type React from "react";
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+// ❌ Removed: import { Inter } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { Toaster } from "sonner";
 import { Suspense } from "react";
 
 import ClientWrapper from "@/components/ClientWrapper";
-import InstallButton from '@/components/InstallButton';
-import SuspensionGuard from '@/components/SuspensionGuard';
-import NotificationProvider from '@/components/NotificationProvider';
-import { NotificationWatcher } from '@/components/NotificationWatcher';
+import InstallButton from "@/components/InstallButton";
+import SuspensionGuard from "@/components/SuspensionGuard";
+import NotificationProvider from "@/components/NotificationProvider";
+import { NotificationWatcher } from "@/components/NotificationWatcher";
 
 import "./globals.css";
 
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-sans",
-});
+// ❌ Removed the Inter font definition
+// const inter = Inter({
+//   subsets: ["latin"],
+//   variable: "--font-sans",
+// });
 
 export const metadata: Metadata = {
   title: "TradeRiser – Next-Gen Trading with Smart Automation",
@@ -50,7 +51,8 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
       </head>
-      <body className={`${inter.variable} font-sans antialiased`}>
+      {/* ✅ Use system font stack instead of Google Font */}
+      <body className="font-sans antialiased">
         <Suspense
           fallback={
             <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-800 to-gray-900">
@@ -62,18 +64,18 @@ export default function RootLayout({
             </div>
           }
         >
-          <NotificationProvider>                    {/* ← Moved OUTSIDE ClientWrapper */}
+          <NotificationProvider>
             <ClientWrapper>
               {children}
               <SuspensionGuard />
               <InstallButton />
             </ClientWrapper>
-            
-            <NotificationWatcher />                 {/* ← Also outside */}
+
+            <NotificationWatcher />
           </NotificationProvider>
         </Suspense>
 
-        <Toaster 
+        <Toaster
           theme="dark"
           richColors
           position="top-right"

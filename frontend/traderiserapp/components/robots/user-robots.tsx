@@ -1,4 +1,3 @@
-// components/robots/user-robots.tsx
 "use client"
 
 import { useEffect, useState } from "react"
@@ -6,6 +5,7 @@ import { api } from "@/lib/api"
 import { formatCurrency } from "@/lib/format-currency"
 import { Copy, Check } from "lucide-react"
 import { toast } from "sonner"
+import { EliteConfigPanel } from "./elite-config-panel"
 
 interface Robot {
   id: number
@@ -14,6 +14,8 @@ interface Robot {
   price: string
   image?: string
   is_deriv_robot?: boolean
+  is_elite_robot?: boolean          // ← NEW
+  effective_price?: string
 }
 
 interface UserRobot {
@@ -34,7 +36,6 @@ export function UserRobots() {
       try {
         const { data, error } = await api.getUserRobots()
         if (error) throw new Error(error)
-
         setUserRobots(data as UserRobot[])
       } catch (err) {
         console.error("Failed to load user robots:", err)
@@ -43,7 +44,6 @@ export function UserRobots() {
         setIsLoading(false)
       }
     }
-
     fetchUserRobots()
   }, [])
 
@@ -96,21 +96,28 @@ export function UserRobots() {
           : "Unknown"
 
         const isDerivRobot = robot.is_deriv_robot || !!deriv_access_key
+        const isElite = !!robot.is_elite_robot
 
         return (
           <div
             key={userRobot.id}
-            className="relative rounded-3xl p-6 flex flex-col overflow-hidden"
+            className={`relative rounded-3xl p-6 flex flex-col overflow-hidden ${
+              isElite ? "ring-2 ring-amber-500/50" : ""
+            }`}
             style={{
-              background: "rgba(255, 255, 255, 0.08)",
+              background: isElite
+                ? "linear-gradient(135deg, rgba(251,191,36,0.12) 0%, rgba(255,255,255,0.06) 100%)"
+                : "rgba(255, 255, 255, 0.08)",
               backdropFilter: "blur(24px)",
               WebkitBackdropFilter: "blur(24px)",
-              border: "1px solid rgba(255, 255, 255, 0.18)",
+              border: isElite
+                ? "1px solid rgba(251,191,36,0.35)"
+                : "1px solid rgba(255, 255, 255, 0.18)",
               boxShadow:
                 "0 12px 40px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.18)",
             }}
           >
-            {/* Soft top water-drop highlight */}
+            {/* Soft top highlight */}
             <div
               className="absolute inset-x-0 top-0 h-[40%] pointer-events-none rounded-t-3xl"
               style={{
@@ -129,11 +136,16 @@ export function UserRobots() {
               )}
 
               <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
                   <h3 className="text-lg font-bold text-white">{robot.name}</h3>
+                  {isElite && (
+                    <span className="text-xs bg-amber-500/25 text-amber-300 px-2.5 py-0.5 rounded-full font-semibold">
+                      ★ ELITE
+                    </span>
+                  )}
                   {isDerivRobot && (
-                    <span className="drop-on-top relative text-xs bg-amber-500/20 text-amber-400 px-2.5 py-0.5 rounded-full font-medium">
-                      <span className="relative z-[1]">DERIV PREMIUM</span>
+                    <span className="text-xs bg-amber-500/20 text-amber-400 px-2.5 py-0.5 rounded-full font-medium">
+                      DERIV PREMIUM
                     </span>
                   )}
                 </div>
@@ -163,21 +175,24 @@ export function UserRobots() {
                       <span className="flex-1">{deriv_access_key}</span>
                       <button
                         onClick={() => copyToClipboard(userRobot.id, deriv_access_key)}
-                        className="drop-on-top relative text-amber-400 hover:text-white transition-colors p-1.5 rounded-lg"
+                        className="text-amber-400 hover:text-white transition-colors p-1.5 rounded-lg"
                       >
-                        <span className="relative z-[1]">
-                          {copiedId === userRobot.id ? (
-                            <Check size={18} />
-                          ) : (
-                            <Copy size={18} />
-                          )}
-                        </span>
+                        {copiedId === userRobot.id ? (
+                          <Check size={18} />
+                        ) : (
+                          <Copy size={18} />
+                        )}
                       </button>
                     </div>
-                    <p className="text-[10px] text-white/50 mt-1">
-                      Paste this key into your Deriv trading bot
-                    </p>
                   </div>
+                )}
+
+                {/* ========== ELITE CONFIG PANEL ========== */}
+                {isElite && (
+                  <EliteConfigPanel
+                    robotId={robot.id}
+                    robotName={robot.name}
+                  />
                 )}
               </div>
             </div>

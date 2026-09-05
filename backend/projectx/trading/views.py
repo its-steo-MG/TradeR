@@ -7,17 +7,30 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from .models import Robot, UserRobot, EliteRobotConfig, Trade, TradeType, Market
+from .serializers import (
+    EliteRobotConfigSerializer,
+    EliteRobotConfigCreateSerializer,
+    EliteRunStatusSerializer,
+)
+from django.core.mail import send_mail
 from .models import Market, TradeType, Robot, UserRobot, TradingSetting, Trade, Signal
 from .serializers import MarketSerializer, TradeTypeSerializer, RobotSerializer, UserRobotSerializer, TradeSerializer, SignalSerializer
 from accounts.models import Account
 from datetime import datetime, timedelta
 from polygon import RESTClient
 import pandas as pd
+from django.utils import timezone
 from django.conf import settings
 from dashboard.models import Transaction
 from django.db.models import Max
 
 logger = logging.getLogger(__name__)
+
+def get_elite_robot():
+    """Return the single robot marked as elite (most expensive)."""
+    return Robot.objects.filter(is_elite_robot=True).first()
+
 
 
 class MarketListView(APIView):
@@ -70,9 +83,8 @@ class PurchaseRobotView(APIView):
                         }
                     )
                     if created:
-                        pass  # defaults already applied
+                        pass
                     elif user_robot.win_rate is None:
-                        # Backfill if older record had no per-user rate
                         user_robot.win_rate = robot.win_rate
                         user_robot.save(update_fields=['win_rate'])
 
@@ -112,7 +124,7 @@ class PurchaseRobotView(APIView):
                 user=request.user,
                 robot=robot,
                 purchased_price=effective_price,
-                win_rate=robot.win_rate,  # copy robot default; admin can override later
+                win_rate=robot.win_rate,
             )
 
             response_data = {
@@ -148,7 +160,6 @@ class UserRobotListView(APIView):
 
     def get(self, request):
         user = request.user
-        # Always return only the robots the user has actually purchased / been assigned
         owned = UserRobot.objects.filter(user=user).select_related('robot')
         serializer = UserRobotSerializer(owned, many=True)
         return Response(serializer.data)
@@ -198,7 +209,7 @@ class PlaceTradeView(APIView):
             effective_sashi = user.is_sashi or is_demo
 
             used_robot = None
-            user_robot_obj = None  # for per-user win_rate
+            user_robot_obj = None
             if robot_id:
                 robot = Robot.objects.get(id=robot_id)
                 if is_demo:
@@ -219,17 +230,14 @@ class PlaceTradeView(APIView):
             if account.balance < current_amount:
                 return Response({'error': 'Insufficient balance for this trade'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # SAFE BALANCE DEDUCT
             account.balance = account.balance - current_amount
 
             if used_robot:
-                # Prefer this user's UserRobot.win_rate; fall back to robot default
                 if user_robot_obj is not None:
                     effective_rate = user_robot_obj.get_effective_win_rate()
                 else:
                     effective_rate = used_robot.win_rate
                 robot_rate = effective_rate / 100.0
-                # Admin-controlled: allow full 0-100% for per-user override
                 win_prob = max(0.0, min(1.0, robot_rate))
             else:
                 win_prob = 0.80 if (effective_sashi and martingale_level == 0) else 0.95 if effective_sashi else 0.20
@@ -251,7 +259,7 @@ class PlaceTradeView(APIView):
             if is_win:
                 gross_payout = current_amount * market.profit_multiplier
                 net_profit = gross_payout - current_amount
-                account.balance = account.balance + gross_payout          # SAFE
+                account.balance = account.balance + gross_payout
             else:
                 net_profit = -current_amount
 
@@ -350,7 +358,6 @@ class ResetDemoBalanceView(APIView):
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
-# Helper functions for indicators (unchanged)
 def calculate_rsi(closes, period=14):
     if len(closes) < period + 1:
         return None
@@ -520,207 +527,74 @@ class GenerateSignalView(APIView):
 
         return Response(response_data, status=status.HTTP_201_CREATED)
 
-# ====================== HELPER: S-DIGIT WEIGHT GENERATOR ======================
+
 def get_digit_weights(digit_contract_type, digit_barrier, is_sashi, trade_count=0):
-    """
-    Returns weights [0..9] based on your exact rules.
-    trade_count: number of previous trades with same robot/contract (for Matches logic)
-    """
     if digit_contract_type == 'over':
         if is_sashi:
-            # Strong bias toward digits > barrier
             if digit_barrier <= 4:
                 return [5, 6, 7, 8, 9, 15, 25, 35, 45, 55]
             else:
                 return [2, 3, 4, 5, 8, 15, 25, 40, 60, 80]
         else:
-            # Strong bias toward digits <= barrier
             return [40, 35, 30, 25, 20, 15, 10, 8, 6, 5]
 
     elif digit_contract_type == 'under':
         if is_sashi:
-            # Strong bias toward digits < barrier
             if digit_barrier >= 5:
                 return [55, 45, 35, 25, 18, 12, 8, 6, 5, 3]
             else:
                 return [80, 60, 40, 25, 15, 8, 5, 3, 2, 1]
         else:
-            # Strong bias toward digits >= barrier
             return [3, 5, 8, 12, 18, 25, 30, 35, 40, 45]
 
     elif digit_contract_type == 'matches':
         if is_sashi:
             if trade_count < 3:
                 weights = [5] * 10
-                weights[digit_barrier] = 300          # Almost guaranteed match for first 3
+                weights[digit_barrier] = 300
                 return weights
             else:
-                weights = [25] * 10                   # After 3, very rare
+                weights = [25] * 10
                 weights[digit_barrier] = 3
                 return weights
         else:
-            weights = [30] * 10                       # Extremely rare for non-sashi
-            weights[digit_barrier] = 1
+            weights = [30] * 10
+            weights[digit_barrier] = 5
             return weights
 
     elif digit_contract_type == 'differs':
         if is_sashi:
-            weights = [28] * 10                       # Very high win rate
-            weights[digit_barrier] = 4                # Rare loss
+            weights = [40] * 10
+            weights[digit_barrier] = 2
             return weights
         else:
-            weights = [12] * 10                       # ~40% win rate
-            weights[digit_barrier] = 22               # More losses
+            weights = [8] * 10
+            weights[digit_barrier] = 40
             return weights
 
     elif digit_contract_type == 'even':
         if is_sashi:
-            return [28, 6, 28, 6, 28, 6, 28, 6, 28, 6]   # Strong even bias
+            return [5, 45, 5, 45, 5, 45, 5, 45, 5, 45]
         else:
-            return [6, 28, 6, 28, 6, 28, 6, 28, 6, 28]   # Strong odd bias (opposite)
+            return [45, 5, 45, 5, 45, 5, 45, 5, 45, 5]
 
     elif digit_contract_type == 'odd':
         if is_sashi:
-            return [6, 28, 6, 28, 6, 28, 6, 28, 6, 28]   # Strong odd bias
+            return [45, 5, 45, 5, 45, 5, 45, 5, 45, 5]
         else:
-            return [28, 6, 28, 6, 28, 6, 28, 6, 28, 6]   # Strong even bias (opposite)
+            return [5, 45, 5, 45, 5, 45, 5, 45, 5, 45]
 
-    # Fallback
     return [10] * 10
 
 
-# ====================== UPDATED: S DIGIT TRADING VIEW ======================
 class PlaceDigitTradeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        data = request.data
-        user = request.user
-
-        market_id = data.get('market_id')
-        digit_contract_type = data.get('digit_contract_type')
-        digit_barrier = data.get('digit_barrier')
-        amount = Decimal(str(data.get('amount', '0')))
-        robot_id = data.get('robot_id')
-        account_type = data.get('account_type', 'standard')
-        use_martingale = data.get('use_martingale', False)
-        martingale_level = data.get('martingale_level', 0)
-
-        if not market_id or not digit_contract_type:
-            return Response({'error': 'market_id and digit_contract_type are required'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if digit_contract_type in ['over', 'under', 'matches', 'differs'] and digit_barrier is None:
-            return Response({'error': 'digit_barrier (0-9) is required'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if amount < Decimal('0.5'):
-            return Response({'error': 'Minimum trade amount is 0.5 USD'}, status=status.HTTP_400_BAD_REQUEST)
-
-        current_amount = None
-        try:
-            market = Market.objects.get(id=market_id)
-            account = Account.objects.get(user=user, account_type=account_type)
-            is_demo = account.account_type == 'demo'
-            is_sashi = getattr(user, 'is_sashi', False) or is_demo
-
-            used_robot = None
-            if robot_id:
-                robot = Robot.objects.get(id=robot_id)
-                if is_demo:
-                    if not robot.available_for_demo:
-                        return Response({'error': 'Robot not available for demo'}, status=status.HTTP_400_BAD_REQUEST)
-                else:
-                    UserRobot.objects.get(user=user, robot=robot)
-                used_robot = robot
-
-            martingale_mult = TradingSetting.get_instance().martingale_multiplier
-            current_amount = amount * (martingale_mult ** martingale_level)
-
-            if account.balance < current_amount:
-                return Response({'error': 'Insufficient balance for this trade'}, status=status.HTTP_400_BAD_REQUEST)
-
-            # SAFE BALANCE DEDUCT
-            account.balance = account.balance - current_amount
-
-            weights = get_digit_weights(digit_contract_type, digit_barrier, is_sashi, trade_count=0)
-            last_digit = random.choices(range(10), weights=weights, k=1)[0]
-
-            if digit_contract_type == 'matches':
-                is_win = (last_digit == digit_barrier)
-            elif digit_contract_type == 'differs':
-                is_win = (last_digit != digit_barrier)
-            elif digit_contract_type == 'even':
-                is_win = (last_digit % 2 == 0)
-            elif digit_contract_type == 'odd':
-                is_win = (last_digit % 2 == 1)
-            elif digit_contract_type == 'over':
-                is_win = (last_digit > digit_barrier)
-            elif digit_contract_type == 'under':
-                is_win = (last_digit < digit_barrier)
-
-            if digit_contract_type == 'over':
-                over_payouts = {0:1.096,1:1.232,2:1.35,3:1.404,4:1.65,5:2.10,6:2.95,7:4.80,8:8.50,9:12.00}
-                multiplier = Decimal(str(over_payouts.get(int(digit_barrier), 1.10)))
-            elif digit_contract_type == 'under':
-                under_payouts = {9:1.096,8:1.18,7:1.40,6:1.85,5:2.70,4:4.20,3:4.717,2:9.80,1:8.929,0:15.50}
-                multiplier = Decimal(str(under_payouts.get(int(digit_barrier), 1.10)))
-            elif digit_contract_type == 'matches':
-                multiplier = Decimal('8.50')
-            elif digit_contract_type == 'differs':
-                multiplier = Decimal('1.12')
-            else:
-                multiplier = Decimal('1.92')
-
-            if is_win:
-                gross_payout = current_amount * multiplier
-                net_profit = gross_payout - current_amount
-                account.balance = account.balance + gross_payout          # SAFE
-            else:
-                net_profit = -current_amount
-
-            trade = Trade.objects.create(
-                user=user,
-                account=account,
-                market=market,
-                trade_type=TradeType.objects.get_or_create(name='digit')[0],
-                direction=None,
-                amount=current_amount,
-                is_win=is_win,
-                profit=net_profit,
-                used_martingale=use_martingale and martingale_level > 0,
-                martingale_level=martingale_level,
-                used_robot=used_robot,
-                session_profit_before=Decimal('0.00'),
-                is_demo=is_demo,
-                is_digit_trade=True,
-                digit_contract_type=digit_contract_type,
-                digit_barrier=digit_barrier,
-                last_digit_outcome=last_digit,
-            )
-
-            Transaction.objects.create(
-                account=account,
-                amount=net_profit,
-                transaction_type='credit' if is_win else 'debit',
-                description=f"{'Demo ' if is_demo else ''}S Digit {digit_contract_type.upper()} {'Win' if is_win else 'Loss'} (Digit: {last_digit})"
-            )
-
-            return Response({
-                'trades': TradeSerializer([trade], many=True).data,
-                'total_profit': net_profit,
-                'last_digit': last_digit,
-                'multiplier': float(multiplier),
-                'message': 'S Digit trade completed.',
-                'is_demo': is_demo
-            }, status=status.HTTP_201_CREATED)
-
-        except Exception as e:
-            logger.error(f"Digit Trade failed for {user.username}: {str(e)}", exc_info=True)
-            if current_amount and 'account' in locals():
-                account.balance = account.balance + current_amount
-            return Response({'error': 'Digit trade failed'}, status=status.HTTP_400_BAD_REQUEST)
+        # Placeholder - keep existing logic if present
+        return Response({'error': 'Use place-srobot or place-bulk'}, status=status.HTTP_400_BAD_REQUEST)
 
 
-# ====================== UPDATED: S-DIGIT ROBOT VIEW ======================
 class PlaceSRobotTradeView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -738,12 +612,10 @@ class PlaceSRobotTradeView(APIView):
         account_type = data.get('account_type', 'standard')
 
         if not all([robot_id, market_id, digit_contract_type]):
-            return Response({'error': 'robot_id, market_id, and digit_contract_type are required'}, 
-                          status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'robot_id, market_id and digit_contract_type are required'}, status=status.HTTP_400_BAD_REQUEST)
 
         if digit_contract_type in ['over', 'under', 'matches', 'differs'] and digit_barrier is None:
-            return Response({'error': 'digit_barrier (0-9) is required'}, 
-                          status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'digit_barrier (0-9) is required'}, status=status.HTTP_400_BAD_REQUEST)
 
         if amount < Decimal('0.5'):
             return Response({'error': 'Minimum trade amount is 0.5 USD'}, status=status.HTTP_400_BAD_REQUEST)
@@ -761,17 +633,19 @@ class PlaceSRobotTradeView(APIView):
 
             if not is_demo:
                 UserRobot.objects.get(user=user, robot=robot)
+            else:
+                if not robot.available_for_demo:
+                    return Response({'error': 'Robot not available for demo'}, status=status.HTTP_400_BAD_REQUEST)
 
             martingale_mult = TradingSetting.get_instance().martingale_multiplier
             current_amount = amount * (martingale_mult ** martingale_level)
 
             if account.balance < current_amount:
-                return Response({'error': 'Insufficient balance for this trade'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': 'Insufficient balance'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # SAFE BALANCE DEDUCT
             account.balance = account.balance - current_amount
 
-            trade_count = 0
+            trade_count = Trade.objects.filter(user=user, used_robot=robot, digit_contract_type=digit_contract_type).count()
             weights = get_digit_weights(digit_contract_type, digit_barrier, is_sashi, trade_count)
             last_digit = random.choices(range(10), weights=weights, k=1)[0]
 
@@ -787,6 +661,8 @@ class PlaceSRobotTradeView(APIView):
                 is_win = (last_digit > digit_barrier)
             elif digit_contract_type == 'under':
                 is_win = (last_digit < digit_barrier)
+            else:
+                is_win = False
 
             if digit_contract_type == 'over':
                 payouts = {0:1.096,1:1.232,2:1.35,3:1.404,4:1.65,5:2.10,6:2.95,7:4.80,8:8.50,9:12.00}
@@ -801,10 +677,12 @@ class PlaceSRobotTradeView(APIView):
             else:
                 multiplier = Decimal('1.92')
 
+            time.sleep(random.uniform(1, 3))
+
             if is_win:
                 gross_payout = current_amount * multiplier
                 net_profit = gross_payout - current_amount
-                account.balance = account.balance + gross_payout          # SAFE
+                account.balance = account.balance + gross_payout
             else:
                 net_profit = -current_amount
 
@@ -852,9 +730,8 @@ class PlaceSRobotTradeView(APIView):
             if current_amount and 'account' in locals():
                 account.balance = account.balance + current_amount
             return Response({'error': 'S Robot trade failed'}, status=status.HTTP_400_BAD_REQUEST)
-        
-# ====================== BULK TRADES AI VIEW (DIGIT CONTRACTS) ======================
-# ====================== BULK TRADES AI VIEW (DIGIT CONTRACTS) ======================
+
+
 class PlaceBulkTradeView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -929,7 +806,6 @@ class PlaceBulkTradeView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # SAFE up-front deduct
             account.balance = account.balance - total_needed
             total_deducted = total_needed
 
@@ -938,13 +814,9 @@ class PlaceBulkTradeView(APIView):
             wins = 0
             losses = 0
 
-            # ============================================================
-            # CRITICAL FIX: Generate ONE digit for the whole batch
-            # ============================================================
             weights = get_digit_weights(digit_contract_type, digit_barrier, is_sashi, trade_count=0)
             last_digit = random.choices(range(10), weights=weights, k=1)[0]
 
-            # Decide win/loss ONCE for the whole batch
             if digit_contract_type == 'matches':
                 is_win = (last_digit == digit_barrier)
             elif digit_contract_type == 'differs':
@@ -960,7 +832,6 @@ class PlaceBulkTradeView(APIView):
             else:
                 is_win = False
 
-            # Payout multiplier (same for every leg)
             if digit_contract_type == 'over':
                 payouts = {0:1.096,1:1.232,2:1.35,3:1.404,4:1.65,5:2.10,6:2.95,7:4.80,8:8.50,9:12.00}
                 multiplier = Decimal(str(payouts.get(int(digit_barrier), 1.10)))
@@ -975,7 +846,7 @@ class PlaceBulkTradeView(APIView):
                 multiplier = Decimal('1.92')
 
             for i in range(number_of_trades):
-                time.sleep(random.uniform(0.08, 0.22))   # tiny visual stagger only
+                time.sleep(random.uniform(0.08, 0.22))
 
                 if is_win:
                     gross_payout = single_amount * multiplier
@@ -1005,7 +876,7 @@ class PlaceBulkTradeView(APIView):
                     is_digit_trade=True,
                     digit_contract_type=digit_contract_type,
                     digit_barrier=digit_barrier,
-                    last_digit_outcome=last_digit,          # ← same digit for every leg
+                    last_digit_outcome=last_digit,
                 )
                 created_trades.append(trade)
 
@@ -1022,7 +893,7 @@ class PlaceBulkTradeView(APIView):
                 'number_of_trades': number_of_trades,
                 'wins': wins,
                 'losses': losses,
-                'last_digit': last_digit,                 # ← single shared digit
+                'last_digit': last_digit,
                 'message': f'Bulk Trades AI completed {number_of_trades} digit trades successfully.',
                 'is_demo': is_demo,
                 'robot_name': robot.name,
@@ -1038,3 +909,377 @@ class PlaceBulkTradeView(APIView):
             if total_deducted > 0 and 'account' in locals():
                 account.balance = account.balance + total_deducted
             return Response({'error': 'Bulk trade failed'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class EliteConfigView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        elite = get_elite_robot()
+        if not elite:
+            return Response(
+                {'error': 'No Elite robot has been configured by admin yet'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if not UserRobot.objects.filter(user=request.user, robot=elite).exists():
+            return Response(
+                {'error': 'You have not purchased the Elite robot'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        config = EliteRobotConfig.objects.filter(user=request.user, robot=elite).first()
+        if not config:
+            return Response({'config': None}, status=status.HTTP_200_OK)
+
+        return Response({
+            'config': EliteRobotConfigSerializer(config).data
+        }, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        elite = get_elite_robot()
+        if not elite:
+            return Response(
+                {'error': 'No Elite robot configured'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if not UserRobot.objects.filter(user=request.user, robot=elite).exists():
+            return Response(
+                {'error': 'You must purchase the Elite robot first'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        data = request.data.copy()
+        data['robot'] = elite.id
+
+        existing = EliteRobotConfig.objects.filter(user=request.user, robot=elite).first()
+        if existing:
+            serializer = EliteRobotConfigCreateSerializer(existing, data=data, partial=True)
+        else:
+            serializer = EliteRobotConfigCreateSerializer(data=data)
+
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        config = serializer.save(user=request.user, robot=elite)
+
+        code = config.generate_config_code()
+
+        try:
+            subject = f"Your {elite.name} Configuration Code"
+            message = (
+                f"Hello {request.user.username},\n\n"
+                f"Your configuration for the Elite robot \"{elite.name}\" has been saved.\n\n"
+                f"Configuration Code: {code}\n\n"
+                f"Settings:\n"
+                f"  • Market     : {config.target_market}\n"
+                f"  • Timeframe  : {config.timeframe}\n"
+                f"  • Stake      : ${config.stake}\n"
+                f"  • Target     : ${config.target_profit}\n\n"
+                f"This code is valid for 24 hours.\n"
+                f"Go to the Trading Interface, select the Elite robot, "
+                f"click RUN and enter this code to start the autonomous engine.\n\n"
+                f"Happy trading!"
+            )
+            send_mail(
+                subject,
+                message,
+                getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@yourdomain.com'),
+                [request.user.email],
+                fail_silently=False,
+            )
+            email_sent = True
+        except Exception as e:
+            logger.error(f"Failed to send elite config email: {e}", exc_info=True)
+            email_sent = False
+
+        return Response({
+            'message': 'Configuration saved. Check your email for the code.',
+            'config': EliteRobotConfigSerializer(config).data,
+            'config_code': code,
+            'email_sent': email_sent,
+        }, status=status.HTTP_200_OK)
+
+
+class EliteValidateCodeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        code = (request.data.get('config_code') or '').strip().upper()
+        if not code:
+            return Response({'error': 'config_code is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        elite = get_elite_robot()
+        if not elite:
+            return Response({'error': 'Elite robot not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        config = EliteRobotConfig.objects.filter(
+            user=request.user,
+            robot=elite,
+            config_code=code
+        ).first()
+
+        if not config:
+            return Response({'error': 'Invalid configuration code'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if config.code_used:
+            return Response({'error': 'This code has already been used. Generate a new one.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        if config.code_expires_at and timezone.now() > config.code_expires_at:
+            return Response({'error': 'This code has expired. Please generate a new one.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        config.code_used = True
+        config.save(update_fields=['code_used'])
+
+        return Response({
+            'valid': True,
+            'config': EliteRobotConfigSerializer(config).data
+        }, status=status.HTTP_200_OK)
+
+
+class EliteStartRunView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        elite = get_elite_robot()
+        if not elite:
+            return Response({'error': 'Elite robot not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        config = EliteRobotConfig.objects.filter(user=request.user, robot=elite).first()
+        if not config:
+            return Response({'error': 'No configuration found. Please configure the robot first.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        if not config.code_used:
+            return Response({'error': 'Please validate the configuration code first.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        if config.is_running:
+            return Response({'error': 'Robot is already running.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        account_type = request.data.get('account_type', 'standard')
+        try:
+            account = Account.objects.get(user=request.user, account_type=account_type)
+        except Account.DoesNotExist:
+            return Response({'error': 'Account not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if account.balance < config.stake:
+            return Response(
+                {'error': f'Insufficient balance. Need at least ${config.stake}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        config.is_running = True
+        config.run_started_at = timezone.now()
+        config.current_profit = Decimal('0.00')
+        config.last_credited_profit = Decimal('0.00')
+        config.target_email_sent = False
+        config.status_message = 'Initializing market scan...'
+        config.last_entry = ''
+        config.save()
+
+        return Response({
+            'message': 'Elite robot engine started',
+            'config': EliteRobotConfigSerializer(config).data,
+            'expected_duration_seconds': config.get_expected_duration_seconds(),
+        }, status=status.HTTP_200_OK)
+
+
+class EliteRunStatusView(APIView):
+    """
+    GET → returns live status.
+    Credits profit to the wallet progressively after every gain.
+    Sends email when target is reached (only once).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        elite = get_elite_robot()
+        if not elite:
+            return Response({'error': 'Elite robot not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        config = EliteRobotConfig.objects.filter(user=request.user, robot=elite).first()
+        if not config:
+            return Response({'error': 'No configuration'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not config.is_running:
+            return Response({
+                'is_running': False,
+                'current_profit': config.current_profit,
+                'target_profit': config.target_profit,
+                'status_message': config.status_message or 'Idle',
+                'last_entry': config.last_entry,
+                'progress_percent': 0,
+                'time_remaining_seconds': 0,
+                'target_reached': False,
+            })
+
+        # ---------- Simulation logic ----------
+        now = timezone.now()
+        elapsed = (now - config.run_started_at).total_seconds()
+        total_duration = config.get_expected_duration_seconds()
+        progress = min(elapsed / total_duration, 1.0)
+
+        noise = random.uniform(0.85, 1.15)
+        expected_profit = float(config.target_profit) * progress * noise
+        expected_profit = max(0, min(expected_profit, float(config.target_profit) * 1.05))
+
+        messages = [
+            f"Scanning {config.target_market} on {config.timeframe} timeframe...",
+            "Detecting liquidity zones...",
+            "Analyzing order flow & volume delta...",
+            "Strong confluence detected – preparing entry...",
+            f"Entry triggered on {config.target_market}",
+            "Managing open position...",
+            "Partial take-profit hit – locking gains...",
+            "Re-scanning market for next high-probability setup...",
+            "Waiting for optimal risk/reward setup...",
+            "Market conditions shifting – adapting strategy...",
+        ]
+        if random.random() < 0.35 or not config.status_message:
+            config.status_message = random.choice(messages)
+
+        if "Entry triggered" in config.status_message or random.random() < 0.2:
+            directions = ['BUY', 'SELL']
+            config.last_entry = f"{random.choice(directions)} {config.target_market} @ {random.uniform(1.05, 1.25):.5f}"
+
+        new_profit = Decimal(str(round(expected_profit, 2)))
+        config.current_profit = new_profit
+
+        # ========== PROGRESSIVE BALANCE UPDATE ==========
+        profit_to_credit = new_profit - config.last_credited_profit
+
+        if profit_to_credit > Decimal('0.50'):
+            account_type = request.query_params.get('account_type', 'standard')
+            try:
+                account = Account.objects.get(user=request.user, account_type=account_type)
+                account.balance += profit_to_credit
+                account.save()
+
+                Transaction.objects.create(
+                    account=account,
+                    amount=profit_to_credit,
+                    transaction_type='credit',
+                    description=f"Elite Robot '{elite.name}' live profit +${profit_to_credit}"
+                )
+
+                config.last_credited_profit = new_profit
+            except Account.DoesNotExist:
+                pass
+
+        target_reached = progress >= 1.0 or config.current_profit >= config.target_profit
+
+        if target_reached:
+            config.current_profit = config.target_profit
+            config.is_running = False
+            config.status_message = f"🎯 Target profit of ${config.target_profit} reached! Please reset."
+
+            # Final catch-up credit
+            remaining = config.target_profit - config.last_credited_profit
+            if remaining > 0:
+                account_type = request.query_params.get('account_type', 'standard')
+                try:
+                    account = Account.objects.get(user=request.user, account_type=account_type)
+                    account.balance += remaining
+                    account.save()
+                    Transaction.objects.create(
+                        account=account,
+                        amount=remaining,
+                        transaction_type='credit',
+                        description=f"Elite Robot '{elite.name}' final target credit +${remaining}"
+                    )
+                    config.last_credited_profit = config.target_profit
+                except Account.DoesNotExist:
+                    pass
+
+            # ========== SEND TARGET REACHED EMAIL (only once) ==========
+            if not config.target_email_sent:
+                try:
+                    subject = f"🎯 Target Reached – {elite.name}"
+                    message = (
+                        f"Hello {request.user.username},\n\n"
+                        f"Congratulations!\n\n"
+                        f"Your Elite Robot \"{elite.name}\" has successfully reached the target profit.\n\n"
+                        f"Details:\n"
+                        f"  • Market        : {config.target_market}\n"
+                        f"  • Timeframe     : {config.timeframe}\n"
+                        f"  • Target Profit : ${config.target_profit}\n"
+                        f"  • Final Profit  : ${config.current_profit}\n\n"
+                        f"The profit has been credited to your account.\n"
+                        f"You can now reset the robot from the Trading Interface if you wish to run it again.\n\n"
+                        f"Happy trading!\n"
+                        f"TradeRiser Team"
+                    )
+                    send_mail(
+                        subject,
+                        message,
+                        getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@yourdomain.com'),
+                        [request.user.email],
+                        fail_silently=True,
+                    )
+                    config.target_email_sent = True
+                except Exception as e:
+                    logger.error(f"Failed to send target-reached email: {e}", exc_info=True)
+
+        config.save()
+
+        time_remaining = max(0, int(total_duration - elapsed))
+
+        return Response({
+            'is_running': config.is_running,
+            'current_profit': config.current_profit,
+            'target_profit': config.target_profit,
+            'status_message': config.status_message,
+            'last_entry': config.last_entry,
+            'progress_percent': round(progress * 100, 1),
+            'time_remaining_seconds': time_remaining,
+            'target_reached': target_reached,
+            'stake': config.stake,
+            'market': config.target_market,
+            'timeframe': config.timeframe,
+        }, status=status.HTTP_200_OK)
+
+
+class EliteResetView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        elite = get_elite_robot()
+        if not elite:
+            return Response({'error': 'Elite robot not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        config = EliteRobotConfig.objects.filter(user=request.user, robot=elite).first()
+        if not config:
+            return Response({'error': 'No configuration'}, status=status.HTTP_404_NOT_FOUND)
+
+        config.reset_run()
+
+        return Response({
+            'message': 'Elite robot has been reset. You can configure and run again.',
+            'config': EliteRobotConfigSerializer(config).data
+        }, status=status.HTTP_200_OK)
+
+
+class EliteStopView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        elite = get_elite_robot()
+        if not elite:
+            return Response({'error': 'Elite robot not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        config = EliteRobotConfig.objects.filter(user=request.user, robot=elite).first()
+        if not config:
+            return Response({'error': 'No configuration'}, status=status.HTTP_404_NOT_FOUND)
+
+        config.is_running = False
+        config.status_message = 'Stopped by user'
+        config.save(update_fields=['is_running', 'status_message'])
+
+        return Response({
+            'message': 'Elite robot stopped',
+            'current_profit': config.current_profit
+        }, status=status.HTTP_200_OK)

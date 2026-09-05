@@ -12,7 +12,13 @@ from .views import (
     GenerateSignalView,
     PlaceDigitTradeView,
     PlaceSRobotTradeView,
-    PlaceBulkTradeView,            # ← NEW: Bulk Trades AI
+    PlaceBulkTradeView, 
+    EliteConfigView,
+    EliteValidateCodeView,
+    EliteStartRunView,
+    EliteRunStatusView,
+    EliteResetView,
+    EliteStopView,
 )
 
 urlpatterns = [
@@ -29,4 +35,10 @@ urlpatterns = [
     path('trades/place-srobot/', PlaceSRobotTradeView.as_view(), name='place_srobot_trade'),
     # NEW: Bulk Trades AI Endpoint
     path('trades/place-bulk/', PlaceBulkTradeView.as_view(), name='place_bulk_trade'),
+    path('elite/config/', EliteConfigView.as_view(), name='elite_config'),
+    path('elite/validate-code/', EliteValidateCodeView.as_view(), name='elite_validate_code'),
+    path('elite/start/', EliteStartRunView.as_view(), name='elite_start'),
+    path('elite/status/', EliteRunStatusView.as_view(), name='elite_status'),
+    path('elite/reset/', EliteResetView.as_view(), name='elite_reset'),
+    path('elite/stop/', EliteStopView.as_view(), name='elite_stop'),
 ]

@@ -3,6 +3,8 @@ from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
 from decimal import Decimal
 from accounts.models import Account
+import secrets
+import string
 from storages.backends.s3boto3 import S3Boto3Storage
 
 # ==================== SHARED CHOICES ====================
@@ -78,6 +80,11 @@ class Robot(models.Model):
         help_text="Optional default contract type for this robot (over, under, matches, etc.)"
     )
 
+    is_elite_robot = models.BooleanField(
+        default=False,
+        help_text="Mark the SINGLE most expensive / Elite robot. Only one should be True."
+    )
+
     # ==================== BULK TRADES AI ROBOT FIELDS ====================
     is_bulk_robot = models.BooleanField(
         default=False,
@@ -102,8 +109,6 @@ class UserRobot(models.Model):
     robot = models.ForeignKey(Robot, on_delete=models.PROTECT)
     purchased_at = models.DateTimeField(auto_now_add=True)
     purchased_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    # Per-user win rate override. If null, falls back to robot.win_rate.
-    # Admin can set this so one user's copy of a robot behaves differently from others.
     win_rate = models.IntegerField(
         null=True,
         blank=True,
@@ -118,7 +123,6 @@ class UserRobot(models.Model):
         return f"{self.user.username} - {self.robot.name}"
 
     def get_effective_win_rate(self):
-        """Return this user's win rate for the robot, or the robot default if not set."""
         if self.win_rate is not None:
             return self.win_rate
         return self.robot.win_rate
@@ -139,10 +143,8 @@ class Trade(models.Model):
         ('sell', 'Sell/Fall/No Touch'),
     ]
 
-    # ==================== DIGIT TRADING FIELDS ====================
-    DIGIT_CONTRACT_TYPES = DIGIT_CONTRACT_TYPES  # Reference the shared choices
+    DIGIT_CONTRACT_TYPES = DIGIT_CONTRACT_TYPES
 
-    # Regular trading fields
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='trades')
     account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name='trades')
     market = models.ForeignKey(Market, on_delete=models.PROTECT)
@@ -166,7 +168,6 @@ class Trade(models.Model):
     exit_spot = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     current_spot = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
-    # Digit Trading Fields
     is_digit_trade = models.BooleanField(default=False, help_text="True if this is a digit (S Digit) trade")
     digit_contract_type = models.CharField(
         max_length=10,
@@ -205,3 +206,98 @@ class Signal(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.market.name} - {self.direction} - Prob: {self.probability}%"
+
+
+class EliteRobotConfig(models.Model):
+    """Per-user configuration for the Elite (most expensive) robot."""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='elite_configs'
+    )
+    robot = models.ForeignKey(
+        'Robot',
+        on_delete=models.CASCADE,
+        related_name='elite_configs'
+    )
+
+    # User settings
+    timeframe = models.CharField(
+        max_length=20,
+        default='5m',
+        help_text="e.g. 1m, 5m, 15m, 1h, 4h"
+    )
+    stake = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('100.00'))],
+        help_text="Minimum stake is 100 USD"
+    )
+    target_profit = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('50.00'))]
+    )
+    target_market = models.CharField(
+        max_length=50,
+        help_text="e.g. XAUUSD, EURJPY, BTCUSD"
+    )
+
+    # Security
+    config_code = models.CharField(max_length=32, unique=True, blank=True)
+    code_used = models.BooleanField(default=False)
+    code_expires_at = models.DateTimeField(null=True, blank=True)
+
+    # Run state
+    is_running = models.BooleanField(default=False)
+    run_started_at = models.DateTimeField(null=True, blank=True)
+    current_profit = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal('0.00')
+    )
+    last_credited_profit = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal('0.00')
+    )
+    status_message = models.CharField(max_length=255, blank=True, default='')
+    last_entry = models.CharField(max_length=100, blank=True, default='')
+    target_email_sent = models.BooleanField(default=False)   # ← NEW
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('user', 'robot')
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f"{self.user.username} - {self.robot.name} config"
+
+    def generate_config_code(self):
+        alphabet = string.ascii_uppercase + string.digits
+        code = ''.join(secrets.choice(alphabet) for _ in range(12))
+        self.config_code = f"{code[:4]}-{code[4:8]}-{code[8:]}"
+        self.code_used = False
+        from django.utils import timezone
+        from datetime import timedelta
+        self.code_expires_at = timezone.now() + timedelta(hours=24)
+        self.save(update_fields=['config_code', 'code_used', 'code_expires_at'])
+        return self.config_code
+
+    def get_expected_duration_seconds(self):
+        tp = float(self.target_profit)
+        if tp <= 600:
+            return 3600
+        elif tp <= 5000:
+            return 7200
+        else:
+            return 21600
+
+    def reset_run(self):
+        self.is_running = False
+        self.run_started_at = None
+        self.current_profit = Decimal('0.00')
+        self.last_credited_profit = Decimal('0.00')
+        self.status_message = ''
+        self.last_entry = ''
+        self.code_used = False
+        self.target_email_sent = False          # ← reset the flag
+        self.save()

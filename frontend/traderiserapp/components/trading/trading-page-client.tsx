@@ -1,4 +1,4 @@
-// app/trading/page.tsx
+// components/trading/trading-page-client.tsx
 "use client"
 
 import { useEffect, useState, useRef } from "react"
@@ -7,6 +7,7 @@ import { TradingInterface } from "@/components/trading/trading-interface"
 import { TradeHistory } from "@/components/trading/trade-history"
 import { TradingViewWidget } from "@/components/trading/tradingview-widget"
 import { TradingModeSelector } from "@/components/trading/trading-mode-selector"
+import { EliteRobotInterface } from "@/components/trading/elite-robot-interface"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { TradeExecutionQueue } from "@/components/trading/trade-execution-queue"
@@ -27,6 +28,7 @@ interface UserRobot {
     id: number
     name: string
     available_for_demo?: boolean
+    is_elite_robot?: boolean
   }
   purchased_at: string | null
 }
@@ -82,10 +84,8 @@ const mapToTradingViewSymbol = (market: string): string => {
 
 export default function TradingPageClient() {
   const router = useRouter()
-  const hasShownLoadToast = useRef(false)
   const hasShownStartToast = useRef(false)
 
-  const showSuccess = (message: string) => toast.success(message)
   const showError = (message: string) => toast.error(message)
   const showTradeResult = (isWin: boolean, profit: number, amount: number, sessionProfit: number) => {
     if (isWin) {
@@ -110,32 +110,13 @@ export default function TradingPageClient() {
   const [sessionProfit, setSessionProfit] = useState<number>(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [executingTrades, setExecutingTrades] = useState<
-    Array<{
-      id: string
-      market: string
-      direction: "buy" | "sell"
-      amount: number
-      status: "pending" | "executing" | "completed"
-      isWin?: boolean
-      profit?: number
-      timeLeft?: number
-      entrySpot?: number
-      market_id: number
-      trade_type_id: number
-      robot_id?: number
-      use_martingale: boolean
-      martingale_level: number
-      targetProfit: number
-      stopLoss: number
-      profit_multiplier: string
-    }>
-  >([])
+  const [executingTrades, setExecutingTrades] = useState<any[]>([])
   const [showExecutionModal, setShowExecutionModal] = useState(false)
   const [isAutoTrading, setIsAutoTrading] = useState(false)
   const [isSessionActive, setIsSessionActive] = useState(false)
   const [selectedAccount, setSelectedAccount] = useState<string>("standard")
   const [chartType, setChartType] = useState<"tradingview" | "analysis">("tradingview")
+  const [isEliteMode, setIsEliteMode] = useState(false)
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -163,7 +144,7 @@ export default function TradingPageClient() {
         setUserRobots(userRobotsRes.data as UserRobot[])
 
         const accountObj = dashboard.accounts.find(
-          (acc: { account_type: string; balance: string | number }) => acc.account_type === selectedAccount,
+          (acc) => acc.account_type === selectedAccount,
         )
         const accountBalance = accountObj && accountObj.balance !== undefined ? Number(accountObj.balance) : 0
 
@@ -183,6 +164,22 @@ export default function TradingPageClient() {
     }
     fetchInitialData()
   }, [selectedAccount])
+
+  // Detect Elite robot
+  const handleRobotSelect = (robotId: number | null) => {
+    setSelectedRobot(robotId)
+    if (robotId) {
+      const ur = userRobots.find((r) => r.robot.id === robotId)
+      if (ur?.robot?.is_elite_robot) {
+        setIsEliteMode(true)
+        setTradingMode("robot")
+      } else {
+        setIsEliteMode(false)
+      }
+    } else {
+      setIsEliteMode(false)
+    }
+  }
 
   const handleStartTrading = (tradeParams: TradeParams) => {
     const marketObj = markets.find((m) => m.name === selectedMarket)
@@ -234,21 +231,10 @@ export default function TradingPageClient() {
   }
 
   const handleStopTrading = () => {
-    console.log("[v0] Stop trading called")
     setIsAutoTrading(false)
     setExecutingTrades((prev) => prev.filter((t) => t.status === "completed"))
     hasShownStartToast.current = false
     toast.success("Trading stopped")
-  }
-
-  const handleLogout = () => {
-    localStorage.removeItem("access_token")
-    localStorage.removeItem("refresh_token")
-    localStorage.removeItem("account_type")
-    localStorage.removeItem("user_session")
-    window.dispatchEvent(new Event("custom-storage-change"))
-    toast.success("Logged out")
-    router.push("/login")
   }
 
   if (loading) {
@@ -280,9 +266,10 @@ export default function TradingPageClient() {
     )
   }
 
+  const selectedEliteRobot = userRobots.find((r) => r.robot.id === selectedRobot)
+
   return (
     <div className="relative min-h-screen text-white overflow-hidden">
-      {/* BLACK DOMINANT BACKGROUND - SAME AS DASHBOARD & ROBOTS */}
       <div className="fixed inset-0 z-0">
         <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950 to-black" />
         <div className="absolute inset-0 bg-gradient-to-br from-transparent via-purple-950/30 to-pink-950/20" />
@@ -298,11 +285,15 @@ export default function TradingPageClient() {
               <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-4 sm:mb-6 md:mb-8">
                 Trading Dashboard
               </h1>
+
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                 <div className="md:col-span-1 lg:col-span-2 xl:col-span-3 space-y-4 sm:space-y-6">
+                  {/* Balance cards */}
                   <div className="rounded-lg bg-white/5 backdrop-blur-md border border-white/10 p-3 sm:p-4">
                     <p className="text-xs text-white/60 mb-1">Account Balance</p>
-                    <p className="text-lg sm:text-xl font-bold text-green-400 truncate">${formatCurrency(balance)}</p>
+                    <p className="text-lg sm:text-xl font-bold text-green-400 truncate">
+                      ${formatCurrency(balance)}
+                    </p>
                     <p className="text-xs text-white/60 mt-1 flex items-center justify-between">
                       <span>Session P/L:</span>
                       <span
@@ -314,22 +305,23 @@ export default function TradingPageClient() {
                       </span>
                     </p>
                   </div>
+
                   <div className="grid grid-cols-2 gap-3 sm:gap-4">
                     <div className="rounded-lg bg-white/5 backdrop-blur-md border border-white/10 p-3 sm:p-4">
                       <p className="text-xs text-white/60 mb-1">Session Profit</p>
-                      <p
-                        className={`text-lg sm:text-xl font-bold ${
-                          sessionProfit >= 0 ? "text-green-400" : "text-red-400"
-                        } truncate`}
-                      >
+                      <p className={`text-lg sm:text-xl font-bold ${sessionProfit >= 0 ? "text-green-400" : "text-red-400"} truncate`}>
                         ${sessionProfit.toFixed(2)}
                       </p>
                     </div>
                     <div className="rounded-lg bg-white/5 backdrop-blur-md border border-white/10 p-3 sm:p-4">
                       <p className="text-xs text-white/60 mb-1">Trading Mode</p>
-                      <p className="text-lg sm:text-xl font-bold text-pink-400 capitalize">{tradingMode}</p>
+                      <p className="text-lg sm:text-xl font-bold text-pink-400 capitalize">
+                        {isEliteMode ? "Elite Robot" : tradingMode}
+                      </p>
                     </div>
                   </div>
+
+                  {/* Chart */}
                   <div className="flex justify-end mb-2">
                     <Select value={chartType} onValueChange={(value: "tradingview" | "analysis") => setChartType(value)}>
                       <SelectTrigger className="w-[180px] bg-white/5 border-white/10">
@@ -341,6 +333,7 @@ export default function TradingPageClient() {
                       </SelectContent>
                     </Select>
                   </div>
+
                   <div className="w-full">
                     {chartType === "tradingview" ? (
                       <TradingViewWidget
@@ -350,29 +343,53 @@ export default function TradingPageClient() {
                       <MarketAnalysis market={selectedMarket} />
                     )}
                   </div>
+
+                  {/* Mode selector */}
                   <div className="w-full">
                     <TradingModeSelector
-                      onModeChange={setTradingMode}
+                      onModeChange={(mode) => {
+                        setTradingMode(mode)
+                        if (mode === "manual") {
+                          setIsEliteMode(false)
+                          setSelectedRobot(null)
+                        }
+                      }}
                       selectedRobot={selectedRobot}
-                      onRobotSelect={setSelectedRobot}
+                      onRobotSelect={handleRobotSelect}
                       userRobots={userRobots}
                     />
                   </div>
+
+                  {/* ========== MAIN TRADING AREA ========== */}
                   <div className="rounded-xl bg-white/5 backdrop-blur-md border border-white/10 p-4 sm:p-6">
-                    <TradingInterface
-                      markets={markets}
-                      selectedMarket={selectedMarket}
-                      onMarketSelect={setSelectedMarket}
-                      balance={balance}
-                      onBalanceChange={setBalance}
-                      onSessionProfitChange={setSessionProfit}
-                      tradingMode={tradingMode}
-                      selectedRobot={selectedRobot}
-                      onStartTrading={handleStartTrading}
-                      accountType={selectedAccount}
-                    />
+                    {isEliteMode && selectedEliteRobot ? (
+                      <EliteRobotInterface
+                        robotName={selectedEliteRobot.robot.name}
+                        accountType={selectedAccount}
+                        onResetToNormal={() => {
+                          setIsEliteMode(false)
+                          setSelectedRobot(null)
+                          setTradingMode("manual")
+                        }}
+                      />
+                    ) : (
+                      <TradingInterface
+                        markets={markets}
+                        selectedMarket={selectedMarket}
+                        onMarketSelect={setSelectedMarket}
+                        balance={balance}
+                        onBalanceChange={setBalance}
+                        onSessionProfitChange={setSessionProfit}
+                        tradingMode={tradingMode}
+                        selectedRobot={selectedRobot}
+                        onStartTrading={handleStartTrading}
+                        accountType={selectedAccount}
+                      />
+                    )}
                   </div>
                 </div>
+
+                {/* Right column - Trade History */}
                 <div className="md:col-span-1 lg:col-span-1 xl:col-span-1">
                   <div className="rounded-xl bg-white/5 backdrop-blur-md border border-white/10 p-3 sm:p-4 lg:p-6 sticky top-20 overflow-y-auto">
                     <h3 className="text-sm sm:text-base font-semibold text-white mb-3 sm:mb-4 uppercase tracking-wider">
@@ -406,6 +423,7 @@ export default function TradingPageClient() {
                 </div>
               </div>
             </div>
+
             <TradeExecutionQueue
               trades={executingTrades}
               onTradeComplete={handleTradeExecutionComplete}
@@ -420,6 +438,7 @@ export default function TradingPageClient() {
               accountType={selectedAccount}
             />
           </div>
+
           <TradeExecutionBadge
             activeTradesCount={executingTrades.filter((t) => t.status !== "completed").length}
             onClick={() => setShowExecutionModal(true)}

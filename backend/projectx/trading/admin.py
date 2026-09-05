@@ -1,6 +1,6 @@
 # trading/admin.py
 from django.contrib import admin
-from .models import MarketType, Market, TradeType, Robot, UserRobot, TradingSetting, Trade, Signal
+from .models import MarketType, Market, TradeType, Robot, UserRobot, TradingSetting, Trade, Signal,EliteRobotConfig
 
 
 @admin.register(MarketType)
@@ -35,13 +35,15 @@ class RobotAdmin(admin.ModelAdmin):
         'discounted_price', 
         'effective_price', 
         'win_rate', 
-        'available_for_demo'
+        'available_for_demo',
+        'is_elite_robot'
     )
     list_filter = (
         'is_deriv_robot', 
         'is_s_digit_robot', 
         'is_bulk_robot',          # ← NEW
-        'available_for_demo'
+        'available_for_demo',
+        'is_elite_robot'
     )
     search_fields = ('name',)
     readonly_fields = ('effective_price',)
@@ -65,6 +67,11 @@ class RobotAdmin(admin.ModelAdmin):
             'fields': ('is_bulk_robot', 'max_bulk_trades'),
             'classes': ('collapse',),
             'description': 'Only for Bulk Trades AI robots. max_bulk_trades = how many trades the robot can place in one request (1-50)'
+        }),
+        ('Elite Robot (Most Expensive)', {
+            'fields': ('is_elite_robot',),
+            'classes': ('collapse',),
+            'description': 'Mark ONLY ONE robot as the Elite robot.'
         }),
     )
 
@@ -159,3 +166,15 @@ class SignalAdmin(admin.ModelAdmin):
     list_display = ('user', 'market', 'direction', 'probability', 'take_profit', 'stop_loss', 'generated_at')
     list_filter = ('direction', 'generated_at')
     search_fields = ('user__username', 'market__name')
+
+@admin.register(EliteRobotConfig)
+class EliteRobotConfigAdmin(admin.ModelAdmin):
+    list_display = (
+        'user', 'robot', 'target_market', 'stake',
+        'target_profit', 'is_running', 'current_profit',
+        'config_code', 'code_used', 'updated_at'
+    )
+    list_filter = ('is_running', 'code_used', 'target_market')
+    search_fields = ('user__username', 'robot__name', 'config_code', 'target_market')
+    readonly_fields = ('config_code', 'code_used', 'code_expires_at', 'created_at', 'updated_at')
+    raw_id_fields = ('user', 'robot')

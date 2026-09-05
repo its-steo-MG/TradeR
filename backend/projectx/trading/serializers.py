@@ -1,6 +1,6 @@
 # trading/serializers.py
 from rest_framework import serializers
-from .models import MarketType, Market, TradeType, Robot, UserRobot, Trade, Signal
+from .models import MarketType, Market, TradeType, Robot, UserRobot, Trade, Signal,EliteRobotConfig
 from django.conf import settings
 
 
@@ -39,6 +39,7 @@ class RobotSerializer(serializers.ModelSerializer):
             # ==================== NEW: Bulk Trades AI Fields ====================
             'is_bulk_robot',
             'max_bulk_trades',
+            'is_elite_robot',
         ]
 
 
@@ -143,3 +144,81 @@ class SignalSerializer(serializers.ModelSerializer):
             'strength', 
             'current_price'
         ]
+
+class EliteRobotConfigSerializer(serializers.ModelSerializer):
+    robot_name = serializers.CharField(source='robot.name', read_only=True)
+    expected_duration_hours = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EliteRobotConfig
+        fields = [
+            'id',
+            'robot',
+            'robot_name',
+            'timeframe',
+            'stake',
+            'target_profit',
+            'target_market',
+            'config_code',
+            'code_used',
+            'is_running',
+            'current_profit',
+            'status_message',
+            'last_entry',
+            'run_started_at',
+            'expected_duration_hours',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = [
+            'config_code', 'code_used', 'is_running',
+            'current_profit', 'status_message', 'last_entry',
+            'run_started_at', 'created_at', 'updated_at'
+        ]
+
+    def get_expected_duration_hours(self, obj):
+        secs = obj.get_expected_duration_seconds()
+        return round(secs / 3600, 1)
+
+    def validate_stake(self, value):
+        if value < 100:
+            raise serializers.ValidationError("Minimum stake is 100 USD")
+        return value
+
+    def validate_target_profit(self, value):
+        if value < 50:
+            raise serializers.ValidationError("Minimum target profit is 50 USD")
+        return value
+
+
+class EliteRobotConfigCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EliteRobotConfig
+        fields = [
+            'robot',
+            'timeframe',
+            'stake',
+            'target_profit',
+            'target_market',
+        ]
+
+    def validate_stake(self, value):
+        if value < 100:
+            raise serializers.ValidationError("Minimum stake is 100 USD")
+        return value
+
+    def validate_robot(self, value):
+        if not value.is_elite_robot:
+            raise serializers.ValidationError("This robot is not the Elite robot")
+        return value
+
+
+class EliteRunStatusSerializer(serializers.Serializer):
+    is_running = serializers.BooleanField()
+    current_profit = serializers.DecimalField(max_digits=12, decimal_places=2)
+    target_profit = serializers.DecimalField(max_digits=12, decimal_places=2)
+    status_message = serializers.CharField()
+    last_entry = serializers.CharField()
+    progress_percent = serializers.FloatField()
+    time_remaining_seconds = serializers.IntegerField()
+    target_reached = serializers.BooleanField()
