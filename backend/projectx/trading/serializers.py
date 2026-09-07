@@ -92,7 +92,9 @@ class UserRobotSerializer(serializers.ModelSerializer):
             'purchased_price',
             'win_rate',
             'effective_win_rate',
-            'deriv_access_key'
+            'deriv_access_key',
+            'is_used',
+            'is_setting',
         ]
 
 

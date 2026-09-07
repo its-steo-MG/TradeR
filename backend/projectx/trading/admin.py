@@ -78,12 +78,18 @@ class RobotAdmin(admin.ModelAdmin):
 
 @admin.register(UserRobot)
 class UserRobotAdmin(admin.ModelAdmin):
-    list_display = ('user', 'robot', 'win_rate', 'effective_win_rate_display', 'purchased_at', 'purchased_price')
-    list_filter = ('purchased_at', 'robot')
+    list_display = (
+        'user', 'robot', 'win_rate', 'effective_win_rate_display',
+        'is_used', 'is_setting', 'purchased_at', 'purchased_price'
+    )
+    list_filter = ('purchased_at', 'robot', 'is_used', 'is_setting')
     search_fields = ('user__username', 'robot__name')
-    list_editable = ('win_rate',)
+    list_editable = ('win_rate', 'is_used', 'is_setting')
     readonly_fields = ('purchased_at', 'purchased_price', 'effective_win_rate_display')
-    fields = ('user', 'robot', 'win_rate', 'effective_win_rate_display', 'purchased_at', 'purchased_price')
+    fields = (
+        'user', 'robot', 'win_rate', 'effective_win_rate_display',
+        'is_used', 'is_setting', 'purchased_at', 'purchased_price'
+    )
 
     @admin.display(description='Effective win rate')
     def effective_win_rate_display(self, obj):

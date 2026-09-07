@@ -19,6 +19,7 @@ from .views import (
     EliteRunStatusView,
     EliteResetView,
     EliteStopView,
+    EliteUpgradeView,
 )
 
 urlpatterns = [
@@ -41,4 +42,5 @@ urlpatterns = [
     path('elite/status/', EliteRunStatusView.as_view(), name='elite_status'),
     path('elite/reset/', EliteResetView.as_view(), name='elite_reset'),
     path('elite/stop/', EliteStopView.as_view(), name='elite_stop'),
+    path('elite/upgrade/', EliteUpgradeView.as_view(), name='elite_upgrade'),
 ]

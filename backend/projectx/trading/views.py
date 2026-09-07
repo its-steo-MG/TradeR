@@ -964,6 +964,12 @@ class EliteConfigView(APIView):
 
         config = serializer.save(user=request.user, robot=elite)
 
+        # Mark this UserRobot as configured for Elite (is_setting = True)
+        user_robot = UserRobot.objects.filter(user=request.user, robot=elite).first()
+        if user_robot:
+            user_robot.is_setting = True
+            user_robot.save(update_fields=['is_setting'])
+
         code = config.generate_config_code()
 
         try:
@@ -1080,6 +1086,12 @@ class EliteStartRunView(APIView):
         config.status_message = 'Initializing market scan...'
         config.last_entry = ''
         config.save()
+
+        # Mark the UserRobot as used so Settings icon is hidden after this run
+        user_robot = UserRobot.objects.filter(user=request.user, robot=elite).first()
+        if user_robot and not user_robot.is_used:
+            user_robot.is_used = True
+            user_robot.save(update_fields=['is_used'])
 
         return Response({
             'message': 'Elite robot engine started',
@@ -1282,4 +1294,68 @@ class EliteStopView(APIView):
         return Response({
             'message': 'Elite robot stopped',
             'current_profit': config.current_profit
+        }, status=status.HTTP_200_OK)
+
+
+class EliteUpgradeView(APIView):
+    """
+    Charge the full original price of the Elite robot and reset is_used=False
+    so the user can configure it again.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        elite = get_elite_robot()
+        if not elite:
+            return Response({'error': 'Elite robot not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        user_robot = UserRobot.objects.filter(user=request.user, robot=elite).first()
+        if not user_robot:
+            return Response(
+                {'error': 'You have not purchased the Elite robot'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if not user_robot.is_used:
+            return Response(
+                {'error': 'This robot is already unlocked for configuration'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        account_type = request.data.get('account_type', 'standard')
+        try:
+            account = Account.objects.get(user=request.user, account_type=account_type)
+        except Account.DoesNotExist:
+            return Response({'error': 'Account not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Always charge the full original price (not discounted)
+        full_price = elite.price
+
+        if account.balance < full_price:
+            return Response(
+                {'error': f'Insufficient balance. Need ${full_price}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Deduct full price
+        account.balance -= full_price
+        account.save()
+
+        Transaction.objects.create(
+            account=account,
+            amount=-full_price,
+            transaction_type='debit',
+            description=f'Upgrade to Elite unlock: {elite.name}'
+        )
+
+        # Unlock settings again
+        user_robot.is_used = False
+        user_robot.save(update_fields=['is_used'])
+
+        return Response({
+            'message': 'Upgrade successful. Settings unlocked. You can now configure the Elite robot again.',
+            'is_used': False,
+            'is_setting': user_robot.is_setting,
+            'amount_charged': str(full_price),
+            'remaining_balance': str(account.balance),
         }, status=status.HTTP_200_OK)

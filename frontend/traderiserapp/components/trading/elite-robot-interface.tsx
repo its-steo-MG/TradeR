@@ -11,6 +11,7 @@ import {
   getEliteStatus,
   resetEliteRun,
   stopEliteRun,
+  type EliteRunStatus,
 } from "@/lib/api"
 import {
   Play, Square, RotateCcw, Loader2, Brain, Target,
@@ -26,6 +27,20 @@ interface EliteRobotInterfaceProps {
 
 type Phase = "idle" | "enter-code" | "running" | "finished"
 
+/** Safely extract EliteRunStatus from ApiResponse or raw object */
+function extractStatus(res: any): EliteRunStatus | null {
+  if (!res) return null
+  // Normal shape from apiRequest → { data, error, status }
+  if (res.data && typeof res.data === "object" && "is_running" in res.data) {
+    return res.data as EliteRunStatus
+  }
+  // Fallback if the helper already returned the raw status
+  if (typeof res.is_running === "boolean") {
+    return res as EliteRunStatus
+  }
+  return null
+}
+
 export function EliteRobotInterface({
   robotName,
   accountType,
@@ -35,8 +50,8 @@ export function EliteRobotInterface({
   const [code, setCode] = useState("")
   const [isValidating, setIsValidating] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
-  const [status, setStatus] = useState<any>(null)
-  const [isCheckingStatus, setIsCheckingStatus] = useState(true) // ← new
+  const [status, setStatus] = useState<EliteRunStatus | null>(null)
+  const [isCheckingStatus, setIsCheckingStatus] = useState(true)
   const pollRef = useRef<NodeJS.Timeout | null>(null)
 
   // Cleanup on unmount
@@ -51,15 +66,16 @@ export function EliteRobotInterface({
     const checkCurrentStatus = async () => {
       try {
         const res = await getEliteStatus(accountType)
-        const data = res?.data || res
+        const data = extractStatus(res)
 
         if (data?.is_running) {
-          // Robot is already running → jump straight to running phase
           setStatus(data)
           setPhase("running")
           startPolling()
-        } else if (data?.target_reached || (data?.current_profit > 0 && !data?.is_running)) {
-          // Target was already reached
+        } else if (
+          data?.target_reached ||
+          (Number(data?.current_profit) > 0 && !data?.is_running)
+        ) {
           setStatus(data)
           setPhase("finished")
         } else {
@@ -81,14 +97,15 @@ export function EliteRobotInterface({
     pollRef.current = setInterval(async () => {
       try {
         const res = await getEliteStatus(accountType)
-        const data = res?.data || res
+        const data = extractStatus(res)
+        if (!data) return
+
         setStatus(data)
 
-        if (data?.target_reached) {
+        if (data.target_reached) {
           setPhase("finished")
           if (pollRef.current) clearInterval(pollRef.current)
           toast.success(`🎯 Target reached! +$${data.current_profit}`)
-          // Force balance refresh in the parent
           window.dispatchEvent(new Event("session-updated"))
         }
       } catch (e) {
@@ -115,8 +132,9 @@ export function EliteRobotInterface({
       const startRes = await startEliteRun(accountType)
       if (startRes?.error) throw new Error(startRes.error)
 
+      const data = extractStatus(startRes)
       setPhase("running")
-      setStatus(startRes?.data || startRes)
+      setStatus(data)
       startPolling()
       toast.success("Elite robot engine started")
     } catch (err: any) {

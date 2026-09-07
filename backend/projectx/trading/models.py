@@ -116,6 +116,16 @@ class UserRobot(models.Model):
         help_text="Per-user win rate for this purchased robot (0-100). Leave blank to use the robot's default win_rate."
     )
 
+    # Elite unlock / usage flags (per-user)
+    is_used = models.BooleanField(
+        default=False,
+        help_text="True after the user has started an Elite run. Hides the Settings button."
+    )
+    is_setting = models.BooleanField(
+        default=False,
+        help_text="True once the user has successfully configured this robot as Elite. Stays True forever."
+    )
+
     class Meta:
         unique_together = ('user', 'robot')
 

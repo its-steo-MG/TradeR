@@ -31,6 +31,8 @@ interface UserRobot {
     is_elite_robot?: boolean
   }
   purchased_at: string | null
+  is_used?: boolean       
+  is_setting?: boolean     
 }
 
 interface DashboardData {
@@ -165,21 +167,27 @@ export default function TradingPageClient() {
     fetchInitialData()
   }, [selectedAccount])
 
-  // Detect Elite robot
-  const handleRobotSelect = (robotId: number | null) => {
-    setSelectedRobot(robotId)
-    if (robotId) {
-      const ur = userRobots.find((r) => r.robot.id === robotId)
-      if (ur?.robot?.is_elite_robot) {
-        setIsEliteMode(true)
-        setTradingMode("robot")
-      } else {
-        setIsEliteMode(false)
-      }
+const handleRobotSelect = (robotId: number | null) => {
+  setSelectedRobot(robotId)
+
+  if (robotId) {
+    const ur = userRobots.find((r) => r.robot.id === robotId)
+
+    // Permanent Elite once is_setting is true, otherwise only when not used
+    const shouldBeElite =
+      !!ur?.robot?.is_elite_robot &&
+      (!!ur?.is_setting || !ur?.is_used)
+
+    if (shouldBeElite) {
+      setIsEliteMode(true)
+      setTradingMode("robot")
     } else {
       setIsEliteMode(false)
     }
+  } else {
+    setIsEliteMode(false)
   }
+}
 
   const handleStartTrading = (tradeParams: TradeParams) => {
     const marketObj = markets.find((m) => m.name === selectedMarket)

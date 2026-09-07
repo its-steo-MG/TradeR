@@ -1355,6 +1355,7 @@ export const placeBulkTrade = (data: {
     body: JSON.stringify(data),
   });
 
+// ====================== ELITE ROBOT ======================
 export interface EliteRobotConfig {
   id: number
   robot: number
@@ -1442,6 +1443,17 @@ export const stopEliteRun = () =>
     body: JSON.stringify({}),
   })
 
+export const upgradeElite = (account_type: string = "standard") =>
+  apiRequest<{
+    message: string
+    is_used: boolean
+    is_setting: boolean
+    amount_charged: string
+    remaining_balance: string
+  }>("/trading/elite/upgrade/", {
+    method: "POST",
+    body: JSON.stringify({ account_type }),
+  })
 
 
 /* ------------------------------------------------------------------ */
@@ -1546,4 +1558,5 @@ export const api = {
   getEliteStatus,
   resetEliteRun,
   stopEliteRun,
+  upgradeElite,
 }
