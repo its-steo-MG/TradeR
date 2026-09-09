@@ -528,63 +528,74 @@ class GenerateSignalView(APIView):
         return Response(response_data, status=status.HTTP_201_CREATED)
 
 
+# ====================== HELPER: S-DIGIT WEIGHT GENERATOR ======================
 def get_digit_weights(digit_contract_type, digit_barrier, is_sashi, trade_count=0):
+    """
+    Returns weights [0..9] based on your exact rules.
+    trade_count: number of previous trades with same robot/contract (for Matches logic)
+    """
     if digit_contract_type == 'over':
         if is_sashi:
+            # Strong bias toward digits > barrier
             if digit_barrier <= 4:
                 return [5, 6, 7, 8, 9, 15, 25, 35, 45, 55]
             else:
                 return [2, 3, 4, 5, 8, 15, 25, 40, 60, 80]
         else:
+            # Strong bias toward digits <= barrier
             return [40, 35, 30, 25, 20, 15, 10, 8, 6, 5]
 
     elif digit_contract_type == 'under':
         if is_sashi:
+            # Strong bias toward digits < barrier
             if digit_barrier >= 5:
                 return [55, 45, 35, 25, 18, 12, 8, 6, 5, 3]
             else:
                 return [80, 60, 40, 25, 15, 8, 5, 3, 2, 1]
         else:
+            # Strong bias toward digits >= barrier
             return [3, 5, 8, 12, 18, 25, 30, 35, 40, 45]
 
     elif digit_contract_type == 'matches':
         if is_sashi:
             if trade_count < 3:
                 weights = [5] * 10
-                weights[digit_barrier] = 300
+                weights[digit_barrier] = 300          # Almost guaranteed match for first 3
                 return weights
             else:
-                weights = [25] * 10
+                weights = [25] * 10                   # After 3, very rare
                 weights[digit_barrier] = 3
                 return weights
         else:
-            weights = [30] * 10
-            weights[digit_barrier] = 5
+            weights = [30] * 10                       # Extremely rare for non-sashi
+            weights[digit_barrier] = 1
             return weights
 
     elif digit_contract_type == 'differs':
         if is_sashi:
-            weights = [40] * 10
-            weights[digit_barrier] = 2
+            weights = [28] * 10                       # Very high win rate
+            weights[digit_barrier] = 4                # Rare loss
             return weights
         else:
-            weights = [8] * 10
-            weights[digit_barrier] = 40
+            weights = [12] * 10                       # ~40% win rate
+            weights[digit_barrier] = 22               # More losses
             return weights
 
     elif digit_contract_type == 'even':
         if is_sashi:
-            return [5, 45, 5, 45, 5, 45, 5, 45, 5, 45]
+            return [28, 6, 28, 6, 28, 6, 28, 6, 28, 6]   # Strong even bias
         else:
-            return [45, 5, 45, 5, 45, 5, 45, 5, 45, 5]
+            return [6, 28, 6, 28, 6, 28, 6, 28, 6, 28]   # Strong odd bias (opposite)
 
     elif digit_contract_type == 'odd':
         if is_sashi:
-            return [45, 5, 45, 5, 45, 5, 45, 5, 45, 5]
+            return [6, 28, 6, 28, 6, 28, 6, 28, 6, 28]   # Strong odd bias
         else:
-            return [5, 45, 5, 45, 5, 45, 5, 45, 5, 45]
+            return [28, 6, 28, 6, 28, 6, 28, 6, 28, 6]   # Strong even bias (opposite)
 
+    # Fallback
     return [10] * 10
+
 
 
 class PlaceDigitTradeView(APIView):
