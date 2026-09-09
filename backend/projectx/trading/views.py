@@ -591,8 +591,154 @@ class PlaceDigitTradeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        # Placeholder - keep existing logic if present
-        return Response({'error': 'Use place-srobot or place-bulk'}, status=status.HTTP_400_BAD_REQUEST)
+        data = request.data
+        user = request.user
+
+        market_id = data.get('market_id')
+        digit_contract_type = data.get('digit_contract_type')
+        digit_barrier = data.get('digit_barrier')
+        amount = Decimal(str(data.get('amount', '0')))
+        robot_id = data.get('robot_id')
+        account_type = data.get('account_type', 'standard')
+        use_martingale = data.get('use_martingale', False)
+        martingale_level = data.get('martingale_level', 0)
+
+        if not market_id or not digit_contract_type:
+            return Response(
+                {'error': 'market_id and digit_contract_type are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if digit_contract_type in ['over', 'under', 'matches', 'differs'] and digit_barrier is None:
+            return Response(
+                {'error': 'digit_barrier (0-9) is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if amount < Decimal('0.5'):
+            return Response(
+                {'error': 'Minimum trade amount is 0.5 USD'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        current_amount = None
+        try:
+            market = Market.objects.get(id=market_id)
+            account = Account.objects.get(user=user, account_type=account_type)
+            is_demo = account.account_type == 'demo'
+            is_sashi = getattr(user, 'is_sashi', False) or is_demo
+
+            used_robot = None
+            if robot_id:
+                robot = Robot.objects.get(id=robot_id)
+                if is_demo:
+                    if not robot.available_for_demo:
+                        return Response(
+                            {'error': 'Robot not available for demo'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                else:
+                    UserRobot.objects.get(user=user, robot=robot)
+                used_robot = robot
+
+            martingale_mult = TradingSetting.get_instance().martingale_multiplier
+            current_amount = amount * (martingale_mult ** martingale_level)
+
+            if account.balance < current_amount:
+                return Response(
+                    {'error': 'Insufficient balance for this trade'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # SAFE BALANCE DEDUCT
+            account.balance = account.balance - current_amount
+
+            # Use the same is_sashi-aware weight system as before
+            weights = get_digit_weights(digit_contract_type, digit_barrier, is_sashi, trade_count=0)
+            last_digit = random.choices(range(10), weights=weights, k=1)[0]
+
+            if digit_contract_type == 'matches':
+                is_win = (last_digit == digit_barrier)
+            elif digit_contract_type == 'differs':
+                is_win = (last_digit != digit_barrier)
+            elif digit_contract_type == 'even':
+                is_win = (last_digit % 2 == 0)
+            elif digit_contract_type == 'odd':
+                is_win = (last_digit % 2 == 1)
+            elif digit_contract_type == 'over':
+                is_win = (last_digit > digit_barrier)
+            elif digit_contract_type == 'under':
+                is_win = (last_digit < digit_barrier)
+            else:
+                is_win = False
+
+            # Payout multipliers (same as previous version)
+            if digit_contract_type == 'over':
+                over_payouts = {0:1.096,1:1.232,2:1.35,3:1.404,4:1.65,5:2.10,6:2.95,7:4.80,8:8.50,9:12.00}
+                multiplier = Decimal(str(over_payouts.get(int(digit_barrier), 1.10)))
+            elif digit_contract_type == 'under':
+                under_payouts = {9:1.096,8:1.18,7:1.40,6:1.85,5:2.70,4:4.20,3:4.717,2:9.80,1:8.929,0:15.50}
+                multiplier = Decimal(str(under_payouts.get(int(digit_barrier), 1.10)))
+            elif digit_contract_type == 'matches':
+                multiplier = Decimal('8.50')
+            elif digit_contract_type == 'differs':
+                multiplier = Decimal('1.12')
+            else:  # even / odd
+                multiplier = Decimal('1.92')
+
+            if is_win:
+                gross_payout = current_amount * multiplier
+                net_profit = gross_payout - current_amount
+                account.balance = account.balance + gross_payout   # SAFE credit
+            else:
+                net_profit = -current_amount
+                # balance already deducted, nothing to add back
+
+            trade = Trade.objects.create(
+                user=user,
+                account=account,
+                market=market,
+                trade_type=TradeType.objects.get_or_create(name='digit')[0],
+                direction=None,
+                amount=current_amount,
+                is_win=is_win,
+                profit=net_profit,
+                used_martingale=use_martingale and martingale_level > 0,
+                martingale_level=martingale_level,
+                used_robot=used_robot,
+                session_profit_before=Decimal('0.00'),
+                is_demo=is_demo,
+                is_digit_trade=True,
+                digit_contract_type=digit_contract_type,
+                digit_barrier=digit_barrier,
+                last_digit_outcome=last_digit,
+            )
+
+            Transaction.objects.create(
+                account=account,
+                amount=net_profit,
+                transaction_type='credit' if is_win else 'debit',
+                description=f"{'Demo ' if is_demo else ''}S Digit {digit_contract_type.upper()} {'Win' if is_win else 'Loss'} (Digit: {last_digit})"
+            )
+
+            # Important: save the account after balance changes
+            account.save()
+
+            return Response({
+                'trades': TradeSerializer([trade], many=True).data,
+                'total_profit': net_profit,
+                'last_digit': last_digit,
+                'multiplier': float(multiplier),
+                'message': 'S Digit trade completed.',
+                'is_demo': is_demo
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            logger.error(f"Digit Trade failed for {user.username}: {str(e)}", exc_info=True)
+            if current_amount and 'account' in locals():
+                account.balance = account.balance + current_amount
+                account.save()
+            return Response({'error': 'Digit trade failed'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class PlaceSRobotTradeView(APIView):

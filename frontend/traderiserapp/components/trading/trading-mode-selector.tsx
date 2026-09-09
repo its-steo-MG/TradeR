@@ -1,4 +1,4 @@
-// components/trading-mode-selector.tsx
+// components/trading/trading-mode-selector.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -15,18 +15,20 @@ interface UserRobot {
   robot: {
     id: number;
     name: string;
-    /** true only for demo-available robots that were *not* purchased */
     available_for_demo?: boolean;
+    is_elite_robot?: boolean;
+    is_s_digit_robot?: boolean;
+    is_bulk_robot?: boolean;
   };
-  /** null = demo-access, non-null = real purchase */
   purchased_at: string | null;
+  is_used?: boolean;
+  is_setting?: boolean;
 }
 
 interface TradingModeSelectorProps {
   onModeChange: (mode: "manual" | "robot") => void;
   selectedRobot: number | null;
   onRobotSelect: (robotId: number | null) => void;
-  /** Full list returned by api.getUserRobots() – may contain both purchased & demo-only entries */
   userRobots: UserRobot[];
 }
 
@@ -39,23 +41,29 @@ export function TradingModeSelector({
   const [mode, setMode] = useState<"manual" | "robot">("manual");
   const [loginType, setLoginType] = useState<"real" | "demo">("real");
 
-  /** Keep loginType in sync with the rest of the app */
   useEffect(() => {
     const stored = localStorage.getItem("login_type");
     setLoginType((stored === "demo" ? "demo" : "real") as "real" | "demo");
   }, []);
 
-  /** --------------------------------------------------------------
-   *  FILTERING LOGIC
-   *  --------------------------------------------------------------
-   *  • Real account → keep only entries with purchased_at !== null
-   *  • Demo account → keep *all* entries (purchased + demo-available)
-   *  -------------------------------------------------------------- */
+  // --------------------------------------------------------------
+  // FILTERING LOGIC
+  // 1. Real account  → only purchased robots
+  // 2. Demo account  → all (purchased + demo-available)
+  // 3. ALWAYS hide S-Digit and Bulk robots from this selector
+  //    Only show: normal robots + Elite robots
+  // --------------------------------------------------------------
   const visibleRobots = userRobots.filter((ur) => {
+    // Hide S-Digit and Bulk robots
+    if (ur.robot.is_s_digit_robot || ur.robot.is_bulk_robot) {
+      return false;
+    }
+
     if (loginType === "real") {
       return ur.purchased_at !== null; // only real purchases
     }
-    // demo mode – show everything (including robots that are only demo-available)
+
+    // demo mode – show everything that is not s-digit / bulk
     return true;
   });
 
@@ -91,7 +99,7 @@ export function TradingModeSelector({
             <p className="text-sm text-white/60">
               {loginType === "demo"
                 ? "No demo robots available"
-                : "You haven't purchased any robots yet"}
+                : "You haven't purchased any normal/Elite robots yet"}
             </p>
           ) : (
             <Select
@@ -108,10 +116,11 @@ export function TradingModeSelector({
                     value={ur.robot.id.toString()}
                   >
                     {ur.robot.name}
+                    {ur.robot.is_elite_robot && (
+                      <span className="ml-2 text-xs text-amber-400">(Elite)</span>
+                    )}
                     {ur.purchased_at === null && loginType === "demo" && (
-                      <span className="ml-2 text-xs text-green-400">
-                        (Demo)
-                      </span>
+                      <span className="ml-2 text-xs text-green-400">(Demo)</span>
                     )}
                   </SelectItem>
                 ))}
