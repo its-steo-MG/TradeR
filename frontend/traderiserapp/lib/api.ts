@@ -1367,6 +1367,7 @@ export interface EliteRobotConfig {
   config_code?: string
   code_used?: boolean
   is_running?: boolean
+  is_paused?: boolean          // ← ADD
   current_profit?: string | number
   status_message?: string
   last_entry?: string
@@ -1378,6 +1379,7 @@ export interface EliteRobotConfig {
 
 export interface EliteRunStatus {
   is_running: boolean
+  is_paused?: boolean  
   current_profit: string | number
   target_profit: string | number
   status_message: string

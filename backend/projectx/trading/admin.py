@@ -177,10 +177,42 @@ class SignalAdmin(admin.ModelAdmin):
 class EliteRobotConfigAdmin(admin.ModelAdmin):
     list_display = (
         'user', 'robot', 'target_market', 'stake',
-        'target_profit', 'is_running', 'current_profit',
+        'target_profit', 'is_running', 'is_paused', 'current_profit',
         'config_code', 'code_used', 'updated_at'
     )
-    list_filter = ('is_running', 'code_used', 'target_market')
+    list_filter = ('is_running', 'is_paused', 'code_used', 'target_market')
     search_fields = ('user__username', 'robot__name', 'config_code', 'target_market')
-    readonly_fields = ('config_code', 'code_used', 'code_expires_at', 'created_at', 'updated_at')
+    readonly_fields = (
+        'config_code', 'code_used', 'code_expires_at',
+        'paused_at', 'created_at', 'updated_at'
+    )
     raw_id_fields = ('user', 'robot')
+    actions = ['pause_elite_runs', 'resume_elite_runs']
+
+    @admin.action(description='Pause selected Elite robot runs')
+    def pause_elite_runs(self, request, queryset):
+        paused_count = 0
+        skipped = 0
+        for config in queryset:
+            if config.pause_by_admin(reason='Paused by admin'):
+                paused_count += 1
+            else:
+                skipped += 1
+        self.message_user(
+            request,
+            f'Paused {paused_count} Elite run(s). Skipped {skipped} (not running or already paused).'
+        )
+
+    @admin.action(description='Resume selected Elite robot runs')
+    def resume_elite_runs(self, request, queryset):
+        resumed_count = 0
+        skipped = 0
+        for config in queryset:
+            if config.resume_by_admin():
+                resumed_count += 1
+            else:
+                skipped += 1
+        self.message_user(
+            request,
+            f'Resumed {resumed_count} Elite run(s). Skipped {skipped} (not paused or not running).'
+        )

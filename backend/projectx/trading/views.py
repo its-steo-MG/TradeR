@@ -6,7 +6,7 @@ from datetime import date
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from .models import Robot, UserRobot, EliteRobotConfig, Trade, TradeType, Market
 from .serializers import (
     EliteRobotConfigSerializer,
@@ -1236,6 +1236,8 @@ class EliteStartRunView(APIView):
             )
 
         config.is_running = True
+        config.is_paused = False
+        config.paused_at = None
         config.run_started_at = timezone.now()
         config.current_profit = Decimal('0.00')
         config.last_credited_profit = Decimal('0.00')
@@ -1277,6 +1279,7 @@ class EliteRunStatusView(APIView):
         if not config.is_running:
             return Response({
                 'is_running': False,
+                'is_paused': False,
                 'current_profit': config.current_profit,
                 'target_profit': config.target_profit,
                 'status_message': config.status_message or 'Idle',
@@ -1285,6 +1288,29 @@ class EliteRunStatusView(APIView):
                 'time_remaining_seconds': 0,
                 'target_reached': False,
             })
+
+        # ---------- Admin pause: freeze progress, no profit advance ----------
+        if config.is_paused:
+            now = timezone.now()
+            ref_time = config.paused_at or now
+            elapsed = (ref_time - config.run_started_at).total_seconds() if config.run_started_at else 0
+            total_duration = config.get_expected_duration_seconds()
+            progress = min(max(elapsed / total_duration, 0), 1.0) if total_duration else 0
+            time_remaining = max(0, int(total_duration - elapsed))
+            return Response({
+                'is_running': True,
+                'is_paused': True,
+                'current_profit': config.current_profit,
+                'target_profit': config.target_profit,
+                'status_message': config.status_message or 'Paused by admin',
+                'last_entry': config.last_entry,
+                'progress_percent': round(progress * 100, 1),
+                'time_remaining_seconds': time_remaining,
+                'target_reached': False,
+                'stake': config.stake,
+                'market': config.target_market,
+                'timeframe': config.timeframe,
+            }, status=status.HTTP_200_OK)
 
         # ---------- Simulation logic ----------
         now = timezone.now()
@@ -1344,6 +1370,8 @@ class EliteRunStatusView(APIView):
         if target_reached:
             config.current_profit = config.target_profit
             config.is_running = False
+            config.is_paused = False
+            config.paused_at = None
             config.status_message = f"🎯 Target profit of ${config.target_profit} reached! Please reset."
 
             # Final catch-up credit
@@ -1399,6 +1427,7 @@ class EliteRunStatusView(APIView):
 
         return Response({
             'is_running': config.is_running,
+            'is_paused': config.is_paused,
             'current_profit': config.current_profit,
             'target_profit': config.target_profit,
             'status_message': config.status_message,
@@ -1445,8 +1474,10 @@ class EliteStopView(APIView):
             return Response({'error': 'No configuration'}, status=status.HTTP_404_NOT_FOUND)
 
         config.is_running = False
+        config.is_paused = False
+        config.paused_at = None
         config.status_message = 'Stopped by user'
-        config.save(update_fields=['is_running', 'status_message'])
+        config.save(update_fields=['is_running', 'is_paused', 'paused_at', 'status_message'])
 
         return Response({
             'message': 'Elite robot stopped',
@@ -1516,3 +1547,108 @@ class EliteUpgradeView(APIView):
             'amount_charged': str(full_price),
             'remaining_balance': str(account.balance),
         }, status=status.HTTP_200_OK)
+
+
+# ====================== ADMIN: Pause / Resume any user's Elite robot ======================
+
+class AdminElitePauseView(APIView):
+    """
+    Admin only. Pause a specific user's Elite robot run.
+    Body: { "user_id": <int>, "reason": "optional message" }
+    Progress freezes; profit stays; resume continues from the same point.
+    """
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def post(self, request):
+        user_id = request.data.get('user_id')
+        reason = (request.data.get('reason') or 'Paused by admin').strip()
+        if not user_id:
+            return Response({'error': 'user_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        elite = get_elite_robot()
+        if not elite:
+            return Response({'error': 'Elite robot not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        config = EliteRobotConfig.objects.filter(user_id=user_id, robot=elite).first()
+        if not config:
+            return Response({'error': 'No Elite config found for this user'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not config.is_running:
+            return Response({'error': 'Elite robot is not running for this user'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if config.is_paused:
+            return Response({
+                'message': 'Already paused',
+                'config': EliteRobotConfigSerializer(config).data,
+            }, status=status.HTTP_200_OK)
+
+        config.pause_by_admin(reason=reason)
+        return Response({
+            'message': f'Elite robot paused for user_id={user_id}',
+            'config': EliteRobotConfigSerializer(config).data,
+        }, status=status.HTTP_200_OK)
+
+
+class AdminEliteResumeView(APIView):
+    """
+    Admin only. Resume a paused Elite robot for a specific user.
+    Body: { "user_id": <int> }
+    Shifts run_started_at so progress continues from where it was paused.
+    """
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def post(self, request):
+        user_id = request.data.get('user_id')
+        if not user_id:
+            return Response({'error': 'user_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        elite = get_elite_robot()
+        if not elite:
+            return Response({'error': 'Elite robot not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        config = EliteRobotConfig.objects.filter(user_id=user_id, robot=elite).first()
+        if not config:
+            return Response({'error': 'No Elite config found for this user'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not config.is_running:
+            return Response({'error': 'Elite robot is not running for this user'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not config.is_paused:
+            return Response({
+                'message': 'Not paused – already running',
+                'config': EliteRobotConfigSerializer(config).data,
+            }, status=status.HTTP_200_OK)
+
+        config.resume_by_admin()
+        return Response({
+            'message': f'Elite robot resumed for user_id={user_id}',
+            'config': EliteRobotConfigSerializer(config).data,
+        }, status=status.HTTP_200_OK)
+
+
+class AdminEliteListRunningView(APIView):
+    """
+    Admin only. List all Elite configs that are currently running (and optionally paused).
+    """
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request):
+        qs = EliteRobotConfig.objects.filter(is_running=True).select_related('user', 'robot')
+        data = []
+        for c in qs:
+            data.append({
+                'id': c.id,
+                'user_id': c.user_id,
+                'username': c.user.username,
+                'robot': c.robot.name,
+                'target_market': c.target_market,
+                'stake': str(c.stake),
+                'target_profit': str(c.target_profit),
+                'current_profit': str(c.current_profit),
+                'is_running': c.is_running,
+                'is_paused': c.is_paused,
+                'status_message': c.status_message,
+                'run_started_at': c.run_started_at,
+                'paused_at': c.paused_at,
+            })
+        return Response({'running': data, 'count': len(data)}, status=status.HTTP_200_OK)

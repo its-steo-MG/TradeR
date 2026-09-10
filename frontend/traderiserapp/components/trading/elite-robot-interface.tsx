@@ -15,7 +15,7 @@ import {
 } from "@/lib/api"
 import {
   Play, Square, RotateCcw, Loader2, Brain, Target,
-  TrendingUp, Clock, ShieldCheck
+  TrendingUp, Clock, ShieldCheck, Pause
 } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 
@@ -25,7 +25,7 @@ interface EliteRobotInterfaceProps {
   onResetToNormal: () => void
 }
 
-type Phase = "idle" | "enter-code" | "running" | "finished"
+type Phase = "idle" | "enter-code" | "running" | "paused" | "finished"
 
 /** Safely extract EliteRunStatus from ApiResponse or raw object */
 function extractStatus(res: any): EliteRunStatus | null {
@@ -68,7 +68,11 @@ export function EliteRobotInterface({
         const res = await getEliteStatus(accountType)
         const data = extractStatus(res)
 
-        if (data?.is_running) {
+        if (data?.is_running && data?.is_paused) {
+          setStatus(data)
+          setPhase("paused")
+          startPolling()
+        } else if (data?.is_running) {
           setStatus(data)
           setPhase("running")
           startPolling()
@@ -107,6 +111,22 @@ export function EliteRobotInterface({
           if (pollRef.current) clearInterval(pollRef.current)
           toast.success(`🎯 Target reached! +$${data.current_profit}`)
           window.dispatchEvent(new Event("session-updated"))
+          return
+        }
+
+        // Admin pause / resume transitions
+        if (data.is_running && data.is_paused) {
+          setPhase("paused")
+        } else if (data.is_running && !data.is_paused) {
+          setPhase("running")
+        } else if (!data.is_running) {
+          // Stopped externally
+          setPhase(
+            Number(data.current_profit) > 0 || data.target_reached
+              ? "finished"
+              : "idle"
+          )
+          if (pollRef.current) clearInterval(pollRef.current)
         }
       } catch (e) {
         console.error("Status poll failed", e)
@@ -201,6 +221,11 @@ export function EliteRobotInterface({
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-6 h-6 text-amber-400" />
             <h2 className="text-xl sm:text-2xl font-bold text-amber-300">{robotName}</h2>
+            {phase === "paused" && (
+              <span className="text-xs bg-orange-500/25 text-orange-300 px-2.5 py-0.5 rounded-full font-semibold">
+                PAUSED
+              </span>
+            )}
           </div>
           <p className="text-xs text-white/50 mt-1">Elite Autonomous Trading Engine</p>
         </div>
@@ -358,6 +383,94 @@ export function EliteRobotInterface({
                 initial={{ width: 0 }}
                 animate={{ width: `${status.progress_percent || 0}%` }}
                 transition={{ duration: 0.8 }}
+              />
+            </div>
+
+            {status.last_entry && (
+              <div className="p-3 rounded-xl bg-black/30 border border-white/10 text-sm">
+                <span className="text-white/50">Last entry: </span>
+                <span className="text-amber-200 font-medium">{status.last_entry}</span>
+              </div>
+            )}
+
+            <Button
+              onClick={handleStop}
+              className="w-full bg-red-600/80 hover:bg-red-600 text-white font-bold"
+            >
+              <Square className="w-4 h-4 mr-2" />
+              Stop Robot
+            </Button>
+          </motion.div>
+        )}
+
+        {/* PAUSED BY ADMIN */}
+        {phase === "paused" && status && (
+          <motion.div
+            key="paused"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="space-y-6"
+          >
+            <div className="relative h-32 rounded-2xl overflow-hidden bg-black/40 border border-orange-500/30 flex items-center justify-center">
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-24 h-24 rounded-full bg-orange-500/15 border border-orange-400/40 flex items-center justify-center">
+                  <Pause className="w-10 h-10 text-orange-400" />
+                </div>
+              </div>
+              <div className="absolute bottom-3 left-0 right-0 text-center">
+                <p className="text-sm text-orange-200/90 font-medium px-4">
+                  {status.status_message || "Paused by admin"}
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-orange-500/30 bg-orange-500/10 px-4 py-3 text-center">
+              <p className="text-sm text-orange-200 font-medium">
+                Trading is temporarily paused by an administrator.
+              </p>
+              <p className="text-xs text-white/50 mt-1">
+                Progress and profit are frozen. The run will continue automatically when resumed.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-4 rounded-xl bg-black/30 border border-white/10">
+                <div className="flex items-center gap-1.5 text-xs text-white/50 mb-1">
+                  <TrendingUp className="w-3.5 h-3.5" /> Current Profit
+                </div>
+                <p className="text-2xl font-bold text-green-400">
+                  ${Number(status.current_profit || 0).toFixed(2)}
+                </p>
+              </div>
+              <div className="p-4 rounded-xl bg-black/30 border border-white/10">
+                <div className="flex items-center gap-1.5 text-xs text-white/50 mb-1">
+                  <Target className="w-3.5 h-3.5" /> Target
+                </div>
+                <p className="text-2xl font-bold text-amber-300">
+                  ${Number(status.target_profit || 0).toFixed(2)}
+                </p>
+              </div>
+              <div className="p-4 rounded-xl bg-black/30 border border-white/10">
+                <div className="flex items-center gap-1.5 text-xs text-white/50 mb-1">
+                  <Clock className="w-3.5 h-3.5" /> Time Remaining
+                </div>
+                <p className="text-lg font-semibold text-white">
+                  {formatTime(status.time_remaining_seconds || 0)}
+                </p>
+              </div>
+              <div className="p-4 rounded-xl bg-black/30 border border-white/10">
+                <div className="text-xs text-white/50 mb-1">Progress</div>
+                <p className="text-lg font-semibold text-white">
+                  {status.progress_percent || 0}%
+                </p>
+              </div>
+            </div>
+
+            <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-orange-500 to-amber-500 opacity-70"
+                style={{ width: `${status.progress_percent || 0}%` }}
               />
             </div>
 

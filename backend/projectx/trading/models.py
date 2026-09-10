@@ -260,6 +260,11 @@ class EliteRobotConfig(models.Model):
 
     # Run state
     is_running = models.BooleanField(default=False)
+    is_paused = models.BooleanField(
+        default=False,
+        help_text="Admin can pause a running Elite robot. Progress freezes until resumed."
+    )
+    paused_at = models.DateTimeField(null=True, blank=True)
     run_started_at = models.DateTimeField(null=True, blank=True)
     current_profit = models.DecimalField(
         max_digits=12, decimal_places=2, default=Decimal('0.00')
@@ -269,7 +274,7 @@ class EliteRobotConfig(models.Model):
     )
     status_message = models.CharField(max_length=255, blank=True, default='')
     last_entry = models.CharField(max_length=100, blank=True, default='')
-    target_email_sent = models.BooleanField(default=False)   # ← NEW
+    target_email_sent = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -303,11 +308,44 @@ class EliteRobotConfig(models.Model):
 
     def reset_run(self):
         self.is_running = False
+        self.is_paused = False
+        self.paused_at = None
         self.run_started_at = None
         self.current_profit = Decimal('0.00')
         self.last_credited_profit = Decimal('0.00')
         self.status_message = ''
         self.last_entry = ''
         self.code_used = False
-        self.target_email_sent = False          # ← reset the flag
+        self.target_email_sent = False
         self.save()
+
+    def pause_by_admin(self, reason='Paused by admin'):
+        """Freeze progress. Keeps is_running=True so resume continues the same run."""
+        if not self.is_running:
+            return False
+        if self.is_paused:
+            return False
+        from django.utils import timezone
+        self.is_paused = True
+        self.paused_at = timezone.now()
+        self.status_message = reason or 'Paused by admin'
+        self.save(update_fields=['is_paused', 'paused_at', 'status_message', 'updated_at'])
+        return True
+
+    def resume_by_admin(self):
+        """Continue from where it left off by shifting run_started_at forward by pause duration."""
+        if not self.is_running or not self.is_paused:
+            return False
+        from django.utils import timezone
+        now = timezone.now()
+        if self.paused_at and self.run_started_at:
+            pause_duration = now - self.paused_at
+            # Shift start time forward so elapsed time stays the same as before pause
+            self.run_started_at = self.run_started_at + pause_duration
+        self.is_paused = False
+        self.paused_at = None
+        self.status_message = 'Resumed by admin – continuing trade...'
+        self.save(update_fields=[
+            'is_paused', 'paused_at', 'run_started_at', 'status_message', 'updated_at'
+        ])
+        return True

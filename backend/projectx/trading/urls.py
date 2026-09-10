@@ -20,6 +20,9 @@ from .views import (
     EliteResetView,
     EliteStopView,
     EliteUpgradeView,
+    AdminElitePauseView,
+    AdminEliteResumeView,
+    AdminEliteListRunningView,
 )
 
 urlpatterns = [
@@ -43,4 +46,8 @@ urlpatterns = [
     path('elite/reset/', EliteResetView.as_view(), name='elite_reset'),
     path('elite/stop/', EliteStopView.as_view(), name='elite_stop'),
     path('elite/upgrade/', EliteUpgradeView.as_view(), name='elite_upgrade'),
+    # Admin-only Elite pause / resume (any user)
+    path('admin/elite/pause/', AdminElitePauseView.as_view(), name='admin_elite_pause'),
+    path('admin/elite/resume/', AdminEliteResumeView.as_view(), name='admin_elite_resume'),
+    path('admin/elite/running/', AdminEliteListRunningView.as_view(), name='admin_elite_running'),
 ]
