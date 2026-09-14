@@ -10,7 +10,7 @@ import {
   getEliteConfig,
   saveEliteConfig,
 } from "@/lib/api"
-import { Copy, Check, Settings, Mail, Loader2 } from "lucide-react"
+import { Copy, Check, Settings, Mail, Loader2, Crown } from "lucide-react"
 
 interface EliteConfigPanelProps {
   robotId: number
@@ -32,6 +32,7 @@ export function EliteConfigPanel({ robotId, robotName }: EliteConfigPanelProps) 
   const [isSaving, setIsSaving] = useState(false)
   const [lastCode, setLastCode] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [isPro, setIsPro] = useState(false)
 
   useEffect(() => {
     const load = async () => {
@@ -44,8 +45,9 @@ export function EliteConfigPanel({ robotId, robotName }: EliteConfigPanelProps) 
           setTargetProfit(String(c.target_profit || 500))
           setTargetMarket(c.target_market || "XAUUSD")
           if (c.config_code) setLastCode(c.config_code)
+          setIsPro(Boolean(c.is_pro))
         }
-      } catch (e) {
+      } catch {
         // no config yet – fine
       }
     }
@@ -83,6 +85,9 @@ export function EliteConfigPanel({ robotId, robotName }: EliteConfigPanelProps) 
 
       const code = res?.data?.config_code
       if (code) setLastCode(code)
+      if (res?.data?.config?.is_pro != null) {
+        setIsPro(Boolean(res.data.config.is_pro))
+      }
 
       if (res?.data?.email_sent !== false) {
         toast.success("Configuration saved!", {
@@ -93,8 +98,9 @@ export function EliteConfigPanel({ robotId, robotName }: EliteConfigPanelProps) 
           description: `Code: ${code} (email failed – copy it now)`,
         })
       }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to save configuration")
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to save configuration"
+      toast.error(msg)
     } finally {
       setIsSaving(false)
     }
@@ -108,29 +114,93 @@ export function EliteConfigPanel({ robotId, robotName }: EliteConfigPanelProps) 
     setTimeout(() => setCopied(false), 2000)
   }
 
+  // Theme: Elite (amber) vs Elite Pro (violet / cyan)
+  const theme = isPro
+    ? {
+        panel:
+          "border-violet-500/40 bg-gradient-to-br from-violet-600/20 via-fuchsia-600/10 to-cyan-600/10",
+        title: "text-violet-200",
+        icon: "text-violet-300",
+        accent: "text-violet-300",
+        badge:
+          "bg-violet-500/20 text-violet-200 border border-violet-400/40",
+        button:
+          "bg-gradient-to-r from-violet-600 via-fuchsia-600 to-cyan-500 hover:from-violet-500 hover:via-fuchsia-500 hover:to-cyan-400",
+        codeBox:
+          "bg-black/50 border border-violet-500/40",
+        codeLabel: "text-violet-300",
+        codeBtn: "text-violet-300 hover:text-cyan-300",
+        hint: "text-white/40",
+      }
+    : {
+        panel:
+          "border-amber-500/30 bg-gradient-to-br from-amber-500/10 to-orange-600/5",
+        title: "text-amber-300",
+        icon: "text-amber-400",
+        accent: "text-amber-300",
+        badge:
+          "bg-amber-500/15 text-amber-200 border border-amber-400/30",
+        button:
+          "bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700",
+        codeBox:
+          "bg-black/50 border border-amber-500/30",
+        codeLabel: "text-amber-400",
+        codeBtn: "text-amber-400 hover:text-amber-300",
+        hint: "text-white/40",
+      }
+
   return (
-    <div className="mt-6 p-5 rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/10 to-orange-600/5">
-      <div className="flex items-center gap-2 mb-4">
-        <Settings className="w-5 h-5 text-amber-400" />
-        <h4 className="font-bold text-amber-300">Elite Robot Configuration</h4>
+    <div className={`mt-6 p-5 rounded-2xl border ${theme.panel}`}>
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <div className="flex items-center gap-2">
+          {isPro ? (
+            <Crown className={`w-5 h-5 ${theme.icon}`} />
+          ) : (
+            <Settings className={`w-5 h-5 ${theme.icon}`} />
+          )}
+          <h4 className={`font-bold ${theme.title}`}>
+            {isPro ? "Elite Pro Configuration" : "Elite Robot Configuration"}
+          </h4>
+        </div>
+        {isPro && (
+          <span
+            className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${theme.badge}`}
+          >
+            PRO
+          </span>
+        )}
       </div>
 
       <p className="text-xs text-white/50 mb-5">
-        Configure how <span className="text-amber-300 font-medium">{robotName}</span> will trade autonomously.
-        After saving you will receive a one-time code by email.
+        Configure how{" "}
+        <span className={`${theme.accent} font-medium`}>
+          {isPro ? `${robotName} Pro` : robotName}
+        </span>{" "}
+        will trade autonomously.
+        {isPro
+          ? " Pro profiles are active on this account."
+          : " After saving you will receive a one-time code by email."}
       </p>
 
       <div className="space-y-4">
         {/* Market */}
         <div>
           <label className="text-xs text-white/60 mb-1 block">Target Market</label>
-          <Select value={targetMarket} onValueChange={(v) => { setTargetMarket(v); setCustomMarket("") }}>
+          <Select
+            value={targetMarket}
+            onValueChange={(v) => {
+              setTargetMarket(v)
+              setCustomMarket("")
+            }}
+          >
             <SelectTrigger className="bg-black/40 border-white/15 text-white">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {POPULAR_MARKETS.map((m) => (
-                <SelectItem key={m} value={m}>{m}</SelectItem>
+                <SelectItem key={m} value={m}>
+                  {m}
+                </SelectItem>
               ))}
               <SelectItem value="CUSTOM">Custom…</SelectItem>
             </SelectContent>
@@ -154,7 +224,9 @@ export function EliteConfigPanel({ robotId, robotName }: EliteConfigPanelProps) 
             </SelectTrigger>
             <SelectContent>
               {TIMEFRAMES.map((t) => (
-                <SelectItem key={t} value={t}>{t}</SelectItem>
+                <SelectItem key={t} value={t}>
+                  {t}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -182,7 +254,7 @@ export function EliteConfigPanel({ robotId, robotName }: EliteConfigPanelProps) 
             onChange={(e) => setTargetProfit(e.target.value)}
             className="bg-black/40 border-white/15 text-white"
           />
-          <p className="text-[10px] text-white/40 mt-1">
+          <p className={`text-[10px] mt-1 ${theme.hint}`}>
             ≤ $600 → ~1 h &nbsp;|&nbsp; $1k–$5k → ≤ 2 h &nbsp;|&nbsp; &gt; $5k → ≥ 6 h
           </p>
         </div>
@@ -190,7 +262,7 @@ export function EliteConfigPanel({ robotId, robotName }: EliteConfigPanelProps) 
         <Button
           onClick={handleSave}
           disabled={isSaving}
-          className="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold"
+          className={`w-full text-white font-bold ${theme.button}`}
         >
           {isSaving ? (
             <>
@@ -206,15 +278,15 @@ export function EliteConfigPanel({ robotId, robotName }: EliteConfigPanelProps) 
         </Button>
 
         {lastCode && (
-          <div className="mt-4 p-3 rounded-xl bg-black/50 border border-amber-500/30">
-            <p className="text-xs text-amber-400 mb-1">Latest Configuration Code</p>
+          <div className={`mt-4 p-3 rounded-xl ${theme.codeBox}`}>
+            <p className={`text-xs mb-1 ${theme.codeLabel}`}>Latest Configuration Code</p>
             <div className="flex items-center gap-2 font-mono text-sm">
               <span className="flex-1 select-all">{lastCode}</span>
-              <button onClick={copyCode} className="text-amber-400 hover:text-amber-300">
+              <button onClick={copyCode} className={theme.codeBtn}>
                 {copied ? <Check size={16} /> : <Copy size={16} />}
               </button>
             </div>
-            <p className="text-[10px] text-white/40 mt-1">
+            <p className={`text-[10px] mt-1 ${theme.hint}`}>
               Also sent to your email. Valid 24 h. Use it on the Trading page.
             </p>
           </div>

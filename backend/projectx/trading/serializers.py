@@ -165,6 +165,8 @@ class EliteRobotConfigSerializer(serializers.ModelSerializer):
             'code_used',
             'is_running',
             'is_paused',
+            'is_pro',
+            'pro_upgraded_at',
             'current_profit',
             'status_message',
             'last_entry',
@@ -175,6 +177,7 @@ class EliteRobotConfigSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             'config_code', 'code_used', 'is_running', 'is_paused',
+            'is_pro', 'pro_upgraded_at',
             'current_profit', 'status_message', 'last_entry',
             'run_started_at', 'created_at', 'updated_at'
         ]
@@ -219,6 +222,7 @@ class EliteRobotConfigCreateSerializer(serializers.ModelSerializer):
 class EliteRunStatusSerializer(serializers.Serializer):
     is_running = serializers.BooleanField()
     is_paused = serializers.BooleanField()
+    is_pro = serializers.BooleanField()
     current_profit = serializers.DecimalField(max_digits=12, decimal_places=2)
     target_profit = serializers.DecimalField(max_digits=12, decimal_places=2)
     status_message = serializers.CharField()

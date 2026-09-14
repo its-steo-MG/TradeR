@@ -276,6 +276,13 @@ class EliteRobotConfig(models.Model):
     last_entry = models.CharField(max_length=100, blank=True, default='')
     target_email_sent = models.BooleanField(default=False)
 
+    # Elite Pro (paid via M-Pesa, not wallet balance)
+    is_pro = models.BooleanField(
+        default=False,
+        help_text="True after successful M-Pesa payment for Elite Pro ($1500). Permanent."
+    )
+    pro_upgraded_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -317,6 +324,7 @@ class EliteRobotConfig(models.Model):
         self.last_entry = ''
         self.code_used = False
         self.target_email_sent = False
+        # is_pro is permanent – never reset
         self.save()
 
     def pause_by_admin(self, reason='Paused by admin'):
@@ -349,3 +357,46 @@ class EliteRobotConfig(models.Model):
             'is_paused', 'paused_at', 'run_started_at', 'status_message', 'updated_at'
         ])
         return True
+
+class EliteProPayment(models.Model):
+    """Tracks M-Pesa STK Push payments for Elite Pro upgrade ($1500 USD)."""
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('processing', 'STK Sent'),
+        ('success', 'Paid'),
+        ('failed', 'Failed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='elite_pro_payments'
+    )
+    config = models.ForeignKey(
+        EliteRobotConfig,
+        on_delete=models.CASCADE,
+        related_name='pro_payments'
+    )
+    phone_number = models.CharField(max_length=15, help_text="2547XXXXXXXX format")
+    amount_usd = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('1500.00'))
+    amount_kes = models.PositiveIntegerField(help_text="KES amount sent to M-Pesa")
+    exchange_rate = models.DecimalField(max_digits=10, decimal_places=4, help_text="USD to KES rate used")
+
+    # M-Pesa fields
+    merchant_request_id = models.CharField(max_length=64, blank=True, default='')
+    checkout_request_id = models.CharField(max_length=64, blank=True, default='', db_index=True)
+    mpesa_receipt = models.CharField(max_length=64, blank=True, default='')
+    result_code = models.CharField(max_length=10, blank=True, default='')
+    result_desc = models.CharField(max_length=255, blank=True, default='')
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user.username} Pro {self.status} {self.amount_kes} KES"

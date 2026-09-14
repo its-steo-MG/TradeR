@@ -1280,6 +1280,7 @@ class EliteRunStatusView(APIView):
             return Response({
                 'is_running': False,
                 'is_paused': False,
+                'is_pro': config.is_pro,
                 'current_profit': config.current_profit,
                 'target_profit': config.target_profit,
                 'status_message': config.status_message or 'Idle',
@@ -1300,6 +1301,7 @@ class EliteRunStatusView(APIView):
             return Response({
                 'is_running': True,
                 'is_paused': True,
+                'is_pro': config.is_pro,
                 'current_profit': config.current_profit,
                 'target_profit': config.target_profit,
                 'status_message': config.status_message or 'Paused by admin',
@@ -1428,6 +1430,7 @@ class EliteRunStatusView(APIView):
         return Response({
             'is_running': config.is_running,
             'is_paused': config.is_paused,
+            'is_pro': config.is_pro,
             'current_profit': config.current_profit,
             'target_profit': config.target_profit,
             'status_message': config.status_message,
@@ -1547,6 +1550,298 @@ class EliteUpgradeView(APIView):
             'amount_charged': str(full_price),
             'remaining_balance': str(account.balance),
         }, status=status.HTTP_200_OK)
+
+
+
+# ====================== ELITE PRO via M-PESA STK PUSH ======================
+# Uses the same production PaymentClient as wallet deposits.
+
+from .models import EliteProPayment
+
+try:
+    # Prefer project wallet payment client (production Daraja)
+    from wallet.payment import PaymentClient
+except ImportError:
+    try:
+        from payment import PaymentClient
+    except ImportError:
+        from trading.payment import PaymentClient  # fallback if you placed it under trading
+
+
+def _usd_to_kes(usd_amount: Decimal):
+    """Convert USD → whole KES using settings.USD_TO_KES_RATE (default 130)."""
+    rate = Decimal(str(getattr(settings, 'USD_TO_KES_RATE', '130')))
+    kes = int((usd_amount * rate).quantize(Decimal('1')))
+    if kes < 1:
+        kes = 1
+    return kes, rate
+
+
+class EliteUpgradeProSTKView(APIView):
+    """
+    Initiate M-Pesa STK Push for Elite Pro ($1500 USD → KES)
+    using the same PaymentClient as wallet deposits.
+    Body: { "phone_number": "07XXXXXXXX" }
+    Only allowed while the Elite run is paused by admin and user is not already Pro.
+    """
+    permission_classes = [IsAuthenticated]
+    PRO_PRICE_USD = Decimal('1500.00')
+
+    def post(self, request):
+        elite = get_elite_robot()
+        if not elite:
+            return Response({'error': 'Elite robot not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        config = EliteRobotConfig.objects.filter(user=request.user, robot=elite).first()
+        if not config:
+            return Response({'error': 'No Elite configuration found'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if config.is_pro:
+            return Response({'error': 'You are already Elite Pro'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not (config.is_running and config.is_paused):
+            return Response(
+                {'error': 'Elite Pro is only available while the robot is paused by admin'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        raw_phone = (request.data.get('phone_number') or '').strip()
+        if not raw_phone:
+            return Response({'error': 'phone_number is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        amount_kes, rate = _usd_to_kes(self.PRO_PRICE_USD)
+
+        payment = EliteProPayment.objects.create(
+            user=request.user,
+            config=config,
+            phone_number=raw_phone,
+            amount_usd=self.PRO_PRICE_USD,
+            amount_kes=amount_kes,
+            exchange_rate=rate,
+            status='pending',
+        )
+
+        try:
+            # Optional dedicated Elite Pro callback; else PaymentClient uses PAYMENT_CALLBACK_URL
+            elite_callback = getattr(settings, 'ELITE_PRO_MPESA_CALLBACK_URL', None)
+            client = PaymentClient(callback_url=elite_callback) if elite_callback else PaymentClient()
+
+            normalized = client.normalize_mpesa_phone(raw_phone)
+            payment.phone_number = normalized
+            payment.save(update_fields=['phone_number'])
+
+            # AccountReference max ~12 chars in your client
+            transaction_id = f'EPRO{payment.id}'
+
+            stk_response = client.initiate_stk_push(
+                phone_number=normalized,
+                amount=amount_kes,
+                transaction_id=transaction_id,
+            )
+
+            # PaymentClient returns ResponseCode '1' + error on failure
+            if str(stk_response.get('ResponseCode', '1')) not in ('0',):
+                payment.status = 'failed'
+                payment.result_desc = (
+                    stk_response.get('error')
+                    or stk_response.get('ResponseDescription')
+                    or stk_response.get('errorMessage')
+                    or str(stk_response)
+                )
+                payment.save()
+                return Response(
+                    {'error': payment.result_desc or 'Failed to initiate M-Pesa payment'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            payment.merchant_request_id = stk_response.get('MerchantRequestID', '')
+            payment.checkout_request_id = stk_response.get('CheckoutRequestID', '')
+            payment.status = 'processing'
+            payment.save()
+
+            return Response({
+                'message': 'STK Push sent. Enter your M-Pesa PIN on your phone.',
+                'payment_id': payment.id,
+                'checkout_request_id': payment.checkout_request_id,
+                'amount_usd': str(self.PRO_PRICE_USD),
+                'amount_kes': amount_kes,
+                'exchange_rate': str(rate),
+                'phone_number': normalized,
+            }, status=status.HTTP_200_OK)
+
+        except ValueError as e:
+            payment.status = 'failed'
+            payment.result_desc = str(e)
+            payment.save()
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(f'Elite Pro STK error: {e}', exc_info=True)
+            payment.status = 'failed'
+            payment.result_desc = str(e)
+            payment.save()
+            return Response(
+                {'error': 'Could not reach M-Pesa. Please try again.'},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
+
+
+class EliteProPaymentStatusView(APIView):
+    """Poll payment status after STK Push."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, payment_id):
+        payment = EliteProPayment.objects.filter(
+            id=payment_id, user=request.user
+        ).select_related('config').first()
+        if not payment:
+            return Response({'error': 'Payment not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({
+            'payment_id': payment.id,
+            'status': payment.status,
+            'amount_kes': payment.amount_kes,
+            'amount_usd': str(payment.amount_usd),
+            'mpesa_receipt': payment.mpesa_receipt,
+            'result_desc': payment.result_desc,
+            'is_pro': payment.config.is_pro,
+        })
+
+
+class EliteProMpesaCallbackView(APIView):
+    """
+    Safaricom STK callback for Elite Pro.
+    On ResultCode 0 → store receipt only. Admin marks paid; user downloads; admin resumes.
+    """
+    permission_classes = []
+
+    def post(self, request):
+        try:
+            body = request.data
+            stk = body.get('Body', {}).get('stkCallback', {})
+            checkout_id = stk.get('CheckoutRequestID', '')
+            result_code = str(stk.get('ResultCode', ''))
+            result_desc = stk.get('ResultDesc', '')
+
+            payment = EliteProPayment.objects.filter(
+                checkout_request_id=checkout_id
+            ).select_related('config').first()
+
+            if not payment:
+                logger.warning(f'M-Pesa callback unknown CheckoutRequestID: {checkout_id}')
+                return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
+            if payment.status == 'success':
+                return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
+            payment.result_code = result_code
+            payment.result_desc = result_desc
+
+            if result_code == '0':
+                items = stk.get('CallbackMetadata', {}).get('Item', [])
+                receipt = ''
+                for item in items:
+                    if item.get('Name') == 'MpesaReceiptNumber':
+                        receipt = str(item.get('Value', ''))
+                        break
+
+                # Record receipt only. Admin must mark payment as paid.
+                # Do NOT set is_pro and do NOT resume.
+                payment.mpesa_receipt = receipt
+                payment.result_desc = result_desc or 'STK completed – awaiting admin confirmation'
+                # Keep status as processing until admin marks paid
+                if payment.status != 'success':
+                    payment.status = 'processing'
+                payment.save()
+                logger.info(
+                    f'Elite Pro STK receipt for user={payment.user_id} receipt={receipt} '
+                    f'(awaiting admin mark-paid)'
+                )
+            else:
+                payment.status = 'failed' if result_code != '1032' else 'cancelled'
+                payment.save()
+
+            return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
+        except Exception as e:
+            logger.error(f'M-Pesa callback error: {e}', exc_info=True)
+            return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
+
+
+# ====================== ADMIN: Mark Elite Pro payment paid ======================
+
+class AdminMarkEliteProPaidView(APIView):
+    """
+    Admin only. Mark an Elite Pro payment as paid.
+    Does NOT set is_pro and does NOT resume.
+    User then sees Download; after download, is_pro is set; admin resumes separately.
+    """
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def post(self, request, payment_id=None):
+        pid = payment_id or request.data.get('payment_id')
+        if not pid:
+            return Response({'error': 'payment_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        payment = EliteProPayment.objects.filter(id=pid).select_related('config', 'user').first()
+        if not payment:
+            return Response({'error': 'Payment not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if payment.status == 'success':
+            return Response({
+                'message': 'Already marked as paid',
+                'payment_id': payment.id,
+                'status': payment.status,
+                'is_pro': payment.config.is_pro,
+            })
+
+        payment.status = 'success'
+        payment.paid_at = timezone.now()
+        note = (request.data.get('note') or 'Marked paid by admin').strip()
+        payment.result_desc = note
+        payment.save(update_fields=['status', 'paid_at', 'result_desc'])
+
+        return Response({
+            'message': f'Payment marked paid for {payment.user.username}. User can download Elite Pro.',
+            'payment_id': payment.id,
+            'status': payment.status,
+            'is_pro': payment.config.is_pro,
+        })
+
+
+class EliteActivateProView(APIView):
+    """
+    User calls this AFTER the download animation.
+    Sets is_pro=True. Does NOT resume — admin resumes separately.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, payment_id):
+        payment = EliteProPayment.objects.filter(
+            id=payment_id, user=request.user
+        ).select_related('config').first()
+        if not payment:
+            return Response({'error': 'Payment not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if payment.status != 'success':
+            return Response(
+                {'error': 'Payment is not confirmed yet. Wait for traderiserapp to mark it paid.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        config = payment.config
+        if not config.is_pro:
+            config.is_pro = True
+            config.pro_upgraded_at = timezone.now()
+            config.status_message = 'Elite Pro activated successfully– resuming trading..'
+            config.save(update_fields=['is_pro', 'pro_upgraded_at', 'status_message'])
+
+        return Response({
+            'message': 'Elite Pro activated. Elitepro will resume automatically.',
+            'is_pro': True,
+            'is_paused': config.is_paused,
+            'is_running': config.is_running,
+        })
 
 
 # ====================== ADMIN: Pause / Resume any user's Elite robot ======================

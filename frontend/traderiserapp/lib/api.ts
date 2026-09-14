@@ -1367,7 +1367,9 @@ export interface EliteRobotConfig {
   config_code?: string
   code_used?: boolean
   is_running?: boolean
-  is_paused?: boolean          // ← ADD
+  is_paused?: boolean
+  is_pro?: boolean              // ← NEW
+  pro_upgraded_at?: string | null
   current_profit?: string | number
   status_message?: string
   last_entry?: string
@@ -1379,7 +1381,8 @@ export interface EliteRobotConfig {
 
 export interface EliteRunStatus {
   is_running: boolean
-  is_paused?: boolean  
+  is_paused?: boolean
+  is_pro?: boolean              // ← NEW
   current_profit: string | number
   target_profit: string | number
   status_message: string
@@ -1455,6 +1458,62 @@ export const upgradeElite = (account_type: string = "standard") =>
   }>("/trading/elite/upgrade/", {
     method: "POST",
     body: JSON.stringify({ account_type }),
+  })
+
+  // ====================== ELITE PRO via M-PESA ======================
+export interface EliteProSTKResponse {
+  message: string
+  payment_id: number
+  checkout_request_id: string
+  amount_usd: string
+  amount_kes: number
+  exchange_rate: string
+  phone_number: string
+}
+
+export interface EliteProPaymentStatus {
+  payment_id: number
+  status: "pending" | "processing" | "success" | "failed" | "cancelled"
+  amount_kes: number
+  amount_usd: string
+  mpesa_receipt: string
+  result_desc: string
+  is_pro: boolean
+}
+
+/** Initiate M-Pesa STK Push for Elite Pro ($1500 → KES). Only while paused. */
+export const initiateEliteProMpesa = (phone_number: string) =>
+  apiRequest<EliteProSTKResponse>("/trading/elite/upgrade-pro/", {
+    method: "POST",
+    body: JSON.stringify({ phone_number }),
+  })
+
+/** Poll M-Pesa payment status after STK Push */
+export const getEliteProPaymentStatus = (paymentId: number) =>
+  apiRequest<EliteProPaymentStatus>(`/trading/elite/pro-payment/${paymentId}/`)
+
+/** User: after download animation — sets is_pro=True (does NOT resume) */
+export const activateElitePro = (paymentId: number) =>
+  apiRequest<{
+    message: string
+    is_pro: boolean
+    is_paused: boolean
+    is_running: boolean
+  }>(`/trading/elite/pro-payment/${paymentId}/activate/`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  })
+
+/** Admin: mark Elite Pro payment as paid (user can then download) */
+export const adminMarkEliteProPaid = (paymentId: number, note?: string) =>
+  apiRequest<{
+    message: string
+    payment_id: number
+    status: string
+    is_pro: boolean
+  }>(`/trading/elite/admin/pro-payment/${paymentId}/mark-paid/`, {
+    method: "POST",
+    body: JSON.stringify({ note: note || "Marked paid by admin" }),
   })
 
 
@@ -1561,4 +1620,8 @@ export const api = {
   resetEliteRun,
   stopEliteRun,
   upgradeElite,
+  initiateEliteProMpesa, 
+  getEliteProPaymentStatus,
+  activateElitePro,
+  adminMarkEliteProPaid,
 }

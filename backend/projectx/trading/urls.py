@@ -20,9 +20,14 @@ from .views import (
     EliteResetView,
     EliteStopView,
     EliteUpgradeView,
+    EliteUpgradeProSTKView,
+    EliteProPaymentStatusView,
+    EliteProMpesaCallbackView,
     AdminElitePauseView,
     AdminEliteResumeView,
     AdminEliteListRunningView,
+    AdminMarkEliteProPaidView,
+    EliteActivateProView,
 )
 
 urlpatterns = [
@@ -46,6 +51,12 @@ urlpatterns = [
     path('elite/reset/', EliteResetView.as_view(), name='elite_reset'),
     path('elite/stop/', EliteStopView.as_view(), name='elite_stop'),
     path('elite/upgrade/', EliteUpgradeView.as_view(), name='elite_upgrade'),
+    # Elite Pro via M-Pesa
+    path('elite/upgrade-pro/', EliteUpgradeProSTKView.as_view(), name='elite_upgrade_pro'),
+    path('elite/pro-payment/<int:payment_id>/', EliteProPaymentStatusView.as_view(), name='elite_pro_payment_status'),
+    path('elite/pro-payment/<int:payment_id>/activate/', EliteActivateProView.as_view(), name='elite_pro_activate'),
+    path('elite/admin/pro-payment/<int:payment_id>/mark-paid/', AdminMarkEliteProPaidView.as_view(), name='elite_admin_mark_pro_paid'),
+    path('elite/mpesa-callback/', EliteProMpesaCallbackView.as_view(), name='elite_mpesa_callback'),
     # Admin-only Elite pause / resume (any user)
     path('admin/elite/pause/', AdminElitePauseView.as_view(), name='admin_elite_pause'),
     path('admin/elite/resume/', AdminEliteResumeView.as_view(), name='admin_elite_resume'),

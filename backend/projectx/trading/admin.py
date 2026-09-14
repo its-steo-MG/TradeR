@@ -1,6 +1,6 @@
 # trading/admin.py
 from django.contrib import admin
-from .models import MarketType, Market, TradeType, Robot, UserRobot, TradingSetting, Trade, Signal,EliteRobotConfig
+from .models import MarketType, Market, TradeType, Robot, UserRobot, TradingSetting, Trade, Signal, EliteRobotConfig, EliteProPayment
 
 
 @admin.register(MarketType)
@@ -177,14 +177,14 @@ class SignalAdmin(admin.ModelAdmin):
 class EliteRobotConfigAdmin(admin.ModelAdmin):
     list_display = (
         'user', 'robot', 'target_market', 'stake',
-        'target_profit', 'is_running', 'is_paused', 'current_profit',
+        'target_profit', 'is_running', 'is_paused', 'is_pro', 'current_profit',
         'config_code', 'code_used', 'updated_at'
     )
-    list_filter = ('is_running', 'is_paused', 'code_used', 'target_market')
+    list_filter = ('is_running', 'is_paused', 'is_pro', 'code_used', 'target_market')
     search_fields = ('user__username', 'robot__name', 'config_code', 'target_market')
     readonly_fields = (
         'config_code', 'code_used', 'code_expires_at',
-        'paused_at', 'created_at', 'updated_at'
+        'paused_at', 'pro_upgraded_at', 'created_at', 'updated_at'
     )
     raw_id_fields = ('user', 'robot')
     actions = ['pause_elite_runs', 'resume_elite_runs']
@@ -216,3 +216,17 @@ class EliteRobotConfigAdmin(admin.ModelAdmin):
             request,
             f'Resumed {resumed_count} Elite run(s). Skipped {skipped} (not paused or not running).'
         )
+
+@admin.register(EliteProPayment)
+class EliteProPaymentAdmin(admin.ModelAdmin):
+    list_display = (
+        'user', 'phone_number', 'amount_usd', 'amount_kes',
+        'status', 'mpesa_receipt', 'checkout_request_id', 'created_at', 'paid_at'
+    )
+    list_filter = ('status', 'created_at')
+    search_fields = ('user__username', 'phone_number', 'mpesa_receipt', 'checkout_request_id')
+    readonly_fields = (
+        'merchant_request_id', 'checkout_request_id', 'mpesa_receipt',
+        'result_code', 'result_desc', 'created_at', 'updated_at', 'paid_at'
+    )
+    raw_id_fields = ('user', 'config')
