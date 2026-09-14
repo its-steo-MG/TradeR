@@ -257,7 +257,7 @@ export function EliteRobotInterface({
             if (paymentPollRef.current) clearInterval(paymentPollRef.current)
             // Do NOT auto-download — show paid screen with Download button
             setPhaseSafe("payment-paid")
-            toast.success("Payment confirmed by admin!")
+            toast.success("Payment confirmed by traderiserapp!")
           } else if (s.status === "failed" || s.status === "cancelled") {
             if (paymentPollRef.current) clearInterval(paymentPollRef.current)
             toast.error(s.result_desc || "Payment failed or cancelled")
@@ -296,7 +296,7 @@ export function EliteRobotInterface({
       if (res.error) throw new Error(res.error)
 
       setIsPro(true)
-      toast.success("Elite Pro activated! Waiting for admin to resume your run.")
+      toast.success("Elite Pro activated! Waiting for traderiserapp to resume your run.")
       // Stay paused until admin resumes
       setPhaseSafe("paused")
       startPolling()
@@ -590,8 +590,8 @@ export function EliteRobotInterface({
                 </div>
                 <p className="text-sm text-white/60">
                   Pay <span className="text-violet-300 font-semibold">$1,500</span> via M-Pesa.
-                  After admin confirms payment, you can download Elite Pro profiles.
-                  Admin will resume your run when ready.
+                  After traderiserapp confirms payment, you can download Elite Pro profiles.
+                  Elitepro will resume trades automatically .
                 </p>
                 <Button
                   onClick={openMpesaForm}
@@ -740,12 +740,12 @@ export function EliteRobotInterface({
                 {amountKes != null ? (
                   <> for <span className="text-violet-300 font-semibold">KES {amountKes.toLocaleString()}</span></>
                 ) : null}
-                . Complete PIN on your phone, then wait for admin to confirm payment.
+                . Complete PIN on your phone, then wait for traderiserapp to confirm payment.
               </p>
             </div>
             <div className="flex items-center justify-center gap-2 text-white/40 text-sm">
               <Loader2 className="w-4 h-4 animate-spin" />
-              Waiting for admin confirmation…
+              Waiting for traderiserapp confirmation…
             </div>
             <Button
               variant="outline"
