@@ -25,7 +25,7 @@ const POPULAR_MARKETS = [
 
 export function EliteConfigPanel({ robotId, robotName }: EliteConfigPanelProps) {
   const [timeframe, setTimeframe] = useState("5m")
-  const [stake, setStake] = useState("100")
+  const [stake, setStake] = useState("1000")
   const [targetProfit, setTargetProfit] = useState("500")
   const [targetMarket, setTargetMarket] = useState("XAUUSD")
   const [customMarket, setCustomMarket] = useState("")
@@ -41,7 +41,7 @@ export function EliteConfigPanel({ robotId, robotName }: EliteConfigPanelProps) 
         if (res?.data?.config) {
           const c = res.data.config
           setTimeframe(c.timeframe || "5m")
-          setStake(String(c.stake || 100))
+          setStake(String(c.stake || 1000))
           setTargetProfit(String(c.target_profit || 500))
           setTargetMarket(c.target_market || "XAUUSD")
           if (c.config_code) setLastCode(c.config_code)
@@ -59,8 +59,8 @@ export function EliteConfigPanel({ robotId, robotName }: EliteConfigPanelProps) 
     const profitNum = Number(targetProfit)
     const market = customMarket.trim() || targetMarket
 
-    if (stakeNum < 100) {
-      toast.error("Minimum stake is $100")
+    if (stakeNum < 1000) {
+      toast.error("Minimum stake is $1000")
       return
     }
     if (profitNum < 50) {
@@ -234,10 +234,10 @@ export function EliteConfigPanel({ robotId, robotName }: EliteConfigPanelProps) 
 
         {/* Stake */}
         <div>
-          <label className="text-xs text-white/60 mb-1 block">Stake (min $100)</label>
+          <label className="text-xs text-white/60 mb-1 block">Stake (min $1000)</label>
           <Input
             type="number"
-            min={100}
+            min={1000}
             value={stake}
             onChange={(e) => setStake(e.target.value)}
             className="bg-black/40 border-white/15 text-white"

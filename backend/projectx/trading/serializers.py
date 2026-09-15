@@ -187,8 +187,8 @@ class EliteRobotConfigSerializer(serializers.ModelSerializer):
         return round(secs / 3600, 1)
 
     def validate_stake(self, value):
-        if value < 100:
-            raise serializers.ValidationError("Minimum stake is 100 USD")
+        if value < 1000:
+            raise serializers.ValidationError("Minimum stake is 1000 USD")
         return value
 
     def validate_target_profit(self, value):
@@ -209,8 +209,8 @@ class EliteRobotConfigCreateSerializer(serializers.ModelSerializer):
         ]
 
     def validate_stake(self, value):
-        if value < 100:
-            raise serializers.ValidationError("Minimum stake is 100 USD")
+        if value < 1000:
+            raise serializers.ValidationError("Minimum stake is 1000 USD")
         return value
 
     def validate_robot(self, value):

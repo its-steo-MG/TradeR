@@ -240,8 +240,8 @@ class EliteRobotConfig(models.Model):
     stake = models.DecimalField(
         max_digits=12,
         decimal_places=2,
-        validators=[MinValueValidator(Decimal('100.00'))],
-        help_text="Minimum stake is 100 USD"
+        validators=[MinValueValidator(Decimal('1000.00'))],
+        help_text="Minimum stake is 1000 USD"
     )
     target_profit = models.DecimalField(
         max_digits=12,
