@@ -1,9 +1,10 @@
 // components/agents/agent-card.tsx
 "use client"
 
-import { Star, MapPin, Shield } from "lucide-react"
+import { Star, MapPin, Shield, MessageCircle } from "lucide-react"
 import Image from "next/image"
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import DepositModal from "./deposit-modal"
 import WithdrawalModal from "./withdrawal-modal"
 import PaymentInfoDisplay from "./payment-info-display"
@@ -39,6 +40,7 @@ export default function AgentCard({ agent }: AgentCardProps) {
   const [showDepositModal, setShowDepositModal] = useState(false)
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false)
   const [imgError, setImgError] = useState(false)
+  const router = useRouter()
 
   const getMethodBadge = (method: string) => {
     const badges: Record<string, { label: string; color: string; bgColor: string }> = {
@@ -69,8 +71,12 @@ export default function AgentCard({ agent }: AgentCardProps) {
   }
 
   const badge = getMethodBadge(agent.method)
-
   const imageSrc = !imgError && agent.image ? agent.image : "/placeholder-agent.jpg"
+
+  const handleChatWithAgent = () => {
+    // Navigate to customer care with the agent context
+    router.push(`/customercare?agent_id=${agent.id}&agent_name=${encodeURIComponent(agent.name)}`)
+  }
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden hover:shadow-lg hover:border-purple-300 transition-all duration-300 flex flex-col h-full">
@@ -188,29 +194,45 @@ export default function AgentCard({ agent }: AgentCardProps) {
         />
       </div>
 
-      {/* Action Buttons — Liquid Glass */}
-      <div className="px-4 sm:px-6 py-4 mt-auto flex gap-2 sm:gap-3">
+      {/* Action Buttons */}
+      <div className="px-4 sm:px-6 py-4 mt-auto space-y-2">
+        {/* Chat with Agent Button */}
         <button
-          onClick={() => setShowDepositModal(true)}
+          onClick={handleChatWithAgent}
           className="
-            drop-on-top relative flex-1 py-2.5 sm:py-3 rounded-xl
-            bg-green-600 hover:bg-green-700 text-white font-semibold
-            text-xs sm:text-base transition-all duration-200
+            drop-on-top relative w-full py-2.5 sm:py-3 rounded-xl
+            bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700
+            text-white font-semibold text-xs sm:text-base transition-all duration-200
+            flex items-center justify-center gap-2
           "
         >
-          <span className="relative z-[1]">Deposit</span>
+          <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
+          <span className="relative z-[1]">Chat with {agent.name}</span>
         </button>
 
-        <button
-          onClick={() => setShowWithdrawalModal(true)}
-          className="
-            drop-on-top relative flex-1 py-2.5 sm:py-3 rounded-xl
-            bg-blue-600 hover:bg-blue-700 text-white font-semibold
-            text-xs sm:text-base transition-all duration-200
-          "
-        >
-          <span className="relative z-[1]">Withdraw</span>
-        </button>
+        <div className="flex gap-2 sm:gap-3">
+          <button
+            onClick={() => setShowDepositModal(true)}
+            className="
+              drop-on-top relative flex-1 py-2.5 sm:py-3 rounded-xl
+              bg-green-600 hover:bg-green-700 text-white font-semibold
+              text-xs sm:text-base transition-all duration-200
+            "
+          >
+            <span className="relative z-[1]">Deposit</span>
+          </button>
+
+          <button
+            onClick={() => setShowWithdrawalModal(true)}
+            className="
+              drop-on-top relative flex-1 py-2.5 sm:py-3 rounded-xl
+              bg-blue-600 hover:bg-blue-700 text-white font-semibold
+              text-xs sm:text-base transition-all duration-200
+            "
+          >
+            <span className="relative z-[1]">Withdraw</span>
+          </button>
+        </div>
       </div>
 
       {/* Modals */}

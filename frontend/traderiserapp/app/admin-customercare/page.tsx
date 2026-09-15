@@ -18,7 +18,6 @@ import {
   Lock,
   User,
   ArrowLeft,
-  Menu,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -65,6 +64,8 @@ export default function AdminCustomercarePage() {
     loading,
     sending,
     error,
+    selectedAgentId,
+    setSelectedAgentId,
     selectUser,
     sendMessage,
     sendTyping,
@@ -165,7 +166,10 @@ export default function AdminCustomercarePage() {
   const handleSend = async () => {
     const text = inputRef.current?.value?.trim()
     if (!text || sending) return
-    await sendMessage(text)
+
+    // Pass selected agent (or null)
+    await sendMessage(text, selectedAgentId)
+
     if (inputRef.current) inputRef.current.value = ''
     sendTyping(false)
   }
@@ -383,6 +387,11 @@ export default function AdminCustomercarePage() {
                         </span>
                       )}
                     </div>
+                    {thread.current_agent && (
+                      <p className="text-[11px] text-purple-400 mt-0.5 truncate">
+                        Agent: {thread.current_agent.name}
+                      </p>
+                    )}
                   </div>
                 </button>
               )
@@ -404,7 +413,7 @@ export default function AdminCustomercarePage() {
             <h2 className="text-2xl font-light text-white/70 mb-2">TradeRiser Admin Care</h2>
             <p className="text-sm max-w-sm text-center px-4">
               Select a conversation from the left to reply as{' '}
-              <strong className="text-emerald-400">TradeRiser Support</strong>.
+              <strong className="text-emerald-400">TradeRiser Support</strong> or as a specific Agent.
             </p>
           </div>
         ) : (
@@ -414,7 +423,7 @@ export default function AdminCustomercarePage() {
               <div className="flex items-center gap-2">
                 {/* Back button - mobile only */}
                 <button
-                  onClick={() => selectUser(null)} // will clear selection
+                  onClick={() => selectUser(null)}
                   className="md:hidden p-2 -ml-1 rounded-full hover:bg-white/10"
                 >
                   <ArrowLeft className="w-5 h-5" />
@@ -430,6 +439,8 @@ export default function AdminCustomercarePage() {
                       <span className="text-emerald-400">typing...</span>
                     ) : currentThread.is_blocked ? (
                       <span className="text-red-400">Blocked</span>
+                    ) : currentThread.current_agent ? (
+                      <span className="text-purple-400">Agent: {currentThread.current_agent.name}</span>
                     ) : (
                       'TradeRiser Support'
                     )}
@@ -437,7 +448,20 @@ export default function AdminCustomercarePage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-1 relative">
+              <div className="flex items-center gap-2 relative">
+                {/* Agent Selector */}
+                <select
+                  value={selectedAgentId || ''}
+                  onChange={(e) => setSelectedAgentId(e.target.value ? Number(e.target.value) : null)}
+                  className="bg-[#2a3942] text-white text-xs rounded-lg px-2 py-1.5 border border-white/10 outline-none max-w-[150px]"
+                >
+                  <option value="">Reply as Support</option>
+                  <option value="1">Equity Agent</option>
+                  <option value="2">M-Pesa Agent</option>
+                  <option value="3">Binance Agent</option>
+                  {/* You can later load real agents dynamically */}
+                </select>
+
                 {activeCallId ? (
                   <Button onClick={endActiveCall} size="sm" className="bg-red-600 hover:bg-red-500 rounded-full text-xs">
                     <PhoneOff className="w-4 h-4 mr-1" />
@@ -510,7 +534,7 @@ export default function AdminCustomercarePage() {
                     >
                       {isMe && (
                         <p className="text-[11px] text-emerald-300 font-medium mb-0.5">
-                          TradeRiser Support
+                          {msg.agent?.name || msg.sender?.username || 'TradeRiser Support'}
                         </p>
                       )}
                       {!isMe && (
@@ -548,7 +572,11 @@ export default function AdminCustomercarePage() {
               <div className="flex-1 bg-[#2a3942] rounded-lg">
                 <textarea
                   ref={inputRef}
-                  placeholder="Reply as TradeRiser Support..."
+                  placeholder={
+                    selectedAgentId
+                      ? `Reply as Agent...`
+                      : 'Reply as TradeRiser Support...'
+                  }
                   rows={1}
                   className="w-full bg-transparent text-white placeholder-white/40 px-3 py-2.5 text-[15px] outline-none resize-none max-h-32"
                   style={{ minHeight: '42px' }}

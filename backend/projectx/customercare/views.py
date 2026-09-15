@@ -1,21 +1,22 @@
 # customercare/views.py
 from rest_framework.views import APIView
-from rest_framework.decorators import api_view, permission_classes 
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status, permissions
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db import transaction
-from django.core.mail import send_mail   
+from django.core.mail import send_mail
 from django.conf import settings
-from .models import ChatThread, Message,AdminEmail
-from .serializers import ChatThreadSerializer, MessageSerializer,AdminEmailSerializer
+from .models import ChatThread, Message, AdminEmail
+from .serializers import ChatThreadSerializer, MessageSerializer, AdminEmailSerializer
 from .permissions import IsOwnerOrAdmin
 from accounts.models import User
 import logging
 
 logger = logging.getLogger('customercare')
+
 
 class ChatThreadView(APIView):
     permission_classes = [IsAuthenticated]
@@ -36,6 +37,17 @@ class ChatThreadView(APIView):
         content = request.data.get('content')
         if not content:
             return Response({"error": "Message content required"}, status=400)
+
+        # Optional: set current agent when user starts chatting with an agent
+        agent_id = request.data.get('agent_id')
+        if agent_id:
+            from agents.models import Agent
+            try:
+                agent = Agent.objects.get(id=agent_id, is_active=True)
+                thread.current_agent = agent
+                thread.save(update_fields=['current_agent'])
+            except Agent.DoesNotExist:
+                pass
 
         message = Message.objects.create(
             thread=thread,
@@ -80,7 +92,7 @@ class AdminChatView(APIView):
     def get(self, request, user_id):
         user = get_object_or_404(User, id=user_id)
         thread = user.support_thread
-        # When admin opens the chat → mark all USER messages as read (so user sees double ticks)
+        # When admin opens the chat → mark all USER messages as read
         thread.messages.filter(
             sender__is_staff=False,
             is_system=False,
@@ -96,30 +108,43 @@ class AdminChatView(APIView):
         if not content:
             return Response({"error": "Content required"}, status=400)
 
-        # Admin replies are ALWAYS system messages so they appear as "TradeRiser Support"
+        # ========== NEW: Admin can reply AS a specific agent ==========
+        agent_id = request.data.get('agent_id')
+        agent = None
+        if agent_id:
+            from agents.models import Agent
+            try:
+                agent = Agent.objects.get(id=agent_id)
+                # Also set as current agent on the thread
+                thread.current_agent = agent
+                thread.save(update_fields=['current_agent'])
+            except Agent.DoesNotExist:
+                pass
+
         is_system = request.data.get('is_system', True)
 
         message = Message.objects.create(
             thread=thread,
             sender=request.user,
             content=content,
-            is_system=is_system
+            is_system=is_system,
+            agent=agent   # ← key change
         )
-        # Also mark any previous unread user messages as read
+
+        # Mark user messages as read
         thread.messages.filter(
             sender__is_staff=False,
             is_system=False,
             is_read=False
         ).update(is_read=True)
 
-        # ===== BROADCAST TO USER VIA CHANNEL LAYER (real-time) =====
-        # This is the ONLY place the message is created + sent.
-        # Frontend must NOT also send via WebSocket.
+        # ===== BROADCAST TO USER VIA CHANNEL LAYER =====
         try:
             from channels.layers import get_channel_layer
             from asgiref.sync import async_to_sync
             channel_layer = get_channel_layer()
             if channel_layer:
+                sender_name = agent.name if agent else "TradeRiser Support"
                 payload = {
                     "type": "new_message",
                     "id": message.id,
@@ -127,12 +152,17 @@ class AdminChatView(APIView):
                     "sent_at": message.sent_at.isoformat(),
                     "is_read": message.is_read,
                     "is_system": True,
-                    "is_me": False,          # from the user's perspective this is NOT me
+                    "is_me": False,
                     "user_id": user.id,
                     "sender": {
-                        "username": "TradeRiser Support",
+                        "username": sender_name,
                         "is_staff": True
-                    }
+                    },
+                    "agent": {
+                        "id": agent.id,
+                        "name": agent.name,
+                        "image": request.build_absolute_uri(agent.profile_picture.url) if agent and agent.profile_picture else None
+                    } if agent else None
                 }
                 async_to_sync(channel_layer.group_send)(
                     f"chat_{user.id}",
@@ -143,8 +173,7 @@ class AdminChatView(APIView):
                     }
                 )
         except Exception as e:
-            import logging
-            logging.getLogger(__name__).error(f"Failed to broadcast admin message: {e}")
+            logger.error(f"Failed to broadcast admin message: {e}")
 
         return Response(MessageSerializer(message, context={'request': request}).data, status=201)
 
@@ -159,16 +188,15 @@ class RequestReviewView(APIView):
 
         thread.review_requested = True
         thread.save()
-        # Notify admin via email or task
         logger.info(f"Review requested by {request.user.id}")
         return Response({"message": "Review request submitted. We’ll get back within 48 hours."})
-    
+
+
 class MarkMessagesReadView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         thread = request.user.support_thread
-        # Mark all admin messages as read
         updated = thread.messages.filter(
             sender__is_staff=True,
             is_read=False
@@ -179,8 +207,8 @@ class MarkMessagesReadView(APIView):
             "status": "success"
         }, status=status.HTTP_200_OK)
 
+
 class AdminMarkMessagesReadView(APIView):
-    """Admin marks a specific user's messages as read (when opening their chat)"""
     permission_classes = [permissions.IsAdminUser]
 
     def post(self, request, user_id):
@@ -197,7 +225,6 @@ class AdminMarkMessagesReadView(APIView):
         }, status=status.HTTP_200_OK)
 
 
-
 @api_view(['GET'])
 @permission_classes([permissions.IsAdminUser])
 def get_active_threads(request):
@@ -205,12 +232,11 @@ def get_active_threads(request):
     last_msg_sub = Message.objects.filter(thread=OuterRef('pk')).order_by('-sent_at')
     threads = (
         ChatThread.objects
-        .select_related('user')
+        .select_related('user', 'current_agent')
         .filter(is_active=True)
         .annotate(
             last_message_at=Subquery(last_msg_sub.values('sent_at')[:1]),
             last_message_content=Subquery(last_msg_sub.values('content')[:1]),
-            # Unread = messages from the USER that are not yet read by admin
             unread_count=Count('messages', filter=Q(messages__is_read=False) & ~Q(messages__sender__is_staff=True) & ~Q(messages__is_system=True))
         )
         .order_by('-last_message_at')[:50]
@@ -222,17 +248,22 @@ def get_active_threads(request):
         'last_message_at': t.last_message_at.isoformat() if t.last_message_at else None,
         'is_blocked': t.is_blocked(),
         'unread_count': t.unread_count or 0,
+        'current_agent': {
+            'id': t.current_agent.id,
+            'name': t.current_agent.name,
+        } if t.current_agent else None,
     } for t in threads]
     return Response(data)
 
+
 from .models import CallSession, CustomerCareSettings
 from .serializers import CallSessionSerializer
+
 
 class InitiateAudioCallView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        # Get or create thread
         thread, _ = ChatThread.objects.get_or_create(user=request.user)
         settings_obj = CustomerCareSettings.get_settings()
 
@@ -256,13 +287,13 @@ class InitiateAudioCallView(APIView):
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 
+
 class AnswerCallView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, call_id):
         call = get_object_or_404(CallSession, id=call_id, status__in=['pending', 'ringing'])
 
-        # Strict staff check
         if not request.user.is_staff:
             logger.warning(f"Non-staff user {request.user.id} tried to answer call")
             return Response({"error": "Staff access only"}, status=status.HTTP_403_FORBIDDEN)
@@ -278,7 +309,6 @@ class AnswerCallView(APIView):
         call.voice_preset = voice_preset
         call.save()
 
-        # Notify the user who initiated the call
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
             f"call_{call.user.id}",
@@ -299,22 +329,21 @@ class AnswerCallView(APIView):
             "voice_preset": voice_preset,
             "agent": request.user.username
         })
-    
+
+
 class EndCallView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, call_id):
         call = get_object_or_404(CallSession, id=call_id)
 
-        # Only caller or staff can end the call
         if call.user != request.user and not request.user.is_staff:
             return Response({"error": "Not authorized"}, status=status.HTTP_403_FORBIDDEN)
 
         call.status = 'completed'
         call.ended_at = timezone.now()
         call.save()
-        
-    # Notify both sides that call ended
+
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
             f"call_session_{call.id}",
@@ -333,7 +362,7 @@ class MissedCallsView(APIView):
 
     def get(self, request):
         missed_count = CallSession.objects.filter(
-            user=request.user, 
+            user=request.user,
             is_missed=True
         ).count()
 
@@ -341,56 +370,34 @@ class MissedCallsView(APIView):
             "missed_calls": missed_count,
             "has_unread": missed_count > 0
         })
-    
-# ====================== ADMIN SEND EMAIL ======================
+
+
 class AdminSendEmailView(APIView):
     permission_classes = [permissions.IsAdminUser]
 
     def send_professional_email(self, admin_email_obj):
-        """Send beautiful professional email"""
         if not admin_email_obj.message:
             return False
 
         plain_message = admin_email_obj.message
 
-        # Professional HTML Template
         html_message = f"""
         <html>
         <head>
             <style>
                 body {{ font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333333; background-color: #f4f6f9; }}
                 .container {{ max-width: 650px; margin: 30px auto; padding: 40px; background: #ffffff; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }}
-                .header {{ 
-                    color: #0066cc; 
-                    font-size: 28px; 
-                    text-align: center; 
-                    margin-bottom: 25px; 
-                    border-bottom: 2px solid #eee;
-                    padding-bottom: 15px;
-                }}
-                .content {{ 
-                    font-size: 16px; 
-                    line-height: 1.7; 
-                    margin-bottom: 30px; 
-                }}
-                .footer {{ 
-                    font-size: 14px; 
-                    color: #777777; 
-                    text-align: center; 
-                    margin-top: 40px; 
-                    padding-top: 20px; 
-                    border-top: 1px solid #eee;
-                }}
+                .header {{ color: #0066cc; font-size: 28px; text-align: center; margin-bottom: 25px; border-bottom: 2px solid #eee; padding-bottom: 15px; }}
+                .content {{ font-size: 16px; line-height: 1.7; margin-bottom: 30px; }}
+                .footer {{ font-size: 14px; color: #777777; text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; }}
             </style>
         </head>
         <body>
             <div class="container">
                 <h1 class="header">TradeRiser Support</h1>
-                
                 <div class="content">
-                    {admin_email_obj.html_message or admin_email_obj.message.replace('\n', '<br>')}
+                    {admin_email_obj.html_message or admin_email_obj.message.replace(chr(10), '<br>')}
                 </div>
-                
                 <div class="footer">
                     Best regards,<br>
                     <strong>TradeRiser Trading Team</strong><br>
@@ -405,7 +412,6 @@ class AdminSendEmailView(APIView):
             if admin_email_obj.recipient_type == 'single' and admin_email_obj.target_user and admin_email_obj.target_user.email:
                 recipient_list = [admin_email_obj.target_user.email]
             else:
-                # Broadcast to all active users
                 recipient_list = list(
                     User.objects.filter(is_active=True)
                     .exclude(email='')
@@ -466,9 +472,7 @@ class AdminSendEmailView(APIView):
                         sent_by=request.user
                     )
 
-                # Send the email
                 email_sent = self.send_professional_email(admin_email)
-
                 serializer = AdminEmailSerializer(admin_email)
 
                 response_message = f"Email sent successfully to recipients" if email_sent else "Email record created but sending failed"

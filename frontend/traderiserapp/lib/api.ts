@@ -239,6 +239,12 @@ export interface ChatMessage {
   }
   is_me: boolean
   user_id?: number
+  // NEW
+  agent?: {
+    id: number
+    name: string
+    image?: string | null
+  } | null
 }
 
 export interface ChatThread {
@@ -259,6 +265,11 @@ export interface ChatThread {
     title?: string
     message?: string
     can_request_review?: boolean
+  } | null
+  // NEW
+  current_agent?: {
+    id: number
+    name: string
   } | null
 }
 
@@ -1004,10 +1015,20 @@ export const getAdminChat = (userId: number) =>
   apiRequest<ChatThread>(`/customercare/admin/chat/${userId}/`)
 
 // Admin reply – always force is_system=true so it shows as "TradeRiser Support"
-export const sendAdminMessage = (userId: number, content: string, is_system = true) =>
+// Admin reply – supports optional agent_id so the message appears as coming from a specific agent
+export const sendAdminMessage = (
+  userId: number,
+  content: string,
+  is_system = true,
+  agentId?: number | null
+) =>
   apiRequest<ChatMessage>(`/customercare/admin/chat/${userId}/`, {
     method: "POST",
-    body: JSON.stringify({ content, is_system }),
+    body: JSON.stringify({
+      content,
+      is_system,
+      ...(agentId ? { agent_id: agentId } : {}),
+    }),
   })
 
 // When admin opens a chat → mark user messages as read (user sees double ticks)

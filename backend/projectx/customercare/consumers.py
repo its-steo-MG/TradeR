@@ -28,7 +28,7 @@ async def safe_db(func, *args, **kwargs):
 class ChatConsumer(AsyncWebsocketConsumer):
     """
     Real-time support chat - ONLY real admin messages
-    No AI bot anymore.
+    Supports agent identity (name + image)
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -61,7 +61,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
 
-        # Send chat history
+        # Send chat history (now includes agent info)
         messages = await safe_db(self.get_messages)
         await self.send(json.dumps({
             "type": "chat_history",
@@ -86,11 +86,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
             return
 
         if msg_type == "message":
-            await self.handle_user_message(data.get("content", ""))
+            await self.handle_user_message(data.get("content", ""), data.get("agent_id"))
         elif msg_type == "typing":
             await self.handle_typing(data.get("is_typing", False))
 
-    async def handle_user_message(self, content: str):
+    async def handle_user_message(self, content: str, agent_id: int = None):
         now = time.time()
         if now - self.last_message_time < self.min_interval:
             await self.send(json.dumps({
@@ -103,7 +103,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         if not content.strip():
             return
 
-        message = await safe_db(self.create_message, content.strip())
+        message = await safe_db(self.create_message, content.strip(), agent_id)
         serialized = await safe_db(self.serialize_message, message, is_me=True)
 
         await self.channel_layer.group_send(
@@ -148,7 +148,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         if thread is None:
             thread = self.thread
         from .models import Message
-        msgs = thread.messages.select_related('sender').all()
+        msgs = thread.messages.select_related('sender', 'agent').all()
         return [
             {
                 "id": m.id,
@@ -157,17 +157,36 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 "is_read": m.is_read,
                 "is_system": m.is_system,
                 "sender": {
-                    "username": "TradeRiser Support" if (m.is_system and m.sender is None)
-                               else (m.sender.username if m.sender else "Support"),
-                    "is_staff": True if (m.is_system or (m.sender and m.sender.is_staff)) else False
+                    "username": (
+                        m.agent.name if m.agent
+                        else ("TradeRiser Support" if (m.is_system and m.sender is None)
+                              else (m.sender.username if m.sender else "Support"))
+                    ),
+                    "is_staff": True if (m.is_system or (m.sender and m.sender.is_staff) or m.agent) else False
                 },
-                "is_me": False if (m.is_system or m.sender is None) else (m.sender == self.user)
+                "is_me": False if (m.is_system or m.sender is None or m.agent) else (m.sender == self.user),
+                "agent": {
+                    "id": m.agent.id,
+                    "name": m.agent.name,
+                    "image": m.agent.profile_picture.url if m.agent and m.agent.profile_picture else None
+                } if m.agent else None
             }
             for m in msgs
         ]
 
-    def create_message(self, content):
-        from .models import Message
+    def create_message(self, content, agent_id=None):
+        from .models import Message, ChatThread
+        from agents.models import Agent
+
+        # Optionally set current_agent on the thread
+        if agent_id:
+            try:
+                agent = Agent.objects.get(id=agent_id, is_active=True)
+                self.thread.current_agent = agent
+                self.thread.save(update_fields=['current_agent'])
+            except Agent.DoesNotExist:
+                pass
+
         return Message.objects.create(
             thread=self.thread,
             sender=self.user,
@@ -175,21 +194,34 @@ class ChatConsumer(AsyncWebsocketConsumer):
         )
 
     def mark_admin_messages_read(self):
-        self.thread.messages.filter(sender__is_staff=True, is_read=False).update(is_read=True)
+        self.thread.messages.filter(
+            sender__is_staff=True, is_read=False
+        ).update(is_read=True)
 
     def serialize_message(self, message, is_me: bool, is_system: bool = False):
+        agent_data = None
+        if message.agent:
+            agent_data = {
+                "id": message.agent.id,
+                "name": message.agent.name,
+                "image": message.agent.profile_picture.url if message.agent.profile_picture else None
+            }
+
         return {
             "type": "new_message",
             "id": message.id,
             "content": message.content,
             "sent_at": message.sent_at.isoformat(),
             "is_read": message.is_read,
-            "is_system": is_system,
+            "is_system": is_system or bool(message.agent),
             "is_me": is_me,
             "sender": {
-                "username": message.sender.username if message.sender else "TradeRiser Support",
-                "is_staff": bool(message.sender and message.sender.is_staff)
-            }
+                "username": message.agent.name if message.agent else (
+                    message.sender.username if message.sender else "TradeRiser Support"
+                ),
+                "is_staff": bool(message.sender and message.sender.is_staff) or bool(message.agent)
+            },
+            "agent": agent_data
         }
 
 
@@ -280,7 +312,6 @@ class CallConsumer(AsyncWebsocketConsumer):
 
     # ====================== CLIENT ACTIONS ======================
     async def handle_webrtc_offer(self, data):
-        """User sends offer → Broadcast to all staff in call_center"""
         call_id = data.get("call_id")
         offer = data.get("offer")
         if not call_id or not offer:
@@ -302,7 +333,6 @@ class CallConsumer(AsyncWebsocketConsumer):
         )
 
     async def handle_webrtc_answer(self, data):
-        """Staff sends answer → Send back to the specific user who initiated the call"""
         call_id = data.get("call_id")
         answer = data.get("answer")
         if not call_id or not answer:
@@ -320,7 +350,6 @@ class CallConsumer(AsyncWebsocketConsumer):
         )
 
     async def handle_webrtc_ice(self, data):
-        """ICE candidates from either side → Forward to the call room"""
         call_id = data.get("call_id")
         candidate = data.get("candidate")
         if not call_id or not candidate:
@@ -338,13 +367,12 @@ class CallConsumer(AsyncWebsocketConsumer):
         )
 
     async def handle_join_call(self, data):
-        """User or Staff joins the specific call session room"""
         call_id = data.get("call_id")
         if not call_id:
             return
         call_room = f"call_session_{call_id}"
         await self.channel_layer.group_add(call_room, self.channel_name)
-        logger.info(f"[CallWS] { 'Staff' if self.is_staff else 'User' } joined call room: {call_room}")
+        logger.info(f"[CallWS] {'Staff' if self.is_staff else 'User'} joined call room: {call_room}")
         await self.send(json.dumps({
             "type": "joined_call_room",
             "call_id": call_id
@@ -352,7 +380,6 @@ class CallConsumer(AsyncWebsocketConsumer):
 
     # ====================== GROUP HANDLERS ======================
     async def webrtc_offer(self, event):
-        """Staff receives offer from user"""
         await self.send(json.dumps({
             "type": "webrtc_offer",
             "call_id": event["call_id"],
@@ -361,7 +388,6 @@ class CallConsumer(AsyncWebsocketConsumer):
         }))
 
     async def webrtc_answer(self, event):
-        """User receives answer from staff"""
         await self.send(json.dumps({
             "type": "webrtc_answer",
             "call_id": event["call_id"],
@@ -369,7 +395,6 @@ class CallConsumer(AsyncWebsocketConsumer):
         }))
 
     async def webrtc_ice(self, event):
-        """Both sides receive ICE candidates"""
         await self.send(json.dumps({
             "type": "webrtc_ice",
             "call_id": event["call_id"],
@@ -403,7 +428,7 @@ class CallConsumer(AsyncWebsocketConsumer):
 # ====================== ADMIN CHAT CONSUMER ========================
 # ===================================================================
 class AdminChatConsumer(AsyncWebsocketConsumer):
-    """Real-time chat for admins - Staff only"""
+    """Real-time chat for admins - Staff only. Supports replying as Agent."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -438,8 +463,6 @@ class AdminChatConsumer(AsyncWebsocketConsumer):
                 "messages": messages
             }))
         else:
-            # FIXED: Get only user_ids inside the sync function so we never
-            # access .user (or any related field) from the async context.
             user_ids = await safe_db(self.get_active_thread_user_ids)
             for uid in user_ids:
                 room_group_name = f"chat_{uid}"
@@ -459,21 +482,28 @@ class AdminChatConsumer(AsyncWebsocketConsumer):
             return
 
         if msg_type == "message":
-            await self.handle_admin_message(data.get("content", ""), data.get("user_id"))
+            await self.handle_admin_message(
+                data.get("content", ""),
+                data.get("user_id"),
+                data.get("agent_id")          # ← NEW
+            )
         elif msg_type == "typing":
             await self.handle_typing(data.get("is_typing", False), data.get("user_id"))
         elif msg_type == "mark_read":
-            # When admin opens a chat → mark all user messages as read
             user_id = data.get("user_id")
             if user_id:
                 await safe_db(self.mark_user_messages_read, int(user_id))
 
-    async def handle_admin_message(self, content: str, target_user_id: int):
+    async def handle_admin_message(self, content: str, target_user_id: int, agent_id: int = None):
         if not content.strip() or not target_user_id:
             return
+
         thread = await safe_db(self.get_thread_by_user_id, int(target_user_id))
-        message = await safe_db(self.create_message, thread, content.strip())
-        serialized = await safe_db(self.serialize_message, message, is_me=True, user_id=int(target_user_id))
+        message = await safe_db(self.create_message, thread, content.strip(), agent_id)
+        serialized = await safe_db(
+            self.serialize_message, message, is_me=True, user_id=int(target_user_id)
+        )
+
         room_group_name = f"chat_{target_user_id}"
         await self.channel_layer.group_send(room_group_name, {
             "type": "chat_message",
@@ -505,10 +535,9 @@ class AdminChatConsumer(AsyncWebsocketConsumer):
         }))
 
     # ------------------------------------------------------------------
-    # DATABASE HELPERS  (ALL SYNC – never touch related fields outside)
+    # DATABASE HELPERS
     # ------------------------------------------------------------------
     def get_active_thread_user_ids(self):
-        """Return plain list of user_ids only – never return model instances"""
         from .models import ChatThread
         return list(
             ChatThread.objects
@@ -518,11 +547,11 @@ class AdminChatConsumer(AsyncWebsocketConsumer):
 
     def get_thread_by_user_id(self, user_id):
         from .models import ChatThread
-        return ChatThread.objects.select_related('user').get(user_id=user_id)
+        return ChatThread.objects.select_related('user', 'current_agent').get(user_id=user_id)
 
     def get_messages(self, thread):
         from .models import Message
-        msgs = thread.messages.select_related('sender').all()
+        msgs = thread.messages.select_related('sender', 'agent').all()
         return [
             {
                 "id": m.id,
@@ -531,25 +560,46 @@ class AdminChatConsumer(AsyncWebsocketConsumer):
                 "is_read": m.is_read,
                 "is_system": m.is_system,
                 "sender": {
-                    "username": "TradeRiser Support" if (m.is_system or (m.sender and m.sender.is_staff)) else (m.sender.username if m.sender else "User"),
-                    "is_staff": True if (m.is_system or (m.sender and m.sender.is_staff)) else False
+                    "username": (
+                        m.agent.name if m.agent
+                        else ("TradeRiser Support" if (m.is_system or (m.sender and m.sender.is_staff))
+                              else (m.sender.username if m.sender else "User"))
+                    ),
+                    "is_staff": True if (m.is_system or (m.sender and m.sender.is_staff) or m.agent) else False
                 },
-                "is_me": bool(m.sender and m.sender == self.user)
+                "is_me": bool(m.sender and m.sender == self.user),
+                "agent": {
+                    "id": m.agent.id,
+                    "name": m.agent.name,
+                    "image": m.agent.profile_picture.url if m.agent and m.agent.profile_picture else None
+                } if m.agent else None
             }
             for m in msgs
         ]
 
-    def create_message(self, thread, content):
+    def create_message(self, thread, content, agent_id=None):
         from .models import Message
+        from agents.models import Agent
+
+        agent = None
+        if agent_id:
+            try:
+                agent = Agent.objects.get(id=agent_id)
+                # Keep thread.current_agent in sync
+                thread.current_agent = agent
+                thread.save(update_fields=['current_agent'])
+            except Agent.DoesNotExist:
+                pass
+
         return Message.objects.create(
             thread=thread,
             sender=self.user,
             content=content,
-            is_system=True,   # ← Always system so frontend shows "TradeRiser Support"
+            is_system=True,
+            agent=agent
         )
 
     def mark_user_messages_read(self, user_id):
-        """When admin opens the chat, mark all messages from the user as read"""
         from .models import ChatThread, Message
         try:
             thread = ChatThread.objects.get(user_id=user_id)
@@ -562,17 +612,26 @@ class AdminChatConsumer(AsyncWebsocketConsumer):
             pass
 
     def serialize_message(self, message, is_me: bool, user_id: int = None):
+        agent_data = None
+        if message.agent:
+            agent_data = {
+                "id": message.agent.id,
+                "name": message.agent.name,
+                "image": message.agent.profile_picture.url if message.agent.profile_picture else None
+            }
+
         return {
             "type": "new_message",
             "id": message.id,
             "content": message.content,
             "sent_at": message.sent_at.isoformat(),
             "is_read": message.is_read,
-            "is_system": True,          # admin always system
+            "is_system": True,
             "is_me": is_me,
             "user_id": user_id,
             "sender": {
-                "username": "TradeRiser Support",
+                "username": message.agent.name if message.agent else "TradeRiser Support",
                 "is_staff": True
-            }
+            },
+            "agent": agent_data
         }

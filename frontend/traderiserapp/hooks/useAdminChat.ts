@@ -8,7 +8,6 @@ import {
   adminBlockUser,
   adminMarkMessagesRead,
   ChatMessage,
-  ChatThread,
 } from '@/lib/api'
 
 const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || 'wss://traderiserproapp.onrender.com'
@@ -20,6 +19,10 @@ export interface Thread {
   last_message_at?: string | null
   is_blocked?: boolean
   unread_count?: number
+  current_agent?: {
+    id: number
+    name: string
+  } | null
 }
 
 function getToken() {
@@ -44,6 +47,9 @@ export function useAdminChat() {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // NEW: currently selected agent for this conversation
+  const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectRef = useRef<NodeJS.Timeout | null>(null)
@@ -75,6 +81,7 @@ export function useAdminChat() {
         last_message_at: t.last_message_at ?? null,
         is_blocked: t.is_blocked ?? false,
         unread_count: t.unread_count ?? 0,
+        current_agent: t.current_agent || null,
       })) as Thread[]
 
       setThreads(sortThreads(list))
@@ -127,6 +134,7 @@ export function useAdminChat() {
         const msgs = (data.messages || []).map((m: any) => ({
           ...m,
           is_me: m.is_me ?? m.sender?.is_staff === true,
+          agent: m.agent || null,
         }))
         setMessages(msgs)
         return
@@ -142,18 +150,15 @@ export function useAdminChat() {
           is_me: data.is_me ?? false,
           user_id: data.user_id,
           sender: data.sender || { username: 'User', is_staff: false },
+          agent: data.agent || null,
         }
 
         const msgUserId = data.user_id as number | undefined
 
-        // Only append if this conversation is open
         if (msgUserId && selectedRef.current === msgUserId) {
           setMessages((prev) => {
-            // Already have this exact message ID
             if (prev.some((m) => m.id === msg.id)) return prev
 
-            // Prevent double: if we just optimistically added the same content
-            // (temp ID is a large timestamp), skip the WS echo
             const isRecentOptimistic = prev.some(
               (m) =>
                 typeof m.id === 'number' &&
@@ -169,7 +174,7 @@ export function useAdminChat() {
           })
         }
 
-        // Update sidebar (most recent on top)
+        // Update sidebar
         if (msgUserId) {
           setThreads((prev) => {
             const exists = prev.some((t) => t.user.id === msgUserId)
@@ -225,6 +230,7 @@ export function useAdminChat() {
     async (userId: number | null) => {
       if (userId === null) {
         setSelectedUserId(null)
+        setSelectedAgentId(null)
         setMessages([])
         setIsTyping(false)
         return
@@ -233,37 +239,45 @@ export function useAdminChat() {
       setMessages([])
       setIsTyping(false)
 
-      // Clear unread for this thread
+      // Clear unread
       setThreads((prev) =>
         prev.map((t) => (t.user.id === userId ? { ...t, unread_count: 0 } : t)),
       )
 
       try {
-        // GET already marks user messages as read on backend
         const res = await getAdminChat(userId)
         if (res.data?.messages) {
           const msgs = res.data.messages.map((m: any) => ({
             ...m,
             is_me: m.is_me ?? m.sender?.is_staff === true,
+            agent: m.agent || null,
           }))
           setMessages(msgs)
         }
-        // Explicit mark-read (safe even if backend already did it)
+
+        // Auto-select current agent if the thread has one
+        if (res.data?.current_agent?.id) {
+          setSelectedAgentId(res.data.current_agent.id)
+        }
+
         await adminMarkMessagesRead(userId).catch(() => {})
       } catch (e) {
         console.error(e)
       }
 
-      // Focused WS connection for this user
       connectWS(userId)
     },
     [connectWS],
   )
 
+  // ========== UPDATED: now accepts optional agentId ==========
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, agentId?: number | null) => {
       if (!selectedUserId || !content.trim() || sending) return
       setSending(true)
+
+      const finalAgentId = agentId ?? selectedAgentId
+
       try {
         // Optimistic UI
         const tempId = Date.now()
@@ -272,14 +286,26 @@ export function useAdminChat() {
           content: content.trim(),
           sent_at: new Date().toISOString(),
           is_read: false,
-          is_system: false,
+          is_system: true,
           is_me: true,
-          sender: { username: 'CustomerCare', is_staff: true },
+          sender: {
+            username: finalAgentId ? 'Agent' : 'CustomerCare',
+            is_staff: true,
+          },
+          agent: finalAgentId
+            ? { id: finalAgentId, name: 'Agent', image: null }
+            : null,
         }
         setMessages((prev) => [...prev, optimistic])
 
-        // REST (creates in DB + fires email signals)
-        const res = await sendAdminMessage(selectedUserId, content.trim(), true)  // always system
+        // REST call – now supports agent_id
+        const res = await sendAdminMessage(
+          selectedUserId,
+          content.trim(),
+          true,           // is_system
+          finalAgentId    // ← NEW
+        )
+
         if (res.error) throw new Error(res.error)
 
         const saved = res.data!
@@ -289,16 +315,11 @@ export function useAdminChat() {
               ? {
                   ...saved,
                   is_me: true,
-                  sender: { username: 'CustomerCare', is_staff: true },
+                  agent: saved.agent || null,
                 }
               : m,
           ),
         )
-
-        // NOTE: Do NOT send via WebSocket here.
-        // REST already creates the message.
-        // Backend AdminChatView broadcasts it to the user via channel layer.
-        // Sending here would create the message twice.
 
         // Move to top of sidebar
         setThreads((prev) =>
@@ -322,7 +343,7 @@ export function useAdminChat() {
         setSending(false)
       }
     },
-    [selectedUserId, sending, sortThreads],
+    [selectedUserId, selectedAgentId, sending, sortThreads],
   )
 
   const sendTyping = useCallback(
@@ -349,7 +370,7 @@ export function useAdminChat() {
     [selectedUserId, loadThreads],
   )
 
-  // Initial load + broad connection
+  // Initial load
   useEffect(() => {
     loadThreads()
     connectWS(null)
@@ -369,6 +390,8 @@ export function useAdminChat() {
     loading,
     sending,
     error,
+    selectedAgentId,
+    setSelectedAgentId,
     selectUser,
     sendMessage,
     sendTyping,

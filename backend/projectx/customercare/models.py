@@ -11,13 +11,23 @@ class ChatThread(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='support_thread')
     created_at = models.DateTimeField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
-    blocked_until = models.DateTimeField(null=True, blank=True)  # For temporary block
+    blocked_until = models.DateTimeField(null=True, blank=True)
     is_permanently_blocked = models.BooleanField(default=False)
     block_reason = models.TextField(blank=True)
     review_requested = models.BooleanField(default=False)
     review_notes = models.TextField(blank=True, help_text="Admin notes on review")
     reviewed_at = models.DateTimeField(null=True, blank=True)
-    auto_delete_at = models.DateTimeField(null=True, blank=True)  # 60 days after permanent block
+    auto_delete_at = models.DateTimeField(null=True, blank=True)
+
+    # ========== NEW ==========
+    current_agent = models.ForeignKey(
+        'agents.Agent',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='active_chats',
+        help_text="The agent this user is currently chatting with"
+    )
 
     def __str__(self):
         return f"Support: {self.user.username}"
@@ -75,19 +85,31 @@ class Message(models.Model):
     content = models.TextField()
     sent_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
-    is_system = models.BooleanField(default=False)  # For welcome, canned responses, etc.
+    is_system = models.BooleanField(default=False)
+
+    # ========== NEW ==========
+    agent = models.ForeignKey(
+        'agents.Agent',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='support_messages',
+        help_text="If this message is sent as a specific agent"
+    )
 
     class Meta:
         ordering = ['sent_at']
 
     def __str__(self):
+        if self.agent:
+            return f"{self.agent.name}: {self.content[:30]}..."
         if self.is_system and self.sender is None:
             return f"TradeRiser Support: {self.content[:30]}..."
         return f"{self.sender.username if self.sender else 'System'}: {self.content[:30]}..."
     
+
 # ====================== AUDIO CALL MODELS ======================
 class CustomerCareSettings(models.Model):
-    """Singleton – Hold music & welcome audio (editable in Django Admin)"""
     hold_music = models.FileField(
         upload_to='customercare/hold_music/',
         null=True, blank=True,
@@ -159,7 +181,7 @@ class CallSession(models.Model):
         self.is_missed = True
         self.save()
 
-# ====================== ADMIN EMAIL / BROADCAST ======================
+
 class AdminEmail(models.Model):
     RECIPIENT_CHOICES = [
         ('single', 'Single User (Private)'),

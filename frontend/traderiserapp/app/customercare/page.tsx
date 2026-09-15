@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Phone, PhoneOff, Headphones } from 'lucide-react'
 import { toast } from 'sonner'
@@ -27,6 +28,11 @@ interface Message {
   timestamp: string
   senderName?: string
   is_read?: boolean
+  agent?: {
+    id: number
+    name: string
+    image?: string | null
+  } | null
 }
 
 interface User {
@@ -54,10 +60,16 @@ interface ChatMessage {
   sent_at: string
   is_me: boolean
   is_read?: boolean
+  is_system?: boolean
   sender?: {
     username: string
     is_staff: boolean
   }
+  agent?: {
+    id: number
+    name: string
+    image?: string | null
+  } | null
 }
 
 interface RawAccount {
@@ -69,6 +81,10 @@ interface RawAccount {
 // ==================== COMPONENT ====================
 
 export default function CustomerCarePage() {
+  const searchParams = useSearchParams()
+  const agentIdFromUrl = searchParams.get('agent_id')
+  const agentNameFromUrl = searchParams.get('agent_name')
+
   const [mounted, setMounted] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [isCallActive, setIsCallActive] = useState(false)
@@ -82,9 +98,16 @@ export default function CustomerCarePage() {
   const [showCallModal, setShowCallModal] = useState(false)
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null)
 
-  // Store incoming offer for staff when they receive webrtc_offer
-  const [pendingOffer, setPendingOffer] = useState<RTCSessionDescriptionInit | null>(null)
+  // Agent context
+  const [currentAgentId, setCurrentAgentId] = useState<number | null>(
+    agentIdFromUrl ? Number(agentIdFromUrl) : null
+  )
+  const [currentAgentName, setCurrentAgentName] = useState<string | null>(
+    agentNameFromUrl || null
+  )
+
   const pendingOfferCallIdRef = useRef<number | null>(null)
+  const [pendingOffer, setPendingOffer] = useState<RTCSessionDescriptionInit | null>(null)
 
   const tokenRef = useRef<string | null>(null)
   const outgoingCallRef = useRef<number | null>(null)
@@ -94,7 +117,7 @@ export default function CustomerCarePage() {
   const holdMusicRef = useRef<HTMLAudioElement | null>(null)
   const remoteAudioRef = useRef<HTMLAudioElement>(null)
 
-  // Load Session + Normalize Account Types
+  // Load Session
   useEffect(() => {
     setMounted(true)
     const rawSession = localStorage.getItem('user_session')
@@ -151,7 +174,6 @@ export default function CustomerCarePage() {
       }
     },
     onRemoteStreamAvailable: (stream) => {
-      console.log('[CustomerCare] Remote stream received')
       setRemoteStream(stream)
       if (remoteAudioRef.current) {
         remoteAudioRef.current.srcObject = stream
@@ -161,7 +183,6 @@ export default function CustomerCarePage() {
       }
     },
     onConnectionStateChange: (state) => {
-      console.log('[CustomerCare] WebRTC connection state:', state)
       if (state === 'connected') {
         setIsCallActive(true)
       }
@@ -172,12 +193,8 @@ export default function CustomerCarePage() {
   })
 
   const handleCallEvent = useCallback((event: CallEvent) => {
-    console.log('Call Event Received:', event.type, event)
-
-    // ==================== INCOMING CALL (for staff) ====================
     if (event.type === 'new_incoming_call' && event.call_id) {
       const id = event.call_id
-
       const isOwnOutgoingCall =
         outgoingCallRef.current === id ||
         (event.user && event.user.username === currentUser?.username)
@@ -191,50 +208,37 @@ export default function CustomerCarePage() {
       }
     }
 
-    // ==================== WEBRTC OFFER (staff receives this) ====================
     if (event.type === 'webrtc_offer' && event.call_id && event.offer) {
-      // Only staff should process incoming offers
       if (currentUser?.is_staff) {
-        console.log('[WebRTC] Received offer for call', event.call_id)
         setPendingOffer(event.offer)
         pendingOfferCallIdRef.current = event.call_id
-
-        // If modal is already open for this call, we can prefill
         if (callId === event.call_id) {
           setCallId(event.call_id)
         }
       }
     }
 
-    // ==================== WEBRTC ANSWER (user receives this) ====================
     if (event.type === 'webrtc_answer' && event.call_id && event.answer) {
-      console.log('[WebRTC] Received answer for call', event.call_id)
       handleRemoteAnswer(event.answer).catch((err) => {
         console.error('Failed to handle remote answer:', err)
       })
     }
 
-    // ==================== ICE CANDIDATE ====================
     if (event.type === 'webrtc_ice' && event.call_id && event.candidate) {
       addIceCandidate(event.candidate).catch((err) => {
         console.error('Failed to add ICE candidate:', err)
       })
     }
 
-    // ==================== CALL ANSWERED ====================
     if (event.type === 'call_answered') {
       stopAllAudio()
       setIsCalling(false)
       setIsLoadingCall(false)
       startCallTimer()
-
-      // If we are the caller, we should already have sent offer.
-      // If we are staff, we just answered via modal.
       setIsCallActive(true)
       toast.success('Call connected successfully')
     }
 
-    // ==================== CALL ENDED ====================
     if (event.type === 'call_ended') {
       handleEndCallLogic()
     }
@@ -301,13 +305,11 @@ export default function CustomerCarePage() {
     pendingOfferCallIdRef.current = null
     localStorage.removeItem('pending_incoming_call_id')
 
-    // Clear remote audio
     if (remoteAudioRef.current) {
       remoteAudioRef.current.srcObject = null
     }
   }, [closeConnection])
 
-  // Restore pending incoming call for staff
   useEffect(() => {
     if (currentUser?.is_staff && !isCalling && !isCallActive) {
       const savedCallId = localStorage.getItem('pending_incoming_call_id')
@@ -323,7 +325,7 @@ export default function CustomerCarePage() {
     }
   }, [currentUser?.is_staff, showCallModal, isCalling, isCallActive])
 
-  // ==================== CALL INITIATION (USER) ====================
+  // ==================== CALL INITIATION ====================
 
   const handleInitiateCall = async () => {
     if (!token) return toast.error('Please log in again')
@@ -338,10 +340,8 @@ export default function CustomerCarePage() {
       outgoingCallRef.current = newCallId
       setCallId(newCallId)
 
-      // Join the specific call room for better signaling
       joinCallRoom(newCallId)
 
-      // Create WebRTC offer and send it
       const offer = await createAndSendOffer()
       sendWebRTCOffer(newCallId, offer)
 
@@ -356,16 +356,12 @@ export default function CustomerCarePage() {
     }
   }
 
-  // ==================== END CALL ====================
-
   const handleEndCall = async () => {
     if (callId) {
       await endCall(callId).catch(() => {})
     }
     handleEndCallLogic()
   }
-
-  // ==================== ANSWER CALL (STAFF) ====================
 
   const handleAnswerCall = async (voicePreset: string): Promise<void> => {
     const currentCallId = callId || pendingOfferCallIdRef.current
@@ -381,19 +377,11 @@ export default function CustomerCarePage() {
     }
 
     try {
-      // 1. Call REST API to mark call as answered
       await answerCall(currentCallId, voicePreset)
-
-      // 2. Create answer using the pending offer + chosen voice preset
       const answer = await handleRemoteOffer(pendingOffer, voicePreset)
-
-      // 3. Send answer via WebSocket
       sendWebRTCAnswer(currentCallId, answer)
-
-      // 4. Join the call room for ICE + media
       joinCallRoom(currentCallId)
 
-      // 5. Update UI
       setShowCallModal(false)
       localStorage.removeItem('pending_incoming_call_id')
       setPendingOffer(null)
@@ -409,7 +397,6 @@ export default function CustomerCarePage() {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to answer call'
       toast.error(message)
-      console.error('Answer call error:', error)
     }
   }
 
@@ -420,16 +407,17 @@ export default function CustomerCarePage() {
     localStorage.removeItem('pending_incoming_call_id')
   }
 
-  // Sync Chat Messages
+  // Sync Chat Messages (now supports agent)
   useEffect(() => {
     if (chatMessages.length > 0) {
       const formattedMessages: Message[] = chatMessages.map((msg: ChatMessage) => ({
         id: msg.id.toString(),
-        sender: msg.is_me ? 'user' : msg.sender?.is_staff ? 'staff' : 'system',
+        sender: msg.is_me ? 'user' : msg.sender?.is_staff || msg.agent ? 'staff' : 'system',
         content: msg.content,
         timestamp: msg.sent_at,
-        senderName: msg.sender?.username,
+        senderName: msg.agent?.name || msg.sender?.username,
         is_read: msg.is_read,
+        agent: msg.agent || null,
       }))
       setMessages(formattedMessages)
     }
@@ -484,7 +472,6 @@ export default function CustomerCarePage() {
         />
 
         <main className="flex-1 w-full overflow-auto md:pl-64 p-6 relative">
-          {/* Background */}
           <div className="fixed inset-0 z-0">
             <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950 to-black" />
             <div className="absolute inset-0 bg-gradient-to-br from-transparent via-purple-950/30 to-pink-950/20" />
@@ -500,7 +487,11 @@ export default function CustomerCarePage() {
               </div>
               <div>
                 <h1 className="text-4xl font-bold">Support Center</h1>
-                <p className="text-white/60">TradeRiser Professional Support</p>
+                <p className="text-white/60">
+                  {currentAgentName
+                    ? `Chatting with ${currentAgentName}`
+                    : 'TradeRiser Professional Support'}
+                </p>
               </div>
             </div>
 
@@ -539,7 +530,9 @@ export default function CustomerCarePage() {
             <div className="glass rounded-3xl overflow-hidden border border-white/10 min-h-[620px] flex flex-col">
               <div className="px-8 py-5 border-b border-white/10 flex items-center gap-3">
                 <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
-                <span className="font-semibold">Live Support Chat</span>
+                <span className="font-semibold">
+                  {currentAgentName ? `Chat with ${currentAgentName}` : 'Live Support Chat'}
+                </span>
                 {chatConnected && <span className="text-green-400 text-sm ml-2">• Online</span>}
               </div>
 
@@ -549,7 +542,11 @@ export default function CustomerCarePage() {
                 ) : messages.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-center py-20">
                     <Headphones className="w-16 h-16 text-white/30 mb-6" />
-                    <p className="text-xl text-white/80">How can we assist you today?</p>
+                    <p className="text-xl text-white/80">
+                      {currentAgentName
+                        ? `How can ${currentAgentName} help you today?`
+                        : 'How can we assist you today?'}
+                    </p>
                   </div>
                 ) : (
                   messages.map((msg) => (
@@ -567,6 +564,7 @@ export default function CustomerCarePage() {
                 <div className="p-6 border-t border-white/10">
                   <ChatInput
                     onSend={async (message: string) => {
+                      // You can pass agent_id here if your sendChatMessage supports it
                       const success = sendChatMessage(message)
                       if (!success) {
                         toast.error("Failed to send message")
@@ -581,7 +579,6 @@ export default function CustomerCarePage() {
         </main>
       </div>
 
-      {/* Hidden audio element for remote stream */}
       <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
 
       {showCallModal && (
