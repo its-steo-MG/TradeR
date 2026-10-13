@@ -62,7 +62,7 @@ export default function InstallButton() {
   return (
     <Button
       onClick={handleInstallClick}
-      className="fixed bottom-4 right-4 z-50 bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg hover:shadow-xl flex items-center gap-2 px-5 py-2.5"
+      className="fixed bottom-24 right-4 z-[99980] bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg hover:shadow-xl flex items-center gap-2 px-5 py-2.5 rounded-full"
       size="sm"
     >
       <div className="relative w-6 h-6 flex-shrink-0">

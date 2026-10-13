@@ -9,9 +9,9 @@ type Field = {
 };
 
 const tones: Record<Field["tone"], string> = {
-  emerald: "text-emerald-400",
-  rose: "text-rose-400",
-  amber: "text-amber-400",
+  emerald: "text-emerald-600 dark:text-emerald-400",
+  rose: "text-rose-600 dark:text-rose-400",
+  amber: "text-amber-600 dark:text-amber-400",
 };
 
 type Props = {
@@ -33,16 +33,8 @@ export default function RiskRow({ targetProfit, stopLoss, multiplier, onChange }
       {fields.map((f) => (
         <div
           key={f.key}
-          className="relative rounded-xl bg-slate-900 border border-slate-800 px-3 py-2 overflow-hidden"
+          className="relative rounded-xl bg-card border border-border px-3 py-2 overflow-hidden"
         >
-          {/* Soft liquid glass layer */}
-          <div
-            className="absolute inset-0 pointer-events-none rounded-xl"
-            style={{
-              background:
-                "linear-gradient(to bottom, rgba(255,255,255,0.06) 0%, transparent 60%)",
-            }}
-          />
           <div className="relative z-[1]">
             <div className={`text-[10px] font-semibold tracking-wider ${tones[f.tone]}`}>
               {f.label}
@@ -52,7 +44,7 @@ export default function RiskRow({ targetProfit, stopLoss, multiplier, onChange }
               <input
                 value={f.value}
                 onChange={(e) => onChange(f.key, Math.max(0, parseFloat(e.target.value) || 0))}
-                className="bg-transparent text-white font-semibold text-lg w-full outline-none"
+                className="bg-transparent text-foreground font-semibold text-lg w-full outline-none"
               />
             </div>
           </div>

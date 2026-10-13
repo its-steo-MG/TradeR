@@ -6,6 +6,8 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { AlertCircle, X, Phone, PhoneOff } from "lucide-react";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { TraderPulseWidget } from "@/components/traderpulse/TraderPulseWidget";
+import UpdateAvailable from "@/components/UpdateAvailable";
 
 interface User {
   kyc_status?: "pending" | "approved" | "rejected";
@@ -56,10 +58,9 @@ export default function ClientWrapper({ children }: { children: React.ReactNode 
 
     const savedCallId = localStorage.getItem("pending_incoming_call_id");
     if (savedCallId && !incomingCall) {
-      // Show persistent incoming call card
       setIncomingCall({
         call_id: Number(savedCallId),
-        user: { id: 0, username: "Support User" }, // Will be updated if WS gives better data
+        user: { id: 0, username: "Support User" },
       });
     }
   }, [isStaff]);
@@ -88,14 +89,11 @@ export default function ClientWrapper({ children }: { children: React.ReactNode 
             user: data.user || { id: 0, username: "User" },
           };
 
-          // Persist so it survives refresh / navigation
           localStorage.setItem("pending_incoming_call_id", data.call_id.toString());
-
           setIncomingCall(callInfo);
         }
 
         if (data.type === "call_ended" || data.type === "call_answered") {
-          // Clear if this call was answered or ended
           const endedId = data.call_id;
           if (endedId && incomingCall?.call_id === endedId) {
             setIncomingCall(null);
@@ -157,13 +155,7 @@ export default function ClientWrapper({ children }: { children: React.ReactNode 
     if (!incomingCall) return;
 
     setIsAnswering(true);
-
-    // The heavy lifting (WebRTC + voice choice + REST answer) lives in /customer-care
-    // We just navigate there. The page will pick up the pending_incoming_call_id from localStorage
     router.push("/customer-care");
-
-    // Keep the call info in localStorage so CustomerCarePage can show the modal immediately
-    // (We already set it when the event arrived)
     setIsAnswering(false);
   };
 
@@ -172,24 +164,21 @@ export default function ClientWrapper({ children }: { children: React.ReactNode 
 
     localStorage.removeItem("pending_incoming_call_id");
     setIncomingCall(null);
-
-    // Optional: call backend to mark as declined if you want
-    // For now we just hide it for this staff member
   };
 
   return (
     <div className={isGradientPage ? "gradient-bg min-h-screen" : "min-h-screen"}>
-      {/* KYC Floating Banner */}
+      {/* ==================== KYC Floating Banner ==================== */}
       {shouldShowKycBanner && (
         <div className="fixed top-4 right-4 z-[99999] w-full max-w-sm">
-          <div className="bg-zinc-900 border border-amber-500/30 rounded-[1.8rem] shadow-2xl p-5 text-white">
+          <div className="bg-card border border-amber-500/30 rounded-[1.8rem] shadow-2xl p-5 text-card-foreground backdrop-blur-xl">
             <div className="flex items-start gap-3">
-              <AlertCircle className="mt-0.5 h-5 w-5 text-amber-400" />
+              <AlertCircle className="mt-0.5 h-5 w-5 text-amber-400 shrink-0" />
               <div className="flex-1 min-w-0">
-                <h4 className="font-semibold text-amber-400 mb-1">
+                <h4 className="font-semibold text-amber-500 dark:text-amber-400 mb-1">
                   {kycStatus === "rejected" ? "KYC Rejected" : "KYC Under Review"}
                 </h4>
-                <p className="text-sm text-white/80 leading-relaxed">
+                <p className="text-sm text-muted-foreground leading-relaxed">
                   {kycStatus === "rejected"
                     ? "Your previous KYC submission was rejected. Please resubmit your Proof of Identity."
                     : "Your Proof of Identity has been submitted and is currently under review."}
@@ -197,19 +186,22 @@ export default function ClientWrapper({ children }: { children: React.ReactNode 
                 <div className="mt-4 flex gap-3">
                   <Link
                     href="/kyc"
-                    className="inline-flex items-center justify-center rounded-xl bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+                    className="inline-flex items-center justify-center rounded-xl bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 transition-colors"
                   >
                     {kycStatus === "rejected" ? "Resubmit KYC" : "View Status"}
                   </Link>
                   <button
                     onClick={() => setShowNotice(false)}
-                    className="rounded-xl px-4 py-2 text-sm text-white/70 hover:bg-white/10 hover:text-white"
+                    className="rounded-xl px-4 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
                   >
                     Dismiss
                   </button>
                 </div>
               </div>
-              <button onClick={() => setShowNotice(false)} className="text-white/50 hover:text-white">
+              <button
+                onClick={() => setShowNotice(false)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -220,24 +212,29 @@ export default function ClientWrapper({ children }: { children: React.ReactNode 
       {/* ==================== GLOBAL PERSISTENT INCOMING CALL CARD (Staff) ==================== */}
       {incomingCall && isStaff && (
         <div className="fixed bottom-6 right-6 z-[999999] w-full max-w-sm">
-          <div className="rounded-[2.2rem] border border-green-500/40 bg-zinc-900/95 p-5 shadow-2xl backdrop-blur-xl">
+          <div className="rounded-[2.2rem] border border-green-500/40 bg-card/95 p-5 shadow-2xl backdrop-blur-xl text-card-foreground">
             <div className="flex items-start gap-4">
               <div className="mt-1 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-[1.8rem] bg-green-500/10">
-                <Phone className="h-6 w-6 animate-pulse text-green-400" />
+                <Phone className="h-6 w-6 animate-pulse text-green-500 dark:text-green-400" />
               </div>
 
               <div className="flex-1">
-                <div className="font-semibold text-white">Incoming Support Call</div>
-                <div className="text-sm text-white/70">
-                  from <span className="font-medium text-white">{incomingCall.user.username}</span>
+                <div className="font-semibold text-foreground">Incoming Support Call</div>
+                <div className="text-sm text-muted-foreground">
+                  from{" "}
+                  <span className="font-medium text-foreground">
+                    {incomingCall.user.username}
+                  </span>
                 </div>
-                <div className="mt-1 text-xs text-white/50">Call #{incomingCall.call_id}</div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  Call #{incomingCall.call_id}
+                </div>
 
                 <div className="mt-4 flex gap-3">
                   <button
                     onClick={handleDeclineFromAnywhere}
                     disabled={isAnswering}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-[1.8rem] border border-white/20 bg-white/5 py-2.5 text-sm font-medium text-white hover:bg-white/10 disabled:opacity-50"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-[1.8rem] border border-border bg-secondary/60 py-2.5 text-sm font-medium text-foreground hover:bg-secondary disabled:opacity-50 transition-colors"
                   >
                     <PhoneOff className="h-4 w-4" /> Decline
                   </button>
@@ -245,7 +242,7 @@ export default function ClientWrapper({ children }: { children: React.ReactNode 
                   <button
                     onClick={handleAnswerFromAnywhere}
                     disabled={isAnswering}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-[1.8rem] bg-green-600 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-[1.8rem] bg-green-600 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
                   >
                     <Phone className="h-4 w-4" />
                     {isAnswering ? "Opening..." : "Answer Call"}
@@ -258,7 +255,7 @@ export default function ClientWrapper({ children }: { children: React.ReactNode 
                   localStorage.removeItem("pending_incoming_call_id");
                   setIncomingCall(null);
                 }}
-                className="text-white/40 hover:text-white/70"
+                className="text-muted-foreground hover:text-foreground transition-colors"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -268,6 +265,8 @@ export default function ClientWrapper({ children }: { children: React.ReactNode 
       )}
 
       {children}
+      {!isAuthPage && <TraderPulseWidget />}
+      <UpdateAvailable />
     </div>
   );
 }

@@ -15,7 +15,7 @@ export default function BottomNav({ tab, onChange, openCount = 0 }: Props) {
   ];
 
   return (
-    <div className="grid grid-cols-2 border-t border-slate-800 bg-slate-950">
+    <div className="grid grid-cols-2 border-t border-border bg-card">
       {items.map(({ key, label, Icon }) => {
         const active = tab === key;
         return (
@@ -27,7 +27,7 @@ export default function BottomNav({ tab, onChange, openCount = 0 }: Props) {
             <div className="relative">
               <Icon
                 size={20}
-                className={active ? "text-blue-400" : "text-slate-500"}
+                className={active ? "text-blue-500 dark:text-blue-400" : "text-muted-foreground"}
               />
               {key === "positions" && openCount > 0 && (
                 <span className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] px-1 rounded-full bg-emerald-500 text-[10px] font-bold text-white flex items-center justify-center">
@@ -37,7 +37,7 @@ export default function BottomNav({ tab, onChange, openCount = 0 }: Props) {
             </div>
             <span
               className={`text-xs ${
-                active ? "text-blue-400" : "text-slate-500"
+                active ? "text-blue-500 dark:text-blue-400" : "text-muted-foreground"
               }`}
             >
               {label}

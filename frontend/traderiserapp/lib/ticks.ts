@@ -3,8 +3,8 @@
 // Market-aware synthetic tick feed.
 // - "1s" markets emit one tick every 1000 ms (Deriv-like).
 // - All other Volatility markets emit one tick every 2000 ms.
-// - Supports `forceNextDigit(d)` so a settled trade can pin the very next
-//   tick's last-digit to whatever the backend returned (Sashi sync).
+// - Supports forceNextDigit(d) so a settled trade can pin the next last-digit.
+// - Supports forcePriceMove("up" | "down") so Rise/Fall candles follow Sashi.
 
 export type Tick = { time: number; price: number; lastDigit: number };
 
@@ -13,15 +13,14 @@ type Listener = (t: Tick) => void;
 class TickFeed {
   private price = 9200 + Math.random() * 50;
   private listeners = new Set<Listener>();
-  private timer: NodeJS.Timeout | null = null;   // ← Fixed: proper type instead of any
+  private timer: NodeJS.Timeout | null = null;
   private history: Tick[] = [];
   private intervalMs = 1000;
   private marketName = "volatility-10-1s";
 
-  // Queue of last-digits to force on upcoming ticks (FIFO).
   private forcedDigits: number[] = [];
+  private forcedMoves: Array<"up" | "down"> = [];
 
-  /** Set the active market. Re-evaluates tick speed. */
   setMarket(name: string) {
     this.marketName = (name || "").toLowerCase();
     const next = this.marketName.includes("1s") ? 1000 : 2000;
@@ -34,10 +33,14 @@ class TickFeed {
     }
   }
 
-  /** Force the *next* emitted tick to end with `digit` (0–9). */
   forceNextDigit(digit: number) {
     if (digit < 0 || digit > 9 || !Number.isFinite(digit)) return;
     this.forcedDigits.push(Math.floor(digit));
+  }
+
+  /** Force the next tick to close higher or lower so the candle follows the trade. */
+  forcePriceMove(dir: "up" | "down") {
+    this.forcedMoves.push(dir);
   }
 
   start() {
@@ -75,13 +78,19 @@ class TickFeed {
   }
 
   private emit() {
-    // Natural drift
     const drift = (9200 - this.price) * 0.002;
     this.price += drift + (Math.random() - 0.5) * 6;
+
+    if (this.forcedMoves.length > 0) {
+      const dir = this.forcedMoves.shift()!;
+      // One small tick so the candle tip only nudges, not a big jump.
+      const step = 1.2 + Math.random() * 1.4;
+      this.price += dir === "up" ? step : -step;
+    }
+
     let priceStr = this.price.toFixed(2);
     let lastDigit = this.digitOf(this.price);
 
-    // If we have a forced digit queued, adjust the price's last digit
     if (this.forcedDigits.length > 0) {
       const forced = this.forcedDigits.shift()!;
       const intPart = Math.floor(this.price * 10) / 10;

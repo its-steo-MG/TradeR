@@ -1,92 +1,64 @@
-import { formatCurrency } from "@/lib/format-currency"
-import { ArrowDownLeft, ArrowUpRight } from "lucide-react"
+import { formatCurrency } from "@/lib/format-currency";
+import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
 
 interface Transaction {
-  id: number
-  amount: number | string // Updated to allow string, as API may return string
-  transaction_type: "deposit" | "withdrawal" | "trade"
-  description: string
-  created_at: string
+  id: number;
+  amount: number | string;
+  transaction_type: "deposit" | "withdrawal" | "trade";
+  description: string;
+  created_at: string;
 }
 
 interface TransactionHistoryProps {
-  transactions: Transaction[]
+  transactions: Transaction[];
 }
 
 export function TransactionHistory({ transactions }: TransactionHistoryProps) {
   return (
-    <div className="w-full">
-      <div className="bg-gradient-to-br from-slate-800/60 via-slate-900/40 to-slate-950/60 backdrop-blur-lg border border-slate-700/50 rounded-2xl p-6 lg:p-8 shadow-2xl">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-2 h-6 bg-gradient-to-b from-slate-400 to-slate-600 rounded-full" />
-          <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white">Recent Transactions</h3>
-          <span className="ml-auto text-xs sm:text-sm text-slate-400">
-            {transactions.length} {transactions.length === 1 ? "transaction" : "transactions"}
-          </span>
-        </div>
-
-        {transactions.length === 0 ? (
-          <div className="py-12 text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-800/50 mb-4">
-              <ArrowUpRight size={32} className="text-slate-500" />
-            </div>
-            <p className="text-slate-400 text-base">No transactions yet</p>
-            <p className="text-slate-500 text-sm mt-1">Your transactions will appear here</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {transactions.map((tx) => (
+    <section className="overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white via-indigo-50/50 to-sky-50 p-3 sm:p-5 md:p-6 shadow-sm dark:border-zinc-800 dark:from-zinc-950 dark:via-zinc-950 dark:to-zinc-950">
+      <div className="mb-3 sm:mb-4 flex items-baseline justify-between gap-2">
+        <h3 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-white">Recent activity</h3>
+        <span className="shrink-0 text-xs text-slate-500 dark:text-zinc-400">{transactions.length}</span>
+      </div>
+      {transactions.length === 0 ? (
+        <p className="py-8 sm:py-10 text-center text-sm text-slate-500 dark:text-zinc-400">No transactions yet</p>
+      ) : (
+        <div className="space-y-2">
+          {transactions.map((tx) => {
+            const out = tx.transaction_type === "withdrawal";
+            return (
               <div
                 key={tx.id}
-                className="flex items-center justify-between p-4 rounded-xl bg-slate-800/30 hover:bg-slate-800/50 border border-slate-700/30 hover:border-emerald-500/30 transition-all duration-300 group"
+                className="drop-on-top relative !flex w-full items-center gap-2 sm:gap-3 overflow-hidden rounded-xl sm:rounded-2xl border border-white/70 bg-white/40 px-2.5 py-2.5 sm:px-3 sm:py-3 backdrop-blur-md dark:border-white/10 dark:bg-white/5"
               >
-                {/* Left Side: Icon and Type */}
-                <div className="flex items-center gap-4 flex-1 min-w-0">
-                  <div
-                    className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center font-semibold ${
-                      tx.transaction_type === "deposit"
-                        ? "bg-emerald-500/20 text-emerald-400 group-hover:bg-emerald-500/30"
-                        : tx.transaction_type === "withdrawal"
-                        ? "bg-red-500/20 text-red-400 group-hover:bg-red-500/30"
-                        : "bg-blue-500/20 text-blue-400 group-hover:bg-blue-500/30"
-                    }`}
-                  >
-                    {tx.transaction_type === "deposit" ? (
-                      <ArrowDownLeft size={20} />
-                    ) : (
-                      <ArrowUpRight size={20} />
-                    )}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white font-semibold text-sm sm:text-base">
-                      {tx.transaction_type.charAt(0).toUpperCase() + tx.transaction_type.slice(1)}
-                    </p>
-                    <p className="text-slate-400 text-xs sm:text-sm truncate">{tx.description}</p>
-                  </div>
-                </div>
-
-                {/* Right Side: Amount and Date */}
-                <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-4">
-                  <p
-                    className={`font-bold text-sm sm:text-base ${
-                      tx.transaction_type === "withdrawal" ? "text-red-400" : "text-emerald-400"
-                    }`}
-                  >
-                    {tx.transaction_type === "withdrawal" ? "-" : "+"}${formatCurrency(tx.amount)}
+                <span
+                  className={`relative z-[1] flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl border ${
+                    out
+                      ? "border-red-200 bg-red-50 text-red-500 dark:border-red-500/30 dark:bg-red-500/20 dark:text-red-400"
+                      : "border-emerald-200 bg-emerald-50 text-emerald-600 dark:border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-400"
+                  }`}
+                >
+                  {out ? <ArrowUpRight size={15} /> : <ArrowDownLeft size={15} />}
+                </span>
+                <div className="relative z-[1] min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium capitalize text-slate-900 dark:text-white">
+                    {tx.transaction_type}
                   </p>
-                  <p className="text-slate-500 text-xs">
-                    {new Date(tx.created_at).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                    })}
+                  <p className="truncate text-[11px] sm:text-xs text-slate-500 dark:text-zinc-400">{tx.description}</p>
+                </div>
+                <div className="relative z-[1] shrink-0 text-right">
+                  <p className={`text-xs sm:text-sm font-semibold whitespace-nowrap ${out ? "text-red-500 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                    {out ? "-" : "+"}${formatCurrency(tx.amount)}
+                  </p>
+                  <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-zinc-400 whitespace-nowrap">
+                    {new Date(tx.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                   </p>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  )
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
 }

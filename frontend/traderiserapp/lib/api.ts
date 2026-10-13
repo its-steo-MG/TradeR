@@ -1292,7 +1292,7 @@ export const markMpesaRead = (id: number) =>
 /* ------------------------------------------------------------------ */
 export const placeDigitTrade = (data: {
   market_id: number;
-  digit_contract_type: 'over' | 'under' | 'matches' | 'differs' | 'even' | 'odd';
+  digit_contract_type: "matches" | "differs" | "even" | "odd" | "over" | "under" | "rise" | "fall";
   digit_barrier?: number;
   amount: number;
   account_type?: 'standard' | 'demo';
@@ -1309,7 +1309,7 @@ export const placeDigitTrade = (data: {
 export const placeSRobotTrade = (data: {
   robot_id: number;
   market_id: number;
-  digit_contract_type: 'over' | 'under' | 'matches' | 'differs' | 'even' | 'odd';
+  digit_contract_type: "matches" | "differs" | "even" | "odd" | "over" | "under" | "rise" | "fall";
   digit_barrier?: number;
   amount: number;
   use_martingale?: boolean;
@@ -1363,7 +1363,7 @@ export const closeMT5Position = (data: {
 export const placeBulkTrade = (data: {
   robot_id: number;
   market_id: number;
-  digit_contract_type: 'over' | 'under' | 'matches' | 'differs' | 'even' | 'odd';
+  digit_contract_type: "matches" | "differs" | "even" | "odd" | "over" | "under" | "rise" | "fall";
   digit_barrier?: number;
   amount: number;
   number_of_trades: number;

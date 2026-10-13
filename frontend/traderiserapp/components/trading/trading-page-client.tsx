@@ -31,8 +31,8 @@ interface UserRobot {
     is_elite_robot?: boolean
   }
   purchased_at: string | null
-  is_used?: boolean       
-  is_setting?: boolean     
+  is_used?: boolean
+  is_setting?: boolean
 }
 
 interface DashboardData {
@@ -148,7 +148,8 @@ export default function TradingPageClient() {
         const accountObj = dashboard.accounts.find(
           (acc) => acc.account_type === selectedAccount,
         )
-        const accountBalance = accountObj && accountObj.balance !== undefined ? Number(accountObj.balance) : 0
+        const accountBalance =
+          accountObj && accountObj.balance !== undefined ? Number(accountObj.balance) : 0
 
         if (isNaN(accountBalance)) throw new Error("Invalid balance value from API")
 
@@ -167,27 +168,26 @@ export default function TradingPageClient() {
     fetchInitialData()
   }, [selectedAccount])
 
-const handleRobotSelect = (robotId: number | null) => {
-  setSelectedRobot(robotId)
+  const handleRobotSelect = (robotId: number | null) => {
+    setSelectedRobot(robotId)
 
-  if (robotId) {
-    const ur = userRobots.find((r) => r.robot.id === robotId)
+    if (robotId) {
+      const ur = userRobots.find((r) => r.robot.id === robotId)
 
-    // Permanent Elite once is_setting is true, otherwise only when not used
-    const shouldBeElite =
-      !!ur?.robot?.is_elite_robot &&
-      (!!ur?.is_setting || !ur?.is_used)
+      const shouldBeElite =
+        !!ur?.robot?.is_elite_robot &&
+        (!!ur?.is_setting || !ur?.is_used)
 
-    if (shouldBeElite) {
-      setIsEliteMode(true)
-      setTradingMode("robot")
+      if (shouldBeElite) {
+        setIsEliteMode(true)
+        setTradingMode("robot")
+      } else {
+        setIsEliteMode(false)
+      }
     } else {
       setIsEliteMode(false)
     }
-  } else {
-    setIsEliteMode(false)
   }
-}
 
   const handleStartTrading = (tradeParams: TradeParams) => {
     const marketObj = markets.find((m) => m.name === selectedMarket)
@@ -227,7 +227,9 @@ const handleRobotSelect = (robotId: number | null) => {
   ) => {
     setExecutingTrades((prev) =>
       prev.map((t) =>
-        t.id === tradeId ? { ...t, status: "completed", profit, isWin, entrySpot, exitSpot, currentSpot } : t,
+        t.id === tradeId
+          ? { ...t, status: "completed", profit, isWin, entrySpot, exitSpot, currentSpot }
+          : t,
       ),
     )
 
@@ -247,9 +249,9 @@ const handleRobotSelect = (robotId: number | null) => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen text-white text-sm sm:text-base">
+      <div className="flex items-center justify-center min-h-screen text-foreground text-sm sm:text-base">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-foreground mx-auto mb-4" />
           <p>Loading trading platform...</p>
         </div>
       </div>
@@ -258,11 +260,11 @@ const handleRobotSelect = (robotId: number | null) => {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen text-red-400 text-sm sm:text-base">
+      <div className="flex items-center justify-center min-h-screen text-red-500 text-sm sm:text-base">
         <div className="text-center max-w-md p-6">
           <div className="text-6xl mb-4">⚠️</div>
-          <h2 className="text-xl font-bold mb-2">Loading Error</h2>
-          <p className="mb-6">{error}</p>
+          <h2 className="text-xl font-bold mb-2 text-foreground">Loading Error</h2>
+          <p className="mb-6 text-muted-foreground">{error}</p>
           <button
             onClick={() => window.location.reload()}
             className="px-6 py-3 bg-gradient-to-r from-pink-600 to-purple-600 text-white rounded-lg font-bold hover:shadow-lg transform hover:-translate-y-1 transition-all duration-200"
@@ -277,8 +279,9 @@ const handleRobotSelect = (robotId: number | null) => {
   const selectedEliteRobot = userRobots.find((r) => r.robot.id === selectedRobot)
 
   return (
-    <div className="relative min-h-screen text-white overflow-hidden">
-      <div className="fixed inset-0 z-0">
+    <div className="relative min-h-screen text-foreground overflow-hidden">
+      {/* Dark mode background */}
+      <div className="fixed inset-0 z-0 dark:block hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950 to-black" />
         <div className="absolute inset-0 bg-gradient-to-br from-transparent via-purple-950/30 to-pink-950/20" />
         <div className="absolute top-1/4 -left-40 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl animate-float" />
@@ -286,27 +289,36 @@ const handleRobotSelect = (robotId: number | null) => {
         <div className="absolute top-1/2 left-1/3 w-96 h-96 bg-purple-700/8 rounded-full blur-3xl animate-float delay-500" />
       </div>
 
+      {/* Light mode background */}
+      <div className="fixed inset-0 z-0 block dark:hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-slate-100" />
+        <div className="absolute top-1/4 -left-40 w-96 h-96 bg-purple-400/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 -right-40 w-96 h-96 bg-pink-400/8 rounded-full blur-3xl" />
+      </div>
+
       <div className="relative z-10">
         <div className="flex min-h-screen">
           <div className="flex-1 overflow-auto ml-0 lg:ml-64">
             <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto">
-              <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-white mb-4 sm:mb-6 md:mb-8">
+              <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-foreground mb-4 sm:mb-6 md:mb-8">
                 Trading Dashboard
               </h1>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                 <div className="md:col-span-1 lg:col-span-2 xl:col-span-3 space-y-4 sm:space-y-6">
-                  {/* Balance cards */}
-                  <div className="rounded-lg bg-white/5 backdrop-blur-md border border-white/10 p-3 sm:p-4">
-                    <p className="text-xs text-white/60 mb-1">Account Balance</p>
-                    <p className="text-lg sm:text-xl font-bold text-green-400 truncate">
+                  {/* Balance cards — solid opaque */}
+                  <div className="rounded-lg bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-3 sm:p-4">
+                    <p className="text-xs text-slate-500 dark:text-zinc-400 mb-1">Account Balance</p>
+                    <p className="text-lg sm:text-xl font-bold text-green-600 dark:text-green-400 truncate">
                       ${formatCurrency(balance)}
                     </p>
-                    <p className="text-xs text-white/60 mt-1 flex items-center justify-between">
+                    <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1 flex items-center justify-between">
                       <span>Session P/L:</span>
                       <span
                         className={`font-mono font-semibold px-2 py-1 rounded-full text-xs ${
-                          sessionProfit >= 0 ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
+                          sessionProfit >= 0
+                            ? "bg-green-500/15 text-green-600 dark:text-green-400"
+                            : "bg-red-500/15 text-red-600 dark:text-red-400"
                         }`}
                       >
                         ${sessionProfit.toFixed(2)}
@@ -315,27 +327,36 @@ const handleRobotSelect = (robotId: number | null) => {
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                    <div className="rounded-lg bg-white/5 backdrop-blur-md border border-white/10 p-3 sm:p-4">
-                      <p className="text-xs text-white/60 mb-1">Session Profit</p>
-                      <p className={`text-lg sm:text-xl font-bold ${sessionProfit >= 0 ? "text-green-400" : "text-red-400"} truncate`}>
+                    <div className="rounded-lg bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-3 sm:p-4">
+                      <p className="text-xs text-slate-500 dark:text-zinc-400 mb-1">Session Profit</p>
+                      <p
+                        className={`text-lg sm:text-xl font-bold truncate ${
+                          sessionProfit >= 0
+                            ? "text-green-600 dark:text-green-400"
+                            : "text-red-600 dark:text-red-400"
+                        }`}
+                      >
                         ${sessionProfit.toFixed(2)}
                       </p>
                     </div>
-                    <div className="rounded-lg bg-white/5 backdrop-blur-md border border-white/10 p-3 sm:p-4">
-                      <p className="text-xs text-white/60 mb-1">Trading Mode</p>
-                      <p className="text-lg sm:text-xl font-bold text-pink-400 capitalize">
+                    <div className="rounded-lg bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-3 sm:p-4">
+                      <p className="text-xs text-slate-500 dark:text-zinc-400 mb-1">Trading Mode</p>
+                      <p className="text-lg sm:text-xl font-bold text-pink-600 dark:text-pink-400 capitalize">
                         {isEliteMode ? "Elite Robot" : tradingMode}
                       </p>
                     </div>
                   </div>
 
-                  {/* Chart */}
+                  {/* Chart selector */}
                   <div className="flex justify-end mb-2">
-                    <Select value={chartType} onValueChange={(value: "tradingview" | "analysis") => setChartType(value)}>
-                      <SelectTrigger className="w-[180px] bg-white/5 border-white/10">
+                    <Select
+                      value={chartType}
+                      onValueChange={(value: "tradingview" | "analysis") => setChartType(value)}
+                    >
+                      <SelectTrigger className="w-[180px] bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700 text-foreground">
                         <SelectValue placeholder="Select Chart" />
                       </SelectTrigger>
-                      <SelectContent className="bg-gray-800 border-white/10">
+                      <SelectContent className="bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700">
                         <SelectItem value="tradingview">Trading View</SelectItem>
                         <SelectItem value="analysis">Technical Analysis</SelectItem>
                       </SelectContent>
@@ -345,7 +366,11 @@ const handleRobotSelect = (robotId: number | null) => {
                   <div className="w-full">
                     {chartType === "tradingview" ? (
                       <TradingViewWidget
-                        symbol={selectedMarket ? mapToTradingViewSymbol(selectedMarket) : "NASDAQ:AAPL"}
+                        symbol={
+                          selectedMarket
+                            ? mapToTradingViewSymbol(selectedMarket)
+                            : "NASDAQ:AAPL"
+                        }
                       />
                     ) : (
                       <MarketAnalysis market={selectedMarket} />
@@ -368,8 +393,8 @@ const handleRobotSelect = (robotId: number | null) => {
                     />
                   </div>
 
-                  {/* ========== MAIN TRADING AREA ========== */}
-                  <div className="rounded-xl bg-white/5 backdrop-blur-md border border-white/10 p-4 sm:p-6">
+                  {/* Main trading area — solid opaque */}
+                  <div className="rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-4 sm:p-6">
                     {isEliteMode && selectedEliteRobot ? (
                       <EliteRobotInterface
                         robotName={selectedEliteRobot.robot.name}
@@ -397,10 +422,10 @@ const handleRobotSelect = (robotId: number | null) => {
                   </div>
                 </div>
 
-                {/* Right column - Trade History */}
+                {/* Right column — Trade History */}
                 <div className="md:col-span-1 lg:col-span-1 xl:col-span-1">
-                  <div className="rounded-xl bg-white/5 backdrop-blur-md border border-white/10 p-3 sm:p-4 lg:p-6 sticky top-20 overflow-y-auto">
-                    <h3 className="text-sm sm:text-base font-semibold text-white mb-3 sm:mb-4 uppercase tracking-wider">
+                  <div className="rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-3 sm:p-4 lg:p-6 sticky top-20 overflow-y-auto">
+                    <h3 className="text-sm sm:text-base font-semibold text-foreground mb-3 sm:mb-4 uppercase tracking-wider">
                       Recent Trades
                     </h3>
                     <TradeHistory

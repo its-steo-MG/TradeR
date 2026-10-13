@@ -100,6 +100,12 @@ export default function LoginPage() {
         account_type: accountType === "deriv" ? "standard" : accountType,
       });
 
+      if (response.error) {
+        toast.error(response.error);
+        setIsLoading(false);
+        return;
+      }
+
       if (response.data && "suspension" in response.data) {
         const suspension = response.data.suspension!;
         const { code, details } = suspension;

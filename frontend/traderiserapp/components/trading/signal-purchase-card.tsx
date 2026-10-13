@@ -7,10 +7,13 @@ import { toast } from "sonner"
 
 interface SignalPurchaseCardProps {
   onPurchaseSuccess: () => void
-  aiBotId: number | null  // ← New prop for dynamic ID
+  aiBotId: number | null
 }
 
-export default function SignalPurchaseCard({ onPurchaseSuccess, aiBotId }: SignalPurchaseCardProps) {
+export default function SignalPurchaseCard({
+  onPurchaseSuccess,
+  aiBotId,
+}: SignalPurchaseCardProps) {
   const [isLoading, setIsLoading] = useState(false)
 
   const handleActivate = async () => {
@@ -21,9 +24,12 @@ export default function SignalPurchaseCard({ onPurchaseSuccess, aiBotId }: Signa
 
     setIsLoading(true)
     try {
-      const accountType = localStorage.getItem("login_type") as "demo" | "standard" | undefined
+      const accountType = localStorage.getItem("login_type") as
+        | "demo"
+        | "standard"
+        | undefined
 
-      const response = await api.purchaseRobot(aiBotId, accountType || "standard")  // ← Use dynamic ID
+      const response = await api.purchaseRobot(aiBotId, accountType || "standard")
 
       if (response.error) {
         toast.error(response.error)
@@ -41,16 +47,25 @@ export default function SignalPurchaseCard({ onPurchaseSuccess, aiBotId }: Signa
   }
 
   if (!aiBotId) {
-    return <div className="text-red-500">Error: AI Signal Bot not configured</div>
+    return (
+      <div className="text-red-500 dark:text-red-400">
+        Error: AI Signal Bot not configured
+      </div>
+    )
   }
 
   return (
     <div className="w-full max-w-md mx-auto">
-      <div className="bg-gradient-to-br from-gray-900 to-black border border-green-500/30 rounded-xl p-8">
+      <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-green-500/30 rounded-xl p-8 shadow-lg">
         {/* Locked Icon */}
         <div className="text-center mb-6">
-          <div className="inline-block bg-green-500/20 border border-green-500/50 rounded-full p-6 mb-4">
-            <svg className="w-12 h-12 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="inline-block bg-green-100 dark:bg-green-500/20 border border-green-300 dark:border-green-500/50 rounded-full p-6 mb-4">
+            <svg
+              className="w-12 h-12 text-green-600 dark:text-green-500"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -62,18 +77,24 @@ export default function SignalPurchaseCard({ onPurchaseSuccess, aiBotId }: Signa
         </div>
 
         {/* Title */}
-        <h3 className="text-2xl font-bold text-white text-center mb-2">AI Signal Bot</h3>
+        <h3 className="text-2xl font-bold text-slate-900 dark:text-white text-center mb-2">
+          AI Signal Bot
+        </h3>
 
         {/* Description */}
-        <p className="text-gray-400 text-center mb-6 text-sm leading-relaxed">
-          Real-time AI-powered market signals for forex & crypto. Scans all markets and delivers high-probability
-          entries with Take Profit & Stop Loss.
+        <p className="text-slate-500 dark:text-zinc-400 text-center mb-6 text-sm leading-relaxed">
+          Real-time AI-powered market signals for forex & crypto. Scans all markets
+          and delivers high-probability entries with Take Profit & Stop Loss.
         </p>
 
         {/* Price */}
         <div className="text-center mb-8">
-          <div className="text-4xl font-bold text-green-500 mb-2">$200</div>
-          <p className="text-gray-400 text-sm">One-time activation</p>
+          <div className="text-4xl font-bold text-green-600 dark:text-green-500 mb-2">
+            $200
+          </div>
+          <p className="text-slate-500 dark:text-zinc-400 text-sm">
+            One-time activation
+          </p>
         </div>
 
         {/* Activate Button */}
@@ -87,19 +108,25 @@ export default function SignalPurchaseCard({ onPurchaseSuccess, aiBotId }: Signa
 
         {/* Features */}
         <div className="mt-8 space-y-3">
-          <p className="text-gray-400 text-xs font-semibold uppercase">Features</p>
-          <ul className="space-y-2 text-sm text-gray-300">
+          <p className="text-slate-500 dark:text-zinc-400 text-xs font-semibold uppercase">
+            Features
+          </p>
+          <ul className="space-y-2 text-sm text-slate-700 dark:text-zinc-300">
             <li className="flex items-center gap-2">
-              <span className="text-green-500">✓</span> Global Market Scanning
+              <span className="text-green-600 dark:text-green-500">✓</span> Global
+              Market Scanning
             </li>
             <li className="flex items-center gap-2">
-              <span className="text-green-500">✓</span> RSI & ATR Analysis
+              <span className="text-green-600 dark:text-green-500">✓</span> RSI & ATR
+              Analysis
             </li>
             <li className="flex items-center gap-2">
-              <span className="text-green-500">✓</span> High-Probability Signals
+              <span className="text-green-600 dark:text-green-500">✓</span>{" "}
+              High-Probability Signals
             </li>
             <li className="flex items-center gap-2">
-              <span className="text-green-500">✓</span> Automatic TP/SL
+              <span className="text-green-600 dark:text-green-500">✓</span> Automatic
+              TP/SL
             </li>
           </ul>
         </div>

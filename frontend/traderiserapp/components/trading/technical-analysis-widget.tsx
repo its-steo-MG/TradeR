@@ -1,13 +1,9 @@
-
-// components/trading/technical-analysis-widget.tsx
 'use client';
 
 import { useEffect, useRef, memo } from 'react';
 
-
-
 interface TechnicalAnalysisWidgetProps {
-  symbol?: string; // e.g., "NASDAQ:AAPL", "OANDA:EURUSD", "BINANCE:BTCUSDT"
+  symbol?: string;
 }
 
 function TechnicalAnalysisWidget({ symbol = 'NASDAQ:AAPL' }: TechnicalAnalysisWidgetProps) {
@@ -17,49 +13,53 @@ function TechnicalAnalysisWidget({ symbol = 'NASDAQ:AAPL' }: TechnicalAnalysisWi
   useEffect(() => {
     if (!container.current) return;
 
-    // Clear previous widget content and remove existing script
-    container.current.innerHTML = '';
-    if (scriptRef.current && scriptRef.current.parentNode) {
-      scriptRef.current.parentNode.removeChild(scriptRef.current);
-    }
-
-    // Create new script for TradingView technical analysis widget
-    const script = document.createElement('script');
-    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js';
-    script.type = 'text/javascript';
-    script.async = true;
-    script.innerHTML = JSON.stringify({
-      colorTheme: 'dark',
-      displayMode: 'single',
-      isTransparent: false,
-      locale: 'en',
-      interval: '1m',
-      disableInterval: false,
-      width: 425,
-      height: 450,
-      symbol, // Dynamic symbol
-      showIntervalTabs: true,
-    });
-
-    container.current.appendChild(script);
-    scriptRef.current = script; // Store script reference for cleanup
-
-    // Cleanup
-    return () => {
-      if (container.current) {
-        container.current.innerHTML = ''; // Clear container
+    const mount = () => {
+      if (!container.current) return;
+      container.current.innerHTML = '';
+      if (scriptRef.current?.parentNode) {
+        scriptRef.current.parentNode.removeChild(scriptRef.current);
       }
-      if (scriptRef.current && scriptRef.current.parentNode) {
-        scriptRef.current.parentNode.removeChild(scriptRef.current); // Remove script
-      }
-      scriptRef.current = null; // Reset script reference
+
+      const dark = document.documentElement.classList.contains('dark');
+      const script = document.createElement('script');
+      script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-technical-analysis.js';
+      script.type = 'text/javascript';
+      script.async = true;
+      script.innerHTML = JSON.stringify({
+        colorTheme: dark ? 'dark' : 'light',
+        displayMode: 'single',
+        isTransparent: false,
+        locale: 'en',
+        interval: '1m',
+        disableInterval: false,
+        width: '100%',
+        height: 450,
+        symbol,
+        showIntervalTabs: true,
+      });
+
+      container.current.appendChild(script);
+      scriptRef.current = script;
     };
-  }, [symbol]); // Re-run effect when symbol changes
+
+    mount();
+    const observer = new MutationObserver(mount);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
+    return () => {
+      observer.disconnect();
+      if (container.current) container.current.innerHTML = '';
+      if (scriptRef.current?.parentNode) {
+        scriptRef.current.parentNode.removeChild(scriptRef.current);
+      }
+      scriptRef.current = null;
+    };
+  }, [symbol]);
 
   return (
-    <div className="tradingview-widget-container" ref={container}>
-      <div className="tradingview-widget-container__widget"></div>
-      <div className="tradingview-widget-copyright text-xs text-white/50 mt-2 text-right">
+    <div className="tradingview-widget-container w-full overflow-hidden rounded-xl bg-white dark:bg-zinc-950" ref={container}>
+      <div className="tradingview-widget-container__widget" />
+      <div className="tradingview-widget-copyright text-xs text-slate-500 dark:text-zinc-400 mt-2 text-right">
         <a
           href={`https://www.tradingview.com/symbols/${symbol.replace(':', '-')}/technicals/`}
           rel="noopener noreferrer"

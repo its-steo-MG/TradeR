@@ -1,4 +1,3 @@
-// components/trading/market-analysis.tsx
 'use client';
 
 import TechnicalAnalysisWidget from './technical-analysis-widget';
@@ -8,16 +7,15 @@ interface Props {
 }
 
 export default function MarketAnalysis({ market }: Props) {
-  // Format symbol to match TradingView's expected format
   const symbol = market
     ? market.includes(':')
-      ? market // Already in "EXCHANGE:SYMBOL" format
-      : `OANDA:${market}` // Adjust prefix for your broker
-    : 'NASDAQ:AAPL'; // Default
+      ? market
+      : `OANDA:${market}`
+    : 'NASDAQ:AAPL';
 
   return (
-    <div className="rounded-xl bg-white/5 backdrop-blur-md border border-white/10 p-4">
-      <h3 className="text-lg font-semibold text-white mb-3">
+    <div className="rounded-xl bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 p-4">
+      <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-3">
         Technical Analysis
       </h3>
       <TechnicalAnalysisWidget symbol={symbol} />

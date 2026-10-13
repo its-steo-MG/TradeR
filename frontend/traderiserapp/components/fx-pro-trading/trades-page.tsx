@@ -142,7 +142,7 @@ export default function TradesPage() {
       </div>
 
       {/* Summary Card */}
-      <Card className="p-4 bg-card/50 border-border">
+      <Card className="p-4 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl border-white/40 dark:border-white/40 dark:border-white/10">
         <div className="flex justify-between items-center mb-2">
           <p className="text-muted-foreground">Open Trades</p>
           <p className="text-xl font-bold">{positions.length}</p>
@@ -196,7 +196,7 @@ export default function TradesPage() {
               return (
                 <Card 
                   key={position.id} 
-                  className="p-4 bg-card/50 border-border hover:border-primary/50 transition-all"
+                  className="p-4 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl border-white/40 dark:border-white/40 dark:border-white/10 hover:border-primary/50 transition-all"
                 >
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex-1 min-w-0">

@@ -333,22 +333,22 @@ export function RobotConfigForm({
   if (isRunning || minimized) return null;
 
   return (
-    <div className="glass-card p-6 space-y-6 rounded-3xl overflow-visible">
+    <div className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 p-6 space-y-6 rounded-3xl overflow-visible text-slate-900 dark:text-white">
       <div className="flex items-center justify-between">
         <button
           type="button"
           onClick={handleResetSetup}
           title="Start a fresh setup"
-          className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-700 bg-slate-900/70 text-slate-400 transition-colors hover:text-white"
+          className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 dark:border-zinc-700 bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 transition-colors hover:text-slate-900 dark:hover:text-white"
         >
           <RotateCcw className="h-4 w-4" />
         </button>
-        <h2 className="text-2xl font-bold text-center">S-Digit Robot</h2>
+        <h2 className="text-2xl font-bold text-center text-slate-900 dark:text-white">S-Digit Robot</h2>
         <button
           type="button"
           onClick={handleMinimize}
           title="Minimise to dock"
-          className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-700 bg-slate-900/70 text-slate-300 transition-colors hover:text-white disabled:opacity-40"
+          className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 dark:border-zinc-700 bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 transition-colors hover:text-slate-900 dark:hover:text-white disabled:opacity-40"
           disabled={!selectedRobot || !selectedMarketId}
         >
           <Minimize2 className="h-4 w-4" />
@@ -357,7 +357,7 @@ export function RobotConfigForm({
 
       {/* Select Robot — value is controlled so the saved robot stays selected */}
       <div className="relative z-50">
-        <Label className="text-sm text-muted-foreground mb-2 block">
+        <Label className="text-sm text-slate-500 dark:text-zinc-400 mb-2 block">
           Select S-Digit Robot
         </Label>
         <Select
@@ -365,10 +365,10 @@ export function RobotConfigForm({
           onValueChange={handleRobotSelect}
           disabled={robots.length === 0}
         >
-          <SelectTrigger className="w-full">
+          <SelectTrigger className="w-full bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700 text-slate-900 dark:text-white">
             <SelectValue placeholder="Choose your S-Digit Robot..." />
           </SelectTrigger>
-          <SelectContent className="z-[10000]">
+          <SelectContent className="z-[10000] bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700 text-slate-900 dark:text-white">
             {robots.map((robot) => (
               <SelectItem key={robot.id} value={String(robot.id)}>
                 {robot.name} ⭐
@@ -381,17 +381,17 @@ export function RobotConfigForm({
       {selectedRobot && (
         <>
           <div className="relative z-50">
-            <Label className="text-sm text-muted-foreground mb-2 block">
+            <Label className="text-sm text-slate-500 dark:text-zinc-400 mb-2 block">
               Volatility Market
             </Label>
             <Select
               value={selectedMarketId?.toString() || ""}
               onValueChange={(val) => setSelectedMarketId(Number(val))}
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger className="w-full bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700 text-slate-900 dark:text-white">
                 <SelectValue placeholder="Select Volatility Market" />
               </SelectTrigger>
-              <SelectContent className="z-[10000]">
+              <SelectContent className="z-[10000] bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700 text-slate-900 dark:text-white">
                 {markets.map((market) => (
                   <SelectItem key={market.id} value={market.id.toString()}>
                     {market.display_name || market.name}
@@ -408,16 +408,18 @@ export function RobotConfigForm({
                 value={contractKind}
                 onValueChange={(value) => setContractKind(value as DigitContractKind)}
               >
-                <SelectTrigger>
+                <SelectTrigger className="bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700 text-slate-900 dark:text-white">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="z-[10000]">
+                <SelectContent className="z-[10000] bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700 text-slate-900 dark:text-white">
                   <SelectItem value="over">Over</SelectItem>
                   <SelectItem value="under">Under</SelectItem>
                   <SelectItem value="matches">Matches</SelectItem>
                   <SelectItem value="differs">Differs</SelectItem>
                   <SelectItem value="even">Even</SelectItem>
                   <SelectItem value="odd">Odd</SelectItem>
+                  <SelectItem value="rise">Rise</SelectItem>
+                  <SelectItem value="fall">Fall</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -425,7 +427,7 @@ export function RobotConfigForm({
             {["over", "under", "matches", "differs"].includes(contractKind) && (
               <div>
                 <Label>Prediction Digit (0-9)</Label>
-                <Input
+                <Input className="bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700 text-slate-900 dark:text-white"
                   type="number"
                   min={0}
                   max={9}
@@ -443,7 +445,7 @@ export function RobotConfigForm({
 
             <div>
               <Label>Initial Stake (USD) — Min 0.5</Label>
-              <Input
+              <Input className="bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700 text-slate-900 dark:text-white"
                 type="number"
                 step="0.1"
                 min="0.5"
@@ -459,7 +461,7 @@ export function RobotConfigForm({
 
             <div>
               <Label>Martingale Multiplier — Min 1</Label>
-              <Input
+              <Input className="bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700 text-slate-900 dark:text-white"
                 type="number"
                 step="0.1"
                 min="1"
@@ -475,7 +477,7 @@ export function RobotConfigForm({
 
             <div>
               <Label>Target Profit (USD)</Label>
-              <Input
+              <Input className="bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700 text-slate-900 dark:text-white"
                 type="number"
                 min="0"
                 value={targetProfit}
@@ -490,7 +492,7 @@ export function RobotConfigForm({
 
             <div>
               <Label>Stop Loss (USD)</Label>
-              <Input
+              <Input className="bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700 text-slate-900 dark:text-white"
                 type="number"
                 min="0"
                 value={stopLoss}
@@ -505,7 +507,7 @@ export function RobotConfigForm({
 
             <div className="sm:col-span-2">
               <Label>Max Runs</Label>
-              <Input
+              <Input className="bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700 text-slate-900 dark:text-white"
                 type="number"
                 min="1"
                 value={maxRuns}
@@ -539,13 +541,13 @@ export function RobotConfigForm({
       )}
 
       {robots.length === 0 ? (
-        <p className="text-center text-amber-400 text-sm py-8">
+        <p className="text-center text-amber-600 dark:text-amber-400 text-sm py-8">
           You don’t own any S-Digit Robot yet.
           <br />
           Please purchase one from the Marketplace first.
         </p>
       ) : !selectedRobot ? (
-        <p className="text-center text-amber-400 text-sm py-8">
+        <p className="text-center text-amber-600 dark:text-amber-400 text-sm py-8">
           Please select an S-Digit Robot to continue
         </p>
       ) : null}

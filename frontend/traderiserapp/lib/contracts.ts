@@ -5,9 +5,15 @@ export type ContractKind =
   | "even"
   | "odd"
   | "over"
-  | "under";
+  | "under"
+  | "rise"
+  | "fall";
+
+// Rise/Fall: fixed 48% implied on both sides. No barrier.
+const RISE_FALL_PAYOUT = 1 / 0.48; // ~2.083
 
 export function getPayout(kind: ContractKind, barrier?: number): number {
+  if (kind === "rise" || kind === "fall") return RISE_FALL_PAYOUT;
   if (kind === "matches") return 8.5;
   if (kind === "differs") return 1.12;
   if (kind === "even" || kind === "odd") return 1.92;
@@ -39,16 +45,19 @@ export function contractLabel(kind: ContractKind, barrier?: number): string {
     case "odd": return "Odd";
     case "over": return `Over ${barrier ?? 0}`;
     case "under": return `Under ${barrier ?? 0}`;
+    case "rise": return "Rise";
+    case "fall": return "Fall";
   }
 }
 
-// ✅ NEW: Accurate win condition checker for all digit contracts
-// This ensures Over/Under, Matches/Differs, Even/Odd work correctly
+// Digit contracts only. Rise/Fall are price direction — do not use a digit.
 export function isWinningDigit(
   kind: ContractKind,
   barrier: number | undefined,
   lastDigit: number
 ): boolean {
+  if (kind === "rise" || kind === "fall") return false;
+
   if (kind === "even") return lastDigit % 2 === 0;
   if (kind === "odd") return lastDigit % 2 === 1;
 
@@ -56,11 +65,21 @@ export function isWinningDigit(
   if (kind === "differs") return lastDigit !== barrier;
 
   if (kind === "over" && barrier !== undefined) {
-    return lastDigit > barrier;           // e.g. Over 5 → 6,7,8,9 win
+    return lastDigit > barrier;
   }
   if (kind === "under" && barrier !== undefined) {
-    return lastDigit < barrier;           // e.g. Under 5 → 0,1,2,3,4 win
+    return lastDigit < barrier;
   }
 
   return false;
+}
+
+// Realistic Rise/Fall win: next price vs entry. No digit.
+export function isWinningRiseFall(
+  kind: "rise" | "fall",
+  entryPrice: number,
+  exitPrice: number
+): boolean {
+  if (kind === "rise") return exitPrice > entryPrice;
+  return exitPrice < entryPrice;
 }

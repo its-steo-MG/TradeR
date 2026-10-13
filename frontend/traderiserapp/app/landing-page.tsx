@@ -208,6 +208,9 @@ export default function LandingPage() {
             <span className="text-lg sm:text-xl font-bold text-white">
               Traderiser
             </span>
+            <span className="drop-on-top relative overflow-hidden rounded-full border border-white/40 bg-gradient-to-r from-fuchsia-500 via-pink-500 to-blue-500 px-3 py-1 text-[11px] font-extrabold uppercase tracking-widest text-white shadow-lg shadow-pink-500/40">
+              <span className="relative z-[1]">v4.1 Beta</span>
+            </span>
           </div>
           <div className="flex items-center gap-3">
             <Link
@@ -230,8 +233,11 @@ export default function LandingPage() {
                 <TrendingUp className="w-10 sm:w-12 h-10 sm:h-12 text-white" />
               </div>
             </div>
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white">
-              Traderiser App
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white flex items-center justify-center gap-3">
+              TraderiserApp
+              <span className="drop-on-top relative overflow-hidden rounded-full border border-white/40 bg-gradient-to-r from-fuchsia-500 via-pink-500 to-blue-500 px-3 py-1 text-xs font-extrabold uppercase tracking-widest text-white shadow-lg shadow-pink-500/40">
+                <span className="relative z-[1]">v4.1 Beta</span>
+              </span>
             </h1>
             <p className="text-lg sm:text-xl text-white/80">
               Choose Your Trading Platform

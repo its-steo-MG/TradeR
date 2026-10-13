@@ -28,8 +28,12 @@ export function WalletHeader() {
 
   return (
     <div className="space-y-2">
-      <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-900">Welcome Back,</h1>
-      <p className="text-lg sm:text-xl text-slate-600 font-medium capitalize">{loading ? "…" : username}</p>
+      <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground">
+        Welcome Back,
+      </h1>
+      <p className="text-lg sm:text-xl text-muted-foreground font-medium capitalize">
+        {loading ? "…" : username}
+      </p>
     </div>
   )
 }

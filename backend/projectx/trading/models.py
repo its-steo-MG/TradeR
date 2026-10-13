@@ -15,6 +15,8 @@ DIGIT_CONTRACT_TYPES = [
     ('odd', 'Odd'),
     ('over', 'Over'),
     ('under', 'Under'),
+    ('rise', 'Rise'),
+    ('fall', 'Fall'),
 ]
 
 
@@ -124,6 +126,10 @@ class UserRobot(models.Model):
     is_setting = models.BooleanField(
         default=False,
         help_text="True once the user has successfully configured this robot as Elite. Stays True forever."
+    )
+    is_upgraded = models.BooleanField(
+        default=False,
+        help_text="True after the user has upgraded this robot. Shows the Upgraded tag on the card."
     )
 
     class Meta:

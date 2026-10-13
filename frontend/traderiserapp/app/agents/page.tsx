@@ -204,19 +204,32 @@ export default function AgentsPage() {
     : (user?.accounts || []).filter((acc) => acc.account_type === "demo")
 
   const getTypeIcon = (type: string) => {
-    if (type === "deposit") return <ArrowDownCircle className="w-4 h-4 text-green-600" />
-    if (type === "withdrawal") return <ArrowUpCircle className="w-4 h-4 text-red-500" />
+    if (type === "deposit") return <ArrowDownCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+    if (type === "withdrawal") return <ArrowUpCircle className="w-4 h-4 text-rose-500 dark:text-rose-400" />
     return <RefreshCw className="w-4 h-4 text-blue-500" />
   }
 
   const getTypeColor = (type: string) => {
-    if (type === "deposit") return "text-green-700 bg-green-50"
-    if (type === "withdrawal") return "text-red-700 bg-red-50"
-    return "text-blue-700 bg-blue-50"
+    if (type === "deposit") return "text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 dark:bg-emerald-500/15 backdrop-blur-md"
+    if (type === "withdrawal") return "text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950"
+    return "text-blue-700 dark:text-blue-300 bg-blue-500/10 dark:bg-blue-500/15 backdrop-blur-md"
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-black text-white">
+    <div className="relative min-h-screen text-foreground overflow-hidden">
+      <div className="fixed inset-0 z-0 hidden dark:block pointer-events-none">
+        <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950 to-black" />
+        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-purple-950/30 to-pink-950/20" />
+        <div className="absolute top-1/4 -left-40 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 -right-40 w-96 h-96 bg-pink-600/8 rounded-full blur-3xl" />
+      </div>
+      <div className="fixed inset-0 z-0 block dark:hidden pointer-events-none">
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-slate-100" />
+        <div className="absolute top-1/4 -left-40 w-96 h-96 bg-purple-400/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 -right-40 w-96 h-96 bg-pink-400/8 rounded-full blur-3xl" />
+      </div>
+
+      <div className="relative z-10 min-h-screen flex flex-col">
       <TopNavbar
         isLoggedIn={isLoggedIn}
         user={user}
@@ -235,7 +248,7 @@ export default function AgentsPage() {
           accounts={availableAccounts}
         />
 
-        <main className="flex-1 w-full overflow-auto md:pl-64 bg-white">
+        <main className="flex-1 w-full overflow-auto md:pl-64">
           <AgentHeader />
 
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-12">
@@ -253,13 +266,13 @@ export default function AgentsPage() {
 
             {/* ===================== TRANSACTION HISTORY ===================== */}
             {isLoggedIn && (
-              <div className="mt-16 border-t border-slate-200 pt-10">
+              <div className="mt-16 border-t border-white/40 dark:border-white/10 pt-10">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                   <div>
-                    <h2 className="text-xl sm:text-2xl font-bold text-slate-900">
+                    <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">
                       Transaction History
                     </h2>
-                    <p className="text-sm text-slate-500 mt-1">
+                    <p className="text-sm text-slate-500 dark:text-zinc-400 mt-1">
                       Your recent deposits, withdrawals and refunds
                     </p>
                   </div>
@@ -267,7 +280,7 @@ export default function AgentsPage() {
                   <select
                     value={selectedAccountId}
                     onChange={(e) => setSelectedAccountId(e.target.value)}
-                    className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                    className="px-4 py-2.5 rounded-xl border border-white/40 dark:border-white/10 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-purple-500/20"
                   >
                     <option value="all">All Accounts</option>
                     {availableAccounts.map((acc) => (
@@ -283,42 +296,42 @@ export default function AgentsPage() {
                   </select>
                 </div>
 
-                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                <div className="bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-white/10 overflow-hidden shadow-sm">
                   {txLoading ? (
                     <div className="flex items-center justify-center py-16">
                       <Loader2 className="w-7 h-7 animate-spin text-purple-600" />
                     </div>
                   ) : transactions.length === 0 ? (
-                    <div className="text-center py-16 text-slate-500">
+                    <div className="text-center py-16 text-slate-500 dark:text-zinc-400">
                       No transactions found yet
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
                       <table className="w-full">
                         <thead>
-                          <tr className="bg-slate-50 border-b border-slate-200">
-                            <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                          <tr className="bg-white/50 dark:bg-white/5 backdrop-blur-md border-b border-white/40 dark:border-white/10">
+                            <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-wider">
                               Date
                             </th>
-                            <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                            <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-wider">
                               Type
                             </th>
-                            <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                            <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-wider">
                               Amount
                             </th>
-                            <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                            <th className="text-left px-5 py-3.5 text-xs font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-wider">
                               Description
                             </th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody className="divide-y divide-slate-100 dark:divide-zinc-800">
                           {transactions.map((tx) => {
                             const amount = Number(tx.amount)
                             const isPositive = amount >= 0
 
                             return (
-                              <tr key={tx.id} className="hover:bg-slate-50 transition">
-                                <td className="px-5 py-4 text-sm text-slate-600 whitespace-nowrap">
+                              <tr key={tx.id} className="hover:bg-white/40 dark:hover:bg-white/5 dark:bg-zinc-900 transition">
+                                <td className="px-5 py-4 text-sm text-slate-600 dark:text-zinc-300 whitespace-nowrap">
                                   {tx.created_at_formatted}
                                 </td>
                                 <td className="px-5 py-4">
@@ -334,13 +347,13 @@ export default function AgentsPage() {
                                 <td className="px-5 py-4">
                                   <span
                                     className={`font-semibold ${
-                                      isPositive ? "text-green-600" : "text-red-600"
+                                      isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
                                     }`}
                                   >
                                     {isPositive ? "+" : ""}${Math.abs(amount).toFixed(2)}
                                   </span>
                                 </td>
-                                <td className="px-5 py-4 text-sm text-slate-600 max-w-xs truncate">
+                                <td className="px-5 py-4 text-sm text-slate-600 dark:text-zinc-300 max-w-xs truncate">
                                   {tx.description || "—"}
                                 </td>
                               </tr>
@@ -356,6 +369,7 @@ export default function AgentsPage() {
             {/* =================== END TRANSACTION HISTORY =================== */}
           </div>
         </main>
+      </div>
       </div>
     </div>
   )

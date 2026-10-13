@@ -97,7 +97,7 @@ export default function MainPage() {
         <select
           value={timeFrame}
           onChange={(e) => setTimeFrame(e.target.value)}
-          className="w-full px-3 py-2 bg-muted border border-border rounded"
+          className="w-full px-3 py-2 bg-white/60 dark:bg-white/60 dark:bg-zinc-900/60/60 backdrop-blur-md border border-white/40 dark:border-white/40 dark:border-white/10 text-slate-900 dark:text-white rounded"
         >
           {[
             { value: "M1", label: "1 Minute" },

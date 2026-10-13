@@ -29,11 +29,11 @@ export default function BlockedMessage({ blockInfo }: BlockedMessageProps) {
   }
 
   return (
-    <div className="flex h-screen items-center justify-center bg-gradient-to-br from-red-50 to-orange-100 p-4">
-      <div className="max-w-md rounded-2xl bg-white p-8 text-center shadow-2xl">
+    <div className="flex h-screen items-center justify-center bg-gradient-to-br from-slate-50 to-rose-50 dark:from-zinc-950 dark:to-rose-950 p-4">
+      <div className="max-w-md rounded-2xl bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 p-8 text-center shadow-2xl">
         <div className="mb-4 text-5xl">🚫</div>
-        <h1 className="mb-2 text-2xl font-bold text-gray-900">{blockInfo.title || "Account Blocked"}</h1>
-        <p className="mb-6 text-gray-600">{blockInfo.message || "Your account has been blocked."}</p>
+        <h1 className="mb-2 text-2xl font-bold text-slate-900 dark:text-white">{blockInfo.title || "Account Blocked"}</h1>
+        <p className="mb-6 text-slate-500 dark:text-zinc-400">{blockInfo.message || "Your account has been blocked."}</p>
 
         {blockInfo.type === "permanent" && blockInfo.can_request_review && (
           <button
@@ -46,7 +46,7 @@ export default function BlockedMessage({ blockInfo }: BlockedMessageProps) {
         )}
 
         {requested && (
-          <p className="mt-4 text-sm text-green-600">
+          <p className="mt-4 text-sm text-emerald-600 dark:text-emerald-400">
             Your request has been submitted. We will review your account within 48 hours.
           </p>
         )}

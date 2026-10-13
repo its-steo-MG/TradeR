@@ -235,7 +235,7 @@ class WithdrawalOTPView(APIView):
         except Account.DoesNotExist:
             return Response({'error': 'Account not found'}, status=status.HTTP_400_BAD_REQUEST)
 
-        MIN_WITHDRAWAL_USD = Decimal('2.00')
+        MIN_WITHDRAWAL_USD = Decimal('5.00')
         MAX_WITHDRAWAL_USD = Decimal('2000.00')
 
         if amount < MIN_WITHDRAWAL_USD:

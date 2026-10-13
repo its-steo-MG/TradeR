@@ -163,7 +163,7 @@ export default function TradingApp() {
 
   if (isLoading || hasProFx === null) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-white bg-black">
+      <div className="min-h-screen flex items-center justify-center text-foreground bg-background">
         Loading...
       </div>
     )
@@ -174,7 +174,19 @@ export default function TradingApp() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-black text-white">
+    <div className="relative min-h-screen flex flex-col text-foreground">
+      <div className="fixed inset-0 z-0 hidden dark:block pointer-events-none">
+        <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950 to-black" />
+        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-purple-950/30 to-pink-950/20" />
+        <div className="absolute top-1/4 -left-40 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 -right-40 w-96 h-96 bg-pink-600/8 rounded-full blur-3xl" />
+      </div>
+      <div className="fixed inset-0 z-0 block dark:hidden pointer-events-none">
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-slate-100" />
+        <div className="absolute top-1/4 -left-40 w-96 h-96 bg-purple-400/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 -right-40 w-96 h-96 bg-pink-400/8 rounded-full blur-3xl" />
+      </div>
+      <div className="relative z-10 min-h-screen flex flex-col">
       <TopNavbar
         isLoggedIn={isLoggedIn}
         user={user}
@@ -211,9 +223,10 @@ export default function TradingApp() {
           })()}
         </main>
       </div>
+      </div>
 
       <div
-        className={`fixed bottom-0 left-0 right-0 bg-card border-t border-border shadow-2xl transition-transform duration-300 ease-out z-50 md:pl-64 ${
+        className={`fixed bottom-0 left-0 right-0 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl border-t border-white/40 dark:border-white/10 shadow-2xl transition-transform duration-300 ease-out z-50 md:pl-64 ${
           isNavVisible ? "translate-y-0" : "translate-y-full"
         }`}
       >

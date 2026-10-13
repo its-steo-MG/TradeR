@@ -60,15 +60,15 @@ export function CredentialsForm({ managementId, onSuccess }: CredentialsFormProp
   }
 
   return (
-    <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/10 border-blue-500/20 backdrop-blur-sm animate-fadeIn">
+    <Card className="bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl border-white/40 dark:border-white/10 animate-fadeIn">
       <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
         <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4">
-          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0">
-            <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-blue-400" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-blue-500/15 dark:bg-blue-500/20 backdrop-blur-md flex items-center justify-center flex-shrink-0">
+            <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 dark:text-blue-400" />
           </div>
           <div>
-            <h2 className="text-xl sm:text-2xl font-bold text-white mb-2">Submit Trading Credentials</h2>
-            <p className="text-sm sm:text-base text-white/70">
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mb-2">Submit Trading Credentials</h2>
+            <p className="text-sm sm:text-base text-slate-500 dark:text-zinc-400">
               Payment verified! Please provide your trading account credentials to begin management.
             </p>
           </div>
@@ -77,13 +77,13 @@ export function CredentialsForm({ managementId, onSuccess }: CredentialsFormProp
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Management ID (Read-only) */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-white/90">Management ID</label>
-            <Input type="text" value={managementId} readOnly className="bg-black/20 border-white/10 text-white/60" />
+            <label className="text-sm font-medium text-slate-700 dark:text-zinc-200">Management ID</label>
+            <Input type="text" value={managementId} readOnly className="bg-white/50 dark:bg-white/5 backdrop-blur-md border-white/40 dark:border-white/10 text-slate-500 dark:text-zinc-400" />
           </div>
 
           {/* Account Email */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-white/90 flex items-center gap-2">
+            <label className="text-sm font-medium text-slate-700 dark:text-zinc-200 flex items-center gap-2">
               <Mail className="w-4 h-4" />
               Trading Account Email
             </label>
@@ -92,13 +92,13 @@ export function CredentialsForm({ managementId, onSuccess }: CredentialsFormProp
               placeholder="your.email@example.com"
               value={formData.account_email}
               onChange={(e) => setFormData({ ...formData, account_email: e.target.value })}
-              className="bg-black/20 border-white/10 text-white placeholder:text-white/40"
+              className="bg-white/50 dark:bg-white/5 backdrop-blur-md border-white/40 dark:border-white/10 text-slate-900 dark:text-white placeholder:text-slate-400 dark:text-zinc-500"
             />
           </div>
 
           {/* Account Password */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-white/90 flex items-center gap-2">
+            <label className="text-sm font-medium text-slate-700 dark:text-zinc-200 flex items-center gap-2">
               <Lock className="w-4 h-4" />
               Trading Account Password
             </label>
@@ -108,12 +108,12 @@ export function CredentialsForm({ managementId, onSuccess }: CredentialsFormProp
                 placeholder="••••••••"
                 value={formData.account_password}
                 onChange={(e) => setFormData({ ...formData, account_password: e.target.value })}
-                className="bg-black/20 border-white/10 text-white placeholder:text-white/40 pr-12"
+                className="bg-white/50 dark:bg-white/5 backdrop-blur-md border-white/40 dark:border-white/10 text-slate-900 dark:text-white placeholder:text-slate-400 dark:text-zinc-500 pr-12"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:text-white transition-colors"
               >
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
@@ -121,8 +121,8 @@ export function CredentialsForm({ managementId, onSuccess }: CredentialsFormProp
           </div>
 
           {/* Security Note */}
-          <div className="bg-black/20 border border-white/10 rounded-lg p-4">
-            <p className="text-white/70 text-sm">
+          <div className="bg-white/50 dark:bg-white/5 backdrop-blur-md border border-white/40 dark:border-white/10 rounded-lg p-4">
+            <p className="text-slate-500 dark:text-zinc-400 text-sm">
               🔒 Your credentials are encrypted and securely stored. They will only be used by our admin team to manage
               your trading account.
             </p>
@@ -132,7 +132,7 @@ export function CredentialsForm({ managementId, onSuccess }: CredentialsFormProp
           <Button
             type="submit"
             disabled={!isValid || isLoading}
-            className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-5 sm:py-6 text-base sm:text-lg disabled:opacity-50"
+            className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-slate-900 dark:text-white font-semibold py-5 sm:py-6 text-base sm:text-lg disabled:opacity-50"
           >
             {isLoading ? (
               <>

@@ -436,14 +436,14 @@ export default function CustomerCarePage() {
 
   if (!mounted || !token || !currentUser) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center text-white">
+      <div className="min-h-screen bg-background flex items-center justify-center text-foreground">
         Loading Support Center...
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-black text-white">
+    <div className="min-h-screen flex flex-col bg-background text-foreground">
       <TopNavbar
         isLoggedIn={true}
         user={currentUser}
@@ -472,12 +472,17 @@ export default function CustomerCarePage() {
         />
 
         <main className="flex-1 w-full overflow-auto md:pl-64 p-6 relative">
-          <div className="fixed inset-0 z-0">
+          <div className="fixed inset-0 z-0 hidden dark:block">
             <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950 to-black" />
             <div className="absolute inset-0 bg-gradient-to-br from-transparent via-purple-950/30 to-pink-950/20" />
-            <div className="absolute top-1/4 -left-40 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl animate-float" />
-            <div className="absolute bottom-1/4 -right-40 w-96 h-96 bg-pink-600/8 rounded-full blur-3xl animate-float delay-1000" />
-            <div className="absolute top-1/2 left-1/3 w-96 h-96 bg-purple-700/8 rounded-full blur-3xl animate-float delay-500" />
+            <div className="absolute top-1/4 -left-40 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl" />
+            <div className="absolute bottom-1/4 -right-40 w-96 h-96 bg-pink-600/8 rounded-full blur-3xl" />
+            <div className="absolute top-1/2 left-1/3 w-96 h-96 bg-purple-700/8 rounded-full blur-3xl" />
+          </div>
+          <div className="fixed inset-0 z-0 block dark:hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-slate-100" />
+            <div className="absolute top-1/4 -left-40 w-96 h-96 bg-purple-400/10 rounded-full blur-3xl" />
+            <div className="absolute bottom-1/4 -right-40 w-96 h-96 bg-pink-400/8 rounded-full blur-3xl" />
           </div>
 
           <div className="relative z-10 max-w-5xl mx-auto">
@@ -487,7 +492,7 @@ export default function CustomerCarePage() {
               </div>
               <div>
                 <h1 className="text-4xl font-bold">Support Center</h1>
-                <p className="text-white/60">
+                <p className="text-slate-500 dark:text-zinc-400">
                   {currentAgentName
                     ? `Chatting with ${currentAgentName}`
                     : 'TradeRiser Professional Support'}
@@ -496,9 +501,9 @@ export default function CustomerCarePage() {
             </div>
 
             {/* Call Button Section */}
-            <div className="glass rounded-3xl p-8 mb-8 border border-white/10 flex flex-col sm:flex-row gap-6 items-center justify-between">
+            <div className="rounded-3xl p-8 mb-8 border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 flex flex-col sm:flex-row gap-6 items-center justify-between">
               <div>
-                <p className="text-sm text-white/60">Immediate Assistance</p>
+                <p className="text-sm text-slate-500 dark:text-zinc-400">Immediate Assistance</p>
                 <p className="text-2xl font-semibold">Speak with our support team</p>
               </div>
 
@@ -527,8 +532,8 @@ export default function CustomerCarePage() {
             </div>
 
             {/* Chat Area */}
-            <div className="glass rounded-3xl overflow-hidden border border-white/10 min-h-[620px] flex flex-col">
-              <div className="px-8 py-5 border-b border-white/10 flex items-center gap-3">
+            <div className="rounded-3xl overflow-hidden border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 min-h-[620px] flex flex-col">
+              <div className="px-8 py-5 border-b border-slate-200 dark:border-zinc-800 flex items-center gap-3">
                 <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
                 <span className="font-semibold">
                   {currentAgentName ? `Chat with ${currentAgentName}` : 'Live Support Chat'}
@@ -541,8 +546,8 @@ export default function CustomerCarePage() {
                   <BlockedMessage />
                 ) : messages.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-center py-20">
-                    <Headphones className="w-16 h-16 text-white/30 mb-6" />
-                    <p className="text-xl text-white/80">
+                    <Headphones className="w-16 h-16 text-slate-400 dark:text-zinc-500 mb-6" />
+                    <p className="text-xl text-slate-700 dark:text-zinc-200">
                       {currentAgentName
                         ? `How can ${currentAgentName} help you today?`
                         : 'How can we assist you today?'}
@@ -561,7 +566,7 @@ export default function CustomerCarePage() {
               </div>
 
               {!isBlocked && (
-                <div className="p-6 border-t border-white/10">
+                <div className="p-6 border-t border-slate-200 dark:border-zinc-800">
                   <ChatInput
                     onSend={async (message: string) => {
                       // You can pass agent_id here if your sendChatMessage supports it

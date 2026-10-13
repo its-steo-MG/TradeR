@@ -35,17 +35,20 @@ export function WithdrawModal({ onClose, onSuccess, onSetMessage }: WithdrawModa
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [walletsRes, mpesaRes] = await Promise.all([api.getWallets(), api.getMpesaNumber()]);
+        const [walletsRes, mpesaRes] = await Promise.all([
+          api.getWallets(),
+          api.getMpesaNumber(),
+        ]);
         if (walletsRes.error) throw new Error(walletsRes.error);
 
-        const normalizedWallets = walletsRes.data?.wallets.map((w: Wallet) => ({
-          ...w,
-          balance: Number(w.balance) || 0,
-        })) || [];
+        const normalizedWallets =
+          walletsRes.data?.wallets.map((w: Wallet) => ({
+            ...w,
+            balance: Number(w.balance) || 0,
+          })) || [];
 
         setWallets(normalizedWallets);
         setMpesaNumber(mpesaRes.data?.phone_number || "");
-
         setHasProFx(normalizedWallets.some((w: Wallet) => w.account_type === "pro-fx"));
         setHasMt5(normalizedWallets.some((w: Wallet) => w.account_type === "mt5"));
 
@@ -109,11 +112,17 @@ export function WithdrawModal({ onClose, onSuccess, onSetMessage }: WithdrawModa
       const data = res.data as { transaction_id?: string } | undefined;
       setTransactionId(data?.transaction_id || "");
       setShowOTPModal(true);
-      onSetMessage({ type: "success", text: `OTP sent to your email! Transaction ID: ${data?.transaction_id || ""}` });
+      onSetMessage({
+        type: "success",
+        text: `OTP sent to your email! Transaction ID: ${data?.transaction_id || ""}`,
+      });
       setTimeout(() => window.dispatchEvent(new Event("session-updated")), 100);
     } catch (err) {
       setError((err as Error).message || "Failed to process withdrawal");
-      onSetMessage({ type: "error", text: (err as Error).message || "Failed to process withdrawal" });
+      onSetMessage({
+        type: "error",
+        text: (err as Error).message || "Failed to process withdrawal",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -135,7 +144,10 @@ export function WithdrawModal({ onClose, onSuccess, onSetMessage }: WithdrawModa
       setStep("amount");
     } catch (err) {
       setError((err as Error).message || "Failed to save M-Pesa number");
-      onSetMessage({ type: "error", text: (err as Error).message || "Failed to save M-Pesa number" });
+      onSetMessage({
+        type: "error",
+        text: (err as Error).message || "Failed to save M-Pesa number",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -157,10 +169,16 @@ export function WithdrawModal({ onClose, onSuccess, onSetMessage }: WithdrawModa
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-end z-50">
-      <div className="bg-white w-full max-w-2xl rounded-t-3xl shadow-2xl animate-in slide-in-from-bottom mx-auto">
-        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-slate-200">
-          <button onClick={onClose} className="text-2xl font-bold text-slate-900">✕</button>
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-900">Withdraw</h2>
+      <div className="bg-white dark:bg-zinc-900 w-full max-w-2xl rounded-t-3xl shadow-2xl border border-slate-200 dark:border-zinc-800 animate-in slide-in-from-bottom mx-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-slate-200 dark:border-zinc-800">
+          <button
+            onClick={onClose}
+            className="text-2xl font-bold text-slate-900 dark:text-white hover:text-slate-600 dark:hover:text-zinc-400"
+          >
+            ✕
+          </button>
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Withdraw</h2>
           <div className="w-6" />
         </div>
 
@@ -169,41 +187,40 @@ export function WithdrawModal({ onClose, onSuccess, onSetMessage }: WithdrawModa
           {step === "account" && (
             <>
               <div>
-                <p className="text-slate-600 text-center mb-3 sm:mb-4 text-sm sm:text-base">From</p>
+                <p className="text-slate-600 dark:text-zinc-400 text-center mb-3 sm:mb-4 text-sm sm:text-base">
+                  From
+                </p>
                 <div className="flex gap-2 sm:gap-3 justify-center mb-6 sm:mb-8 flex-wrap">
-                  {/* TradeR */}
                   <button
                     onClick={() => setSelectedAccountType("standard")}
                     className={`drop-on-top relative px-4 sm:px-6 py-2 sm:py-3 rounded-xl text-sm sm:text-base font-semibold transition-all ${
                       selectedAccountType === "standard"
                         ? "bg-purple-600 text-white"
-                        : "bg-slate-200 text-slate-600 hover:bg-slate-300"
+                        : "bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-zinc-700"
                     }`}
                   >
                     <span className="relative z-[1]">TradeR</span>
                   </button>
 
-                  {/* ProFX */}
                   <button
                     onClick={() => setSelectedAccountType("pro-fx")}
                     disabled={!hasProFx}
                     className={`drop-on-top relative px-4 sm:px-6 py-2 sm:py-3 rounded-xl text-sm sm:text-base font-semibold transition-all ${
                       selectedAccountType === "pro-fx"
                         ? "bg-purple-600 text-white"
-                        : "bg-slate-200 text-slate-600 hover:bg-slate-300"
+                        : "bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-zinc-700"
                     } ${!hasProFx ? "opacity-50 cursor-not-allowed" : ""}`}
                   >
                     <span className="relative z-[1]">ProFX</span>
                   </button>
 
-                  {/* MT5 */}
                   <button
                     onClick={() => setSelectedAccountType("mt5")}
                     disabled={!hasMt5}
                     className={`drop-on-top relative px-4 sm:px-6 py-2 sm:py-3 rounded-xl text-sm sm:text-base font-semibold transition-all ${
                       selectedAccountType === "mt5"
                         ? "bg-teal-600 text-white"
-                        : "bg-slate-200 text-slate-600 hover:bg-slate-300"
+                        : "bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-zinc-700"
                     } ${!hasMt5 ? "opacity-50 cursor-not-allowed" : ""}`}
                   >
                     <span className="relative z-[1]">MT5</span>
@@ -211,7 +228,6 @@ export function WithdrawModal({ onClose, onSuccess, onSetMessage }: WithdrawModa
                 </div>
               </div>
 
-              {/* Next */}
               <button
                 onClick={() => setStep("mpesa")}
                 className="drop-on-top relative w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 sm:py-4 px-4 sm:px-6 rounded-2xl transition-all"
@@ -225,17 +241,19 @@ export function WithdrawModal({ onClose, onSuccess, onSetMessage }: WithdrawModa
           {step === "mpesa" && (
             <>
               <div className="mb-4 sm:mb-6">
-                <label className="block text-slate-600 text-sm mb-2">M-Pesa Phone Number</label>
+                <label className="block text-slate-600 dark:text-zinc-400 text-sm mb-2">
+                  M-Pesa Phone Number
+                </label>
                 <input
                   type="tel"
                   value={mpesaNumber}
                   onChange={(e) => setMpesaNumber(e.target.value)}
                   placeholder="254712345678"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-purple-500 focus:outline-none transition-colors text-slate-900 placeholder-slate-400"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:border-purple-500 focus:outline-none transition-colors"
                 />
               </div>
 
-              {error && <p className="text-red-600 text-sm text-center">{error}</p>}
+              {error && <p className="text-red-500 text-sm text-center">{error}</p>}
 
               <button
                 onClick={handleSaveMpesa}
@@ -253,24 +271,29 @@ export function WithdrawModal({ onClose, onSuccess, onSetMessage }: WithdrawModa
           {step === "amount" && (
             <>
               <div>
-                <p className="text-slate-600 text-center mb-2 text-sm sm:text-base">You Send</p>
-                <div className="text-2xl sm:text-3xl font-bold text-slate-900 text-center mb-1">
+                <p className="text-slate-600 dark:text-zinc-400 text-center mb-2 text-sm sm:text-base">
+                  You Send
+                </p>
+                <div className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white text-center mb-1">
                   {formatCurrency(usdAmount || "0.00")} USD
                 </div>
-                <p className="text-center text-slate-500 text-xs sm:text-sm mb-4 sm:mb-6">
+                <p className="text-center text-slate-500 dark:text-zinc-500 text-xs sm:text-sm mb-4 sm:mb-6">
                   Conversion rate: 1 USD = {formatCurrency(conversionRate)} KES
                 </p>
-                <p className="text-slate-600 text-center mb-2 text-sm sm:text-base">You Receive</p>
-                <div className="text-2xl sm:text-3xl font-bold text-slate-900 text-center mb-6 sm:mb-8">
+                <p className="text-slate-600 dark:text-zinc-400 text-center mb-2 text-sm sm:text-base">
+                  You Receive
+                </p>
+                <div className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white text-center mb-6 sm:mb-8">
                   {formatCurrency(kesAmount || "0")} KES
                 </div>
               </div>
 
-              <p className="text-center text-slate-600 text-xs sm:text-base">
-                Available balance is {formatCurrency(selectedWallet?.balance || 0)} {selectedWallet?.currency.code || "USD"}
+              <p className="text-center text-slate-600 dark:text-zinc-400 text-xs sm:text-base">
+                Available balance is {formatCurrency(selectedWallet?.balance || 0)}{" "}
+                {selectedWallet?.currency?.code || "USD"}
               </p>
 
-              {error && <p className="text-red-600 text-sm text-center">{error}</p>}
+              {error && <p className="text-red-500 text-sm text-center">{error}</p>}
 
               {/* Numpad */}
               <div className="grid grid-cols-3 gap-2 sm:gap-3">
@@ -278,32 +301,31 @@ export function WithdrawModal({ onClose, onSuccess, onSetMessage }: WithdrawModa
                   <button
                     key={num}
                     onClick={() => handleNumpadClick(num)}
-                    className="bg-slate-100 hover:bg-slate-200 text-slate-900 font-semibold py-3 sm:py-4 px-2 sm:px-6 rounded-2xl transition-colors text-base sm:text-xl"
+                    className="bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-900 dark:text-white font-semibold py-3 sm:py-4 px-2 sm:px-6 rounded-2xl transition-colors text-base sm:text-xl"
                   >
                     {num}
                   </button>
                 ))}
                 <button
                   onClick={() => handleNumpadClick(".")}
-                  className="bg-slate-100 hover:bg-slate-200 text-slate-900 font-semibold py-3 sm:py-4 px-2 sm:px-6 rounded-2xl transition-colors text-base sm:text-xl"
+                  className="bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-900 dark:text-white font-semibold py-3 sm:py-4 px-2 sm:px-6 rounded-2xl transition-colors text-base sm:text-xl"
                 >
                   .
                 </button>
                 <button
                   onClick={() => handleNumpadClick("0")}
-                  className="bg-slate-100 hover:bg-slate-200 text-slate-900 font-semibold py-3 sm:py-4 px-2 sm:px-6 rounded-2xl transition-colors text-base sm:text-xl"
+                  className="bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-900 dark:text-white font-semibold py-3 sm:py-4 px-2 sm:px-6 rounded-2xl transition-colors text-base sm:text-xl"
                 >
                   0
                 </button>
                 <button
                   onClick={() => handleNumpadClick("backspace")}
-                  className="bg-slate-100 hover:bg-slate-200 text-slate-900 font-semibold py-3 sm:py-4 px-2 sm:px-6 rounded-2xl transition-colors text-base sm:text-xl"
+                  className="bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-900 dark:text-white font-semibold py-3 sm:py-4 px-2 sm:px-6 rounded-2xl transition-colors text-base sm:text-xl"
                 >
                   ⌫
                 </button>
               </div>
 
-              {/* Withdraw Button */}
               <button
                 onClick={handleInitiateWithdrawal}
                 disabled={!usdAmount || isSubmitting}

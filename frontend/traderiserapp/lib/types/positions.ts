@@ -2,13 +2,15 @@
 // Shared types for the Positions panel (Open / Closed / Statement).
 
 export type DigitContractKind =
-  | "over"
-  | "under"
   | "matches"
   | "differs"
   | "even"
-  | "odd";
-
+  | "odd"
+  | "over"
+  | "under"
+  | "rise"
+  | "fall";
+  
 export type PositionOutcome = "W" | "L";
 
 export interface OpenPosition {

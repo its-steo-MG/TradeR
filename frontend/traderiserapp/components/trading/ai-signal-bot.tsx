@@ -28,14 +28,16 @@ export default function AISignalBot() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch available robots to find AI Signal Bot
         const robotsResponse = await api.getRobots()
 
         if (robotsResponse.data && Array.isArray(robotsResponse.data)) {
           const aiBot = (robotsResponse.data as ForexRobot[]).find((robot) => {
             const name = robot.name.toLowerCase()
             return (
-              (name.includes("ai") && (name.includes("signal") || name.includes("siganal") || name.includes("siganl"))) ||
+              (name.includes("ai") &&
+                (name.includes("signal") ||
+                  name.includes("siganal") ||
+                  name.includes("siganl"))) ||
               name === "ai signal bot" ||
               name === "ai siganal bot" ||
               name === "ai siganl bot"
@@ -44,36 +46,26 @@ export default function AISignalBot() {
 
           if (aiBot) {
             setAiBotId(aiBot.id)
-            console.log("Found AI Signal Bot:", aiBot.name, "ID:", aiBot.id)
           } else {
-            console.warn("AI Signal Bot not found in robots list")
             toast.error("AI Signal Bot not available. Contact support.")
           }
         }
 
-        // Fetch user's owned robots
         const userRobotsResponse = await api.getUserRobots()
-
         let userRobots: UserRobot[] = []
 
         if (userRobotsResponse.data) {
           const data = userRobotsResponse.data
-
-          // Case 1: data is directly the array
           if (Array.isArray(data)) {
             userRobots = data as UserRobot[]
-          }
-          // Case 2: data is an object with a user_robots array property
-          else if (typeof data === "object" && data !== null && "user_robots" in data) {
+          } else if (typeof data === "object" && data !== null && "user_robots" in data) {
             const possibleArray = (data as Record<string, unknown>).user_robots
             if (Array.isArray(possibleArray)) {
               userRobots = possibleArray as UserRobot[]
             }
           }
-          // Other shapes → stay empty
         }
 
-        // Check if user owns the AI Signal Bot
         const hasSignalBot = userRobots.some((item: UserRobot) => {
           const name = item.robot.name.toLowerCase()
           return (
@@ -83,9 +75,6 @@ export default function AISignalBot() {
         })
 
         setIsActivated(hasSignalBot)
-        if (hasSignalBot) {
-          console.log("AI Signal Bot is activated for this user")
-        }
       } catch (error) {
         console.error("Failed to load AI Signal Bot data:", error)
         toast.error("Failed to connect to server")
@@ -97,39 +86,34 @@ export default function AISignalBot() {
     fetchData()
   }, [])
 
-  // Cycle through scanning phrases
   useEffect(() => {
     if (!isScanning) return
-
     const interval = setInterval(() => {
       setCurrentPhrase((prev) => (prev + 1) % scanPhrases.length)
     }, 2000)
-
     return () => clearInterval(interval)
   }, [isScanning])
 
   const handleScanSignal = async () => {
     if (!isActivated) return
-
     setIsScanning(true)
     setSignal(null)
     setCurrentPhrase(0)
 
     try {
-      // Visual delay for dramatic effect
       await new Promise((resolve) => setTimeout(resolve, 5000))
-
       const response = await api.generateSignal()
-      console.log("Generate Signal Response:", response)
 
       if (response.error) {
         toast.error(response.error || "Failed to generate signal")
         return
       }
 
-      // Handle "no strong signal" message
       if (response.data && typeof response.data === "object" && "message" in response.data) {
-        toast.info((response.data as { message: string }).message || "No strong signal found. Try again later.")
+        toast.info(
+          (response.data as { message: string }).message ||
+            "No strong signal found. Try again later.",
+        )
         return
       }
 
@@ -147,35 +131,39 @@ export default function AISignalBot() {
     }
   }
 
-  // Loading state
+  // Shared background
+  const Background = () => (
+    <>
+      <div className="fixed inset-0 z-0 dark:block hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950 to-black" />
+        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-purple-950/30 to-pink-950/20" />
+        <div className="absolute top-1/4 -left-40 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl animate-float" />
+        <div className="absolute bottom-1/4 -right-40 w-96 h-96 bg-pink-600/8 rounded-full blur-3xl animate-float delay-1000" />
+        <div className="absolute top-1/2 left-1/3 w-96 h-96 bg-purple-700/8 rounded-full blur-3xl animate-float delay-500" />
+      </div>
+      <div className="fixed inset-0 z-0 block dark:hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-slate-100" />
+        <div className="absolute top-1/4 -left-40 w-96 h-96 bg-purple-400/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 -right-40 w-96 h-96 bg-pink-400/8 rounded-full blur-3xl" />
+      </div>
+    </>
+  )
+
   if (isLoading) {
     return (
-      <div className="relative min-h-screen text-white overflow-hidden">
-        <div className="fixed inset-0 z-0">
-          <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950 to-black" />
-          <div className="absolute inset-0 bg-gradient-to-br from-transparent via-purple-950/30 to-pink-950/20" />
-          <div className="absolute top-1/4 -left-40 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl animate-float" />
-          <div className="absolute bottom-1/4 -right-40 w-96 h-96 bg-pink-600/8 rounded-full blur-3xl animate-float delay-1000" />
-          <div className="absolute top-1/2 left-1/3 w-96 h-96 bg-purple-700/8 rounded-full blur-3xl animate-float delay-500" />
-        </div>
+      <div className="relative min-h-screen text-foreground overflow-hidden">
+        <Background />
         <div className="relative z-10 flex items-center justify-center min-h-screen">
-          <p className="text-white text-xl">Loading AI Signal Bot...</p>
+          <p className="text-foreground text-xl">Loading AI Signal Bot...</p>
         </div>
       </div>
     )
   }
 
-  // Not purchased → show purchase card
   if (!isActivated) {
     return (
-      <div className="relative min-h-screen text-white overflow-hidden">
-        <div className="fixed inset-0 z-0">
-          <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950 to-black" />
-          <div className="absolute inset-0 bg-gradient-to-br from-transparent via-purple-950/30 to-pink-950/20" />
-          <div className="absolute top-1/4 -left-40 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl animate-float" />
-          <div className="absolute bottom-1/4 -right-40 w-96 h-96 bg-pink-600/8 rounded-full blur-3xl animate-float delay-1000" />
-          <div className="absolute top-1/2 left-1/3 w-96 h-96 bg-purple-700/8 rounded-full blur-3xl animate-float delay-500" />
-        </div>
+      <div className="relative min-h-screen text-foreground overflow-hidden">
+        <Background />
         <div className="relative z-10 flex items-center justify-center min-h-screen p-4">
           <SignalPurchaseCard
             onPurchaseSuccess={() => {
@@ -189,37 +177,27 @@ export default function AISignalBot() {
     )
   }
 
-  // Scanning in progress
   if (isScanning) {
     return (
-      <div className="relative min-h-screen bg-black flex flex-col items-center justify-center overflow-hidden">
-        {/* Background layers for consistency */}
-        <div className="fixed inset-0 z-0">
-          <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950 to-black" />
-          <div className="absolute inset-0 bg-gradient-to-br from-transparent via-purple-950/30 to-pink-950/20" />
-        </div>
+      <div className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden">
+        <Background />
         <SignalScannerAnimation />
         <div className="relative z-10 text-center space-y-6">
-          <h2 className="text-4xl font-bold text-green-400 animate-pulse">
+          <h2 className="text-4xl font-bold text-green-600 dark:text-green-400 animate-pulse">
             {scanPhrases[currentPhrase]}
           </h2>
-          <p className="text-green-300 text-lg">Hacking into global markets with AI analysis...</p>
+          <p className="text-green-700 dark:text-green-300 text-lg">
+            Hacking into global markets with AI analysis...
+          </p>
         </div>
       </div>
     )
   }
 
-  // Signal result
   if (signal) {
     return (
-      <div className="relative min-h-screen text-white overflow-hidden p-4 md:p-8">
-        <div className="fixed inset-0 z-0">
-          <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950 to-black" />
-          <div className="absolute inset-0 bg-gradient-to-br from-transparent via-purple-950/30 to-pink-950/20" />
-          <div className="absolute top-1/4 -left-40 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl animate-float" />
-          <div className="absolute bottom-1/4 -right-40 w-96 h-96 bg-pink-600/8 rounded-full blur-3xl animate-float delay-1000" />
-          <div className="absolute top-1/2 left-1/3 w-96 h-96 bg-purple-700/8 rounded-full blur-3xl animate-float delay-500" />
-        </div>
+      <div className="relative min-h-screen text-foreground overflow-hidden p-4 md:p-8">
+        <Background />
         <div className="relative z-10">
           <SignalResultCard signal={signal} onScanAgain={handleScanSignal} />
         </div>
@@ -227,21 +205,14 @@ export default function AISignalBot() {
     )
   }
 
-  // Default: Ready to scan
   return (
-    <div className="relative min-h-screen text-white overflow-hidden p-8">
-      <div className="fixed inset-0 z-0">
-        <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950 to-black" />
-        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-purple-950/30 to-pink-950/20" />
-        <div className="absolute top-1/4 -left-40 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl animate-float" />
-        <div className="absolute bottom-1/4 -right-40 w-96 h-96 bg-pink-600/8 rounded-full blur-3xl animate-float delay-1000" />
-        <div className="absolute top-1/2 left-1/3 w-96 h-96 bg-purple-700/8 rounded-full blur-3xl animate-float delay-500" />
-      </div>
+    <div className="relative min-h-screen text-foreground overflow-hidden p-8">
+      <Background />
 
       <div className="relative z-10 w-full max-w-2xl mx-auto space-y-8">
         <div className="text-center space-y-4 mb-12">
-          <h1 className="text-5xl font-bold text-white">AI Signal Bot</h1>
-          <p className="text-xl text-gray-400">
+          <h1 className="text-5xl font-bold text-foreground">AI Signal Bot</h1>
+          <p className="text-xl text-slate-500 dark:text-zinc-400">
             Scans overall markets using real-time API data for accurate signals
           </p>
         </div>
@@ -260,15 +231,15 @@ export default function AISignalBot() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-12">
-          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6">
-            <h3 className="font-bold text-white mb-2">Global Coverage</h3>
-            <p className="text-gray-400 text-sm">
+          <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg p-6">
+            <h3 className="font-bold text-foreground mb-2">Global Coverage</h3>
+            <p className="text-slate-500 dark:text-zinc-400 text-sm">
               Analyzes all major forex and crypto markets simultaneously.
             </p>
           </div>
-          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6">
-            <h3 className="font-bold text-white mb-2">Advanced AI Scan</h3>
-            <p className="text-gray-400 text-sm">
+          <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg p-6">
+            <h3 className="font-bold text-foreground mb-2">Advanced AI Scan</h3>
+            <p className="text-slate-500 dark:text-zinc-400 text-sm">
               Uses real-time API for RSI, ATR on hourly data across overall markets.
             </p>
           </div>

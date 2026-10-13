@@ -48,7 +48,6 @@ export default function PositionsPanel({
 
   return (
     <div className="space-y-3">
-      {/* Tab pills (Deriv-style) */}
       <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
         {TABS.map((t) => {
           const active = tab === t.key;
@@ -58,8 +57,8 @@ export default function PositionsPanel({
               onClick={() => setTab(t.key)}
               className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm whitespace-nowrap transition border ${
                 active
-                  ? "bg-slate-800 text-white border-slate-700"
-                  : "bg-transparent text-slate-400 border-slate-800 hover:text-slate-200"
+                  ? "bg-foreground text-background border-foreground"
+                  : "bg-transparent text-muted-foreground border-border hover:text-foreground"
               }`}
             >
               <span>{t.label}</span>
@@ -67,7 +66,7 @@ export default function PositionsPanel({
                 className={`text-[10px] px-1.5 py-0.5 rounded-full ${
                   active
                     ? "bg-blue-500 text-white"
-                    : "bg-slate-800 text-slate-400"
+                    : "bg-muted text-muted-foreground"
                 }`}
               >
                 {counts[t.key]}
@@ -76,24 +75,22 @@ export default function PositionsPanel({
           );
         })}
 
-        {(tab === "closed" || tab === "statement") &&
-          counts[tab] > 0 && (
-            <button
-              onClick={() => {
-                if (confirm("Clear all history for this view? (cannot be undone)")) {
-                  onClearHistory();
-                }
-              }}
-              className="ml-auto flex items-center gap-1.5 px-3 py-2 text-xs text-slate-400 hover:text-rose-400 transition"
-              title="Clear history"
-            >
-              <Trash2 size={14} />
-              Clear
-            </button>
-          )}
+        {(tab === "closed" || tab === "statement") && counts[tab] > 0 && (
+          <button
+            onClick={() => {
+              if (confirm("Clear all history for this view? (cannot be undone)")) {
+                onClearHistory();
+              }
+            }}
+            className="ml-auto flex items-center gap-1.5 px-3 py-2 text-xs text-muted-foreground hover:text-rose-500 transition"
+            title="Clear history"
+          >
+            <Trash2 size={14} />
+            Clear
+          </button>
+        )}
       </div>
 
-      {/* Panels */}
       <div>
         {tab === "open" && (
           <OpenPositions

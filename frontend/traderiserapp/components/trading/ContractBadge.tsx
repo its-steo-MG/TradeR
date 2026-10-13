@@ -1,15 +1,6 @@
 import { cn } from "@/lib/utils";
 import type { ContractKind } from "@/lib/contracts";
 
-/**
- * Deriv-style contract identifier badge.
- *
- * Even/Odd  -> E / O chip (no arrows — arrows imply direction which is wrong here)
- * Over      -> ▲ {n}  (digit must be GREATER than n)
- * Under     -> ▼ {n}  (digit must be LESS than n)
- * Matches   -> = {n}
- * Differs   -> ≠ {n}
- */
 export function ContractBadge({
   kind,
   barrier,
@@ -21,17 +12,14 @@ export function ContractBadge({
   size?: "sm" | "md";
   pulse?: boolean;
 }) {
-  // Make it smaller on mobile / tight spaces
-  const dim = size === "sm" 
-    ? "h-7 w-7 text-[10px]" 
-    : "h-9 w-9 text-xs";   // ← was h-10 w-10 text-sm
+  const dim = size === "sm" ? "h-7 w-7 text-[10px]" : "h-9 w-9 text-xs";
 
   const config = (() => {
     switch (kind) {
       case "even":
-        return { label: "E", bg: "bg-contract-even/15 text-contract-even ring-contract-even/40", title: "Even" };
+        return { label: "E", bg: "bg-sky-100 text-sky-700 ring-sky-300 dark:bg-sky-950 dark:text-sky-300 dark:ring-sky-700", title: "Even" };
       case "odd":
-        return { label: "O", bg: "bg-contract-odd/15 text-contract-odd ring-contract-odd/40", title: "Odd" };
+        return { label: "O", bg: "bg-violet-100 text-violet-700 ring-violet-300 dark:bg-violet-950 dark:text-violet-300 dark:ring-violet-700", title: "Odd" };
       case "over":
         return {
           label: (
@@ -40,7 +28,7 @@ export function ContractBadge({
               <span className="font-mono">{barrier ?? 0}</span>
             </span>
           ),
-          bg: "bg-contract-over/15 text-contract-over ring-contract-over/40",
+          bg: "bg-emerald-100 text-emerald-700 ring-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:ring-emerald-700",
           title: `Over ${barrier ?? 0}`,
         };
       case "under":
@@ -51,7 +39,7 @@ export function ContractBadge({
               <span className="font-mono">{barrier ?? 0}</span>
             </span>
           ),
-          bg: "bg-contract-under/15 text-contract-under ring-contract-under/40",
+          bg: "bg-rose-100 text-rose-700 ring-rose-300 dark:bg-rose-950 dark:text-rose-300 dark:ring-rose-700",
           title: `Under ${barrier ?? 0}`,
         };
       case "matches":
@@ -62,7 +50,7 @@ export function ContractBadge({
               <span className="font-mono">{barrier ?? 0}</span>
             </span>
           ),
-          bg: "bg-contract-matches/15 text-contract-matches ring-contract-matches/40",
+          bg: "bg-amber-100 text-amber-700 ring-amber-300 dark:bg-amber-950 dark:text-amber-300 dark:ring-amber-700",
           title: `Matches ${barrier ?? 0}`,
         };
       case "differs":
@@ -73,11 +61,15 @@ export function ContractBadge({
               <span className="font-mono">{barrier ?? 0}</span>
             </span>
           ),
-          bg: "bg-contract-differs/15 text-contract-differs ring-contract-differs/40",
+          bg: "bg-indigo-100 text-indigo-700 ring-indigo-300 dark:bg-indigo-950 dark:text-indigo-300 dark:ring-indigo-700",
           title: `Differs ${barrier ?? 0}`,
         };
+      case "rise":
+        return { label: "R", bg: "bg-cyan-100 text-cyan-700 ring-cyan-300 dark:bg-cyan-950 dark:text-cyan-300 dark:ring-cyan-700", title: "Rise" };
+      case "fall":
+        return { label: "F", bg: "bg-orange-100 text-orange-700 ring-orange-300 dark:bg-orange-950 dark:text-orange-300 dark:ring-orange-700", title: "Fall" };
       default:
-        return { label: "?", bg: "bg-muted text-muted-foreground ring-border", title: String(kind) };
+        return { label: "?", bg: "bg-slate-100 text-slate-600 ring-slate-300 dark:bg-zinc-800 dark:text-zinc-300 dark:ring-zinc-700", title: String(kind) };
     }
   })();
 

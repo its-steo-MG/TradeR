@@ -32,7 +32,6 @@ export function TransferModal({ onClose, onSuccess, onSetMessage }: TransferModa
           return;
         }
 
-        // Safely check without defining conflicting types
         const hasPro = (res.data.wallets as Array<{ account_type?: string }>).some(
           (wallet) => wallet.account_type === "pro-fx"
         );
@@ -91,13 +90,18 @@ export function TransferModal({ onClose, onSuccess, onSetMessage }: TransferModa
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-end z-50">
-      <div className="bg-white w-full max-w-2xl rounded-t-3xl shadow-2xl animate-in slide-in-from-bottom mx-auto">
+      <div className="bg-white dark:bg-zinc-900 w-full max-w-2xl rounded-t-3xl shadow-2xl border border-slate-200 dark:border-zinc-800 animate-in slide-in-from-bottom mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-slate-200">
-          <button onClick={onClose} className="text-2xl font-bold text-slate-900">
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-slate-200 dark:border-zinc-800">
+          <button
+            onClick={onClose}
+            className="text-2xl font-bold text-slate-900 dark:text-white hover:text-slate-600 dark:hover:text-zinc-400"
+          >
             ✕
           </button>
-          <h3 className="text-xl sm:text-2xl font-bold text-slate-900">Transfer Funds</h3>
+          <h3 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">
+            Transfer Funds
+          </h3>
           <div className="w-6" />
         </div>
 
@@ -106,7 +110,9 @@ export function TransferModal({ onClose, onSuccess, onSetMessage }: TransferModa
           {/* Sender Step */}
           {step === "sender" && (
             <div className="space-y-4">
-              <p className="text-center text-slate-600 text-lg">Select source account</p>
+              <p className="text-center text-slate-600 dark:text-zinc-400 text-lg">
+                Select source account
+              </p>
               <button
                 onClick={() => {
                   setSenderType("standard");
@@ -122,7 +128,7 @@ export function TransferModal({ onClose, onSuccess, onSetMessage }: TransferModa
                     setSenderType("pro-fx");
                     setStep("recipient");
                   }}
-                  className="w-full bg-slate-200 text-slate-900 py-6 rounded-2xl text-xl font-semibold hover:bg-slate-300 transition-colors"
+                  className="w-full bg-slate-100 dark:bg-zinc-800 text-slate-900 dark:text-white py-6 rounded-2xl text-xl font-semibold hover:bg-slate-200 dark:hover:bg-zinc-700 transition-colors"
                 >
                   ProFX Account
                 </button>
@@ -133,13 +139,15 @@ export function TransferModal({ onClose, onSuccess, onSetMessage }: TransferModa
           {/* Recipient Step */}
           {step === "recipient" && (
             <div className="space-y-6">
-              <p className="text-center text-slate-600 text-lg">Enter recipient details</p>
+              <p className="text-center text-slate-600 dark:text-zinc-400 text-lg">
+                Enter recipient details
+              </p>
               <input
                 type="email"
                 value={recipientEmail}
                 onChange={(e) => setRecipientEmail(e.target.value)}
                 placeholder="Recipient Email"
-                className="w-full px-6 py-4 border border-slate-300 rounded-2xl text-lg focus:outline-none focus:border-purple-600"
+                className="w-full px-6 py-4 border border-slate-300 dark:border-zinc-700 rounded-2xl text-lg bg-white dark:bg-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-purple-600"
               />
               <div className="grid grid-cols-2 gap-4">
                 <button
@@ -147,7 +155,7 @@ export function TransferModal({ onClose, onSuccess, onSetMessage }: TransferModa
                   className={`py-4 rounded-2xl text-lg font-semibold transition-colors ${
                     recipientType === "standard"
                       ? "bg-purple-600 text-white"
-                      : "bg-slate-200 text-slate-900 hover:bg-slate-300"
+                      : "bg-slate-100 dark:bg-zinc-800 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-zinc-700"
                   }`}
                 >
                   TradeR
@@ -157,7 +165,7 @@ export function TransferModal({ onClose, onSuccess, onSetMessage }: TransferModa
                   className={`py-4 rounded-2xl text-lg font-semibold transition-colors ${
                     recipientType === "pro-fx"
                       ? "bg-purple-600 text-white"
-                      : "bg-slate-200 text-slate-900 hover:bg-slate-300"
+                      : "bg-slate-100 dark:bg-zinc-800 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-zinc-700"
                   }`}
                 >
                   ProFX
@@ -179,9 +187,13 @@ export function TransferModal({ onClose, onSuccess, onSetMessage }: TransferModa
           {/* Amount Step */}
           {step === "amount" && (
             <div className="space-y-6">
-              <p className="text-center text-slate-600 text-lg">Enter transfer amount (USD)</p>
+              <p className="text-center text-slate-600 dark:text-zinc-400 text-lg">
+                Enter transfer amount (USD)
+              </p>
               <div className="text-center">
-                <p className="text-4xl font-bold text-slate-900">${amount || "0.00"}</p>
+                <p className="text-4xl font-bold text-slate-900 dark:text-white">
+                  ${amount || "0.00"}
+                </p>
               </div>
 
               <div className="grid grid-cols-3 gap-3">
@@ -189,26 +201,26 @@ export function TransferModal({ onClose, onSuccess, onSetMessage }: TransferModa
                   <button
                     key={n}
                     onClick={() => handleNumpadClick(n)}
-                    className="bg-slate-100 hover:bg-slate-200 text-slate-900 font-semibold py-5 rounded-2xl text-2xl transition-colors"
+                    className="bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-900 dark:text-white font-semibold py-5 rounded-2xl text-2xl transition-colors"
                   >
                     {n}
                   </button>
                 ))}
                 <button
                   onClick={() => handleNumpadClick(".")}
-                  className="bg-slate-100 hover:bg-slate-200 text-slate-900 font-semibold py-5 rounded-2xl text-2xl"
+                  className="bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-900 dark:text-white font-semibold py-5 rounded-2xl text-2xl"
                 >
                   .
                 </button>
                 <button
                   onClick={() => handleNumpadClick("0")}
-                  className="bg-slate-100 hover:bg-slate-200 text-slate-900 font-semibold py-5 rounded-2xl text-2xl"
+                  className="bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-900 dark:text-white font-semibold py-5 rounded-2xl text-2xl"
                 >
                   0
                 </button>
                 <button
                   onClick={() => handleNumpadClick("backspace")}
-                  className="bg-slate-100 hover:bg-slate-200 text-slate-900 font-semibold py-5 rounded-2xl text-2xl"
+                  className="bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-900 dark:text-white font-semibold py-5 rounded-2xl text-2xl"
                 >
                   ⌫
                 </button>
@@ -230,8 +242,10 @@ export function TransferModal({ onClose, onSuccess, onSetMessage }: TransferModa
           {/* Confirmation Step */}
           {step === "confirmation" && (
             <div className="space-y-6 text-center">
-              <p className="text-lg text-slate-600">Please confirm transfer details</p>
-              <div className="space-y-3 text-left bg-slate-50 p-6 rounded-2xl">
+              <p className="text-lg text-slate-600 dark:text-zinc-400">
+                Please confirm transfer details
+              </p>
+              <div className="space-y-3 text-left bg-slate-50 dark:bg-zinc-800 p-6 rounded-2xl text-slate-900 dark:text-white">
                 <p>
                   <span className="font-semibold">From:</span>{" "}
                   {senderType === "standard" ? "TradeR" : "ProFX"} Account
@@ -243,12 +257,12 @@ export function TransferModal({ onClose, onSuccess, onSetMessage }: TransferModa
                   <span className="font-semibold">Account Type:</span>{" "}
                   {recipientType === "standard" ? "TradeR" : "ProFX"}
                 </p>
-                <p className="text-2xl font-bold text-slate-900">
+                <p className="text-2xl font-bold">
                   Amount: ${formatCurrency(parseFloat(amount || "0"))}
                 </p>
               </div>
 
-              {error && <p className="text-red-600 text-center">{error}</p>}
+              {error && <p className="text-red-500 text-center">{error}</p>}
 
               <button
                 onClick={handleInitiate}

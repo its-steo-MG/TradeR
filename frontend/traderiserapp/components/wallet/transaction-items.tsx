@@ -24,22 +24,22 @@ export function TransactionItem({ transaction, onClick }: TransactionItemProps) 
     switch (status.toLowerCase()) {
       case "completed":
       case "success":
-        return "text-green-600 bg-green-50";
+        return "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-500/10";
       case "pending":
-        return "text-yellow-600 bg-yellow-50";
+        return "text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-500/10";
       case "failed":
       case "error":
-        return "text-red-600 bg-red-50";
+        return "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10";
       default:
-        return "text-slate-600 bg-slate-50";
+        return "text-muted-foreground bg-muted";
     }
   };
 
-  // Improved formatCurrency - KSH comes before amount, USD after
   const formatCurrency = (value: string | number, currencyCode: string = "USD") => {
-    const num = typeof value === "string" 
-      ? parseFloat(value.replace(/[^0-9.-]+/g, "")) 
-      : Number(value);
+    const num =
+      typeof value === "string"
+        ? parseFloat(value.replace(/[^0-9.-]+/g, ""))
+        : Number(value);
 
     if (isNaN(num)) return String(value);
 
@@ -50,14 +50,12 @@ export function TransactionItem({ transaction, onClick }: TransactionItemProps) 
 
     if (currencyCode.toUpperCase() === "KSH" || currencyCode.toUpperCase() === "KES") {
       return `KSH ${formattedNumber}`;
-    } else {
-      return `${formattedNumber} ${currencyCode}`;
     }
+    return `${formattedNumber} ${currencyCode}`;
   };
 
-  // Select unique icon based on transaction type
   const txType = transaction.transactionType.toLowerCase();
-  let imageSrc = "/transaction-icon.png"; // fallback
+  let imageSrc = "/transaction-icon.png";
 
   switch (txType) {
     case "deposit":
@@ -67,8 +65,6 @@ export function TransactionItem({ transaction, onClick }: TransactionItemProps) 
       imageSrc = "/transaction-icon.png";
       break;
     case "transfer_in":
-      imageSrc = "/transfer-in-icon.png";
-      break;
     case "transfer_out":
       imageSrc = "/transfer-in-icon.png";
       break;
@@ -76,18 +72,13 @@ export function TransactionItem({ transaction, onClick }: TransactionItemProps) 
       imageSrc = "/transaction-icon.png";
   }
 
-  // Use converted_amount if available, otherwise amount
   const displayAmount = transaction.convertedAmount
     ? formatCurrency(
-        transaction.convertedAmount, 
+        transaction.convertedAmount,
         transaction.target_currency?.code || "USD"
       )
-    : formatCurrency(
-        transaction.amount, 
-        transaction.currency?.code || "USD"
-      );
+    : formatCurrency(transaction.amount, transaction.currency?.code || "USD");
 
-  // Clean display label
   const displayType = transaction.type
     .replace(/_/g, " ")
     .split(" ")
@@ -96,7 +87,7 @@ export function TransactionItem({ transaction, onClick }: TransactionItemProps) 
 
   return (
     <div
-      className="flex items-center justify-between p-4 sm:p-6 hover:bg-slate-50 transition-colors cursor-pointer"
+      className="flex items-center justify-between p-4 sm:p-6 hover:bg-muted/50 transition-colors cursor-pointer"
       onClick={onClick}
     >
       {/* Left: Icon + Details */}
@@ -114,19 +105,25 @@ export function TransactionItem({ transaction, onClick }: TransactionItemProps) 
         </div>
 
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-slate-900 text-sm sm:text-base truncate">
+          <p className="font-semibold text-foreground text-sm sm:text-base truncate">
             {displayType}
           </p>
-          <p className="text-xs sm:text-sm text-slate-500">{transaction.date}</p>
+          <p className="text-xs sm:text-sm text-muted-foreground">
+            {transaction.date}
+          </p>
         </div>
       </div>
 
       {/* Right: Amount + Status */}
       <div className="flex flex-col items-end gap-2 ml-3 sm:ml-4 flex-shrink-0">
-        <p className="font-bold text-slate-900 text-sm sm:text-base">
+        <p className="font-bold text-foreground text-sm sm:text-base">
           {displayAmount}
         </p>
-        <span className={`text-xs font-medium px-2 py-1 rounded-full ${getStatusColor(transaction.status)}`}>
+        <span
+          className={`text-xs font-medium px-2 py-1 rounded-full ${getStatusColor(
+            transaction.status
+          )}`}
+        >
           {transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
         </span>
       </div>

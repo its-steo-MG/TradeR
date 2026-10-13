@@ -30,7 +30,7 @@ export default function AgentGrid({ agents, loading }: AgentGridProps) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
         {[...Array(6)].map((_, i) => (
-          <div key={i} className="bg-slate-200 rounded-2xl h-96 animate-pulse" />
+          <div key={i} className="bg-slate-200 dark:bg-zinc-700 rounded-2xl h-96 animate-pulse" />
         ))}
       </div>
     )
@@ -39,7 +39,7 @@ export default function AgentGrid({ agents, loading }: AgentGridProps) {
   if (agents.length === 0) {
     return (
       <div className="text-center py-12 sm:py-16">
-        <p className="text-slate-500 text-base sm:text-lg">No agents found. Try adjusting your filters.</p>
+        <p className="text-slate-500 dark:text-zinc-400 text-base sm:text-lg">No agents found. Try adjusting your filters.</p>
       </div>
     )
   }

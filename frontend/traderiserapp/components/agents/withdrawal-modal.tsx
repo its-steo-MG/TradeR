@@ -151,7 +151,7 @@ export default function WithdrawalModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+      <div className="bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-600 to-purple-700 p-5 text-white">
           <div className="flex items-center justify-between">
@@ -185,13 +185,13 @@ export default function WithdrawalModal({
           {step === "amount" && (
             <>
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                <label className="block text-sm font-semibold text-slate-700 dark:text-zinc-200 mb-2">
                   From Account
                 </label>
                 <select
                   value={accountId || ""}
                   onChange={(e) => setAccountId(Number(e.target.value))}
-                  className="w-full p-3 rounded-xl border-2 border-purple-200 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 transition bg-white text-slate-900"
+                  className="w-full p-3 rounded-xl border-2 border-purple-200 dark:border-purple-800 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900 transition bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white"
                 >
                   {accounts.map((a) => (
                     <option key={a.id} value={a.id}>
@@ -203,7 +203,7 @@ export default function WithdrawalModal({
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                <label className="block text-sm font-semibold text-slate-700 dark:text-zinc-200 mb-2">
                   Amount (USD)
                 </label>
                 <input
@@ -213,10 +213,10 @@ export default function WithdrawalModal({
                   placeholder="10.00"
                   min="10"
                   step="0.01"
-                  className="w-full p-4 text-2xl font-bold text-center rounded-xl border-2 border-purple-200 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 transition bg-white text-slate-900 placeholder-slate-400"
+                  className="w-full p-4 text-2xl font-bold text-center rounded-xl border-2 border-purple-200 dark:border-purple-800 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900 transition bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500"
                 />
                 <p className="text-center mt-3 text-lg">
-                  <span className="text-slate-500">≈</span>{" "}
+                  <span className="text-slate-500 dark:text-zinc-400">≈</span>{" "}
                   <span className="font-bold text-purple-600">{kes} KES</span>
                 </p>
               </div>
@@ -245,7 +245,7 @@ export default function WithdrawalModal({
                   value={paypalEmail}
                   onChange={(e) => setPaypalEmail(e.target.value)}
                   placeholder="your@email.com"
-                  className="w-full p-4 rounded-xl border-2 border-purple-200 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 transition bg-white text-slate-900 placeholder-slate-400"
+                  className="w-full p-4 rounded-xl border-2 border-purple-200 dark:border-purple-800 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900 transition bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500"
                 />
               )}
 
@@ -256,28 +256,28 @@ export default function WithdrawalModal({
                     value={bankName}
                     onChange={(e) => setBankName(e.target.value)}
                     placeholder="Bank Name"
-                    className="w-full p-4 rounded-xl border-2 border-purple-200 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 transition bg-white text-slate-900 placeholder-slate-400"
+                    className="w-full p-4 rounded-xl border-2 border-purple-200 dark:border-purple-800 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900 transition bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500"
                   />
                   <input
                     type="text"
                     value={accName}
                     onChange={(e) => setAccName(e.target.value)}
                     placeholder="Account Name"
-                    className="w-full p-4 rounded-xl border-2 border-purple-200 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 transition bg-white text-slate-900 placeholder-slate-400"
+                    className="w-full p-4 rounded-xl border-2 border-purple-200 dark:border-purple-800 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900 transition bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500"
                   />
                   <input
                     type="text"
                     value={accNumber}
                     onChange={(e) => setAccNumber(e.target.value)}
                     placeholder="Account Number"
-                    className="w-full p-4 rounded-xl border-2 border-purple-200 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 transition bg-white text-slate-900 placeholder-slate-400"
+                    className="w-full p-4 rounded-xl border-2 border-purple-200 dark:border-purple-800 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900 transition bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500"
                   />
                   <input
                     type="text"
                     value={swift}
                     onChange={(e) => setSwift(e.target.value)}
                     placeholder="SWIFT (optional)"
-                    className="w-full p-4 rounded-xl border-2 border-purple-200 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 transition bg-white text-slate-900 placeholder-slate-400"
+                    className="w-full p-4 rounded-xl border-2 border-purple-200 dark:border-purple-800 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900 transition bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500"
                   />
                 </>
               )}
@@ -288,13 +288,13 @@ export default function WithdrawalModal({
                   value={mpesaPhone}
                   onChange={(e) => setMpesaPhone(e.target.value)}
                   placeholder="0712345678"
-                  className="w-full p-4 rounded-xl border-2 border-purple-200 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 transition bg-white text-slate-900 placeholder-slate-400"
+                  className="w-full p-4 rounded-xl border-2 border-purple-200 dark:border-purple-800 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900 transition bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500"
                 />
               )}
 
               {method === "binance" && (
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-zinc-200 mb-2">
                     Your Binance Wallet Address
                   </label>
                   <input
@@ -302,9 +302,9 @@ export default function WithdrawalModal({
                     value={binanceAddress}
                     onChange={(e) => setBinanceAddress(e.target.value)}
                     placeholder="0xYourBinanceAddress... (BEP20 recommended)"
-                    className="w-full p-4 rounded-xl border-2 border-purple-200 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 transition bg-white text-slate-900 placeholder-slate-400"
+                    className="w-full p-4 rounded-xl border-2 border-purple-200 dark:border-purple-800 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900 transition bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500"
                   />
-                  <p className="text-xs text-amber-600 mt-1">
+                  <p className="text-xs text-amber-600 dark:text-amber-300 mt-1">
                     Paste your USDT (BEP20) or ERC20 wallet address
                   </p>
                 </div>
@@ -334,13 +334,13 @@ export default function WithdrawalModal({
           {/* Step: OTP */}
           {step === "otp" && (
             <div className="text-center space-y-6">
-              <p className="text-slate-600">Enter 6-digit OTP from email</p>
+              <p className="text-slate-600 dark:text-zinc-300">Enter 6-digit OTP from email</p>
               <input
                 type="text"
                 value={otp}
                 onChange={(e) => setOtp(e.target.value.slice(0, 6))}
                 placeholder="000000"
-                className="w-full p-5 text-3xl tracking-widest text-center rounded-xl border-2 border-purple-300 focus:border-purple-600 bg-white text-slate-900"
+                className="w-full p-5 text-3xl tracking-widest text-center rounded-xl border-2 border-purple-300 focus:border-purple-600 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white"
                 maxLength={6}
               />
               <button
@@ -361,9 +361,9 @@ export default function WithdrawalModal({
           {/* Step: Done */}
           {step === "done" && (
             <div className="text-center py-10 space-y-6">
-              <div className="w-20 h-20 mx-auto bg-green-100 rounded-full flex items-center justify-center">
+              <div className="w-20 h-20 mx-auto bg-emerald-100 dark:bg-emerald-950 rounded-full flex items-center justify-center">
                 <svg
-                  className="w-12 h-12 text-green-600"
+                  className="w-12 h-12 text-emerald-600 dark:text-emerald-300 dark:text-emerald-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -376,8 +376,8 @@ export default function WithdrawalModal({
                   />
                 </svg>
               </div>
-              <h3 className="text-2xl font-bold text-slate-900">Success!</h3>
-              <p className="text-slate-600">
+              <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Success!</h3>
+              <p className="text-slate-600 dark:text-zinc-300">
                 ${amountUsd} locked → {kes} KES
                 <br />
                 <b>{agent.name}</b> pays in 5 mins

@@ -200,15 +200,15 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
-      <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-6 relative max-h-[90vh] overflow-y-auto">
+      <div className="bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl rounded-2xl max-w-md w-full p-6 space-y-6 relative max-h-[90vh] overflow-y-auto">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-slate-500 hover:text-slate-700"
+          className="absolute top-4 right-4 text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:text-zinc-200"
         >
           <X className="w-6 h-6" />
         </button>
 
-        <h2 className="text-xl font-bold text-slate-900">
+        <h2 className="text-xl font-bold text-slate-900 dark:text-white">
           Deposit via {agent.name}
         </h2>
         <PaymentInfoDisplay method={agent.method} agent={agent} />
@@ -216,7 +216,7 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Amount */}
           <div>
-            <p className="text-sm font-medium text-slate-700 mb-2">
+            <p className="text-sm font-medium text-slate-700 dark:text-zinc-200 mb-2">
               {isBinance ? "Amount in USD / USDT" : "Amount in KES"}
             </p>
             <input
@@ -226,9 +226,9 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
               placeholder={isBinance ? "50.00" : "6500"}
               min="10"
               step="0.01"
-              className="w-full p-3 rounded-xl border border-slate-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 bg-white text-slate-900"
+              className="w-full p-3 rounded-xl border border-white/40 dark:border-white/10 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white"
             />
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
               {isBinance
                 ? `You'll send ≈ ${displayConversion()} KES equivalent`
                 : `You'll get ≈ $${displayConversion()} USD`}
@@ -237,18 +237,18 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
 
           {/* Account */}
           {fetchError ? (
-            <p className="text-red-600 text-sm">{fetchError}</p>
+            <p className="text-rose-600 dark:text-rose-400 text-sm">{fetchError}</p>
           ) : accounts.length === 0 ? (
-            <p className="text-slate-500 text-sm">No trading accounts found</p>
+            <p className="text-slate-500 dark:text-zinc-400 text-sm">No trading accounts found</p>
           ) : (
             <div>
-              <p className="text-sm font-medium text-slate-700 mb-2">
+              <p className="text-sm font-medium text-slate-700 dark:text-zinc-200 mb-2">
                 Credit to Account
               </p>
               <select
                 value={selectedAccount ?? ""}
                 onChange={(e) => setSelectedAccount(Number(e.target.value))}
-                className="w-full p-3 rounded-xl border border-slate-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 bg-white text-slate-900"
+                className="w-full p-3 rounded-xl border border-white/40 dark:border-white/10 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white"
               >
                 {accounts.map((acc) => (
                   <option key={acc.id} value={acc.id}>
@@ -261,7 +261,7 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
 
           {/* Transaction Code */}
           <div>
-            <p className="text-sm font-medium text-slate-700 mb-2">
+            <p className="text-sm font-medium text-slate-700 dark:text-zinc-200 mb-2">
               {isBinance
                 ? "Binance Transaction Hash (TxID)"
                 : "Transaction Code / Reference"}
@@ -271,13 +271,13 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
               value={transactionCode}
               onChange={(e) => setTransactionCode(e.target.value)}
               placeholder={isBinance ? "0xabc123..." : "Enter code"}
-              className="w-full p-3 rounded-xl border border-slate-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 bg-white text-slate-900"
+              className="w-full p-3 rounded-xl border border-white/40 dark:border-white/10 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white"
             />
           </div>
 
           {/* Screenshot */}
           {(isBinance || method === "mpesa" || method === "bank_transfer") && (
-            <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center space-y-2 bg-slate-50">
+            <div className="border-2 border-dashed border-white/50 dark:border-white/15 rounded-xl p-6 text-center space-y-2 bg-white/50 dark:bg-white/5 backdrop-blur-md">
               {preview ? (
                 <div className="space-y-2">
                   <div className="relative w-full h-32 rounded-lg overflow-hidden">
@@ -289,18 +289,18 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
                       setPreview("")
                       setScreenshot(null)
                     }}
-                    className="text-sm text-red-600 hover:text-red-700 font-medium"
+                    className="text-sm text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:text-rose-300 font-medium"
                   >
                     Remove
                   </button>
                 </div>
               ) : (
                 <label className="cursor-pointer">
-                  <Upload className="w-8 h-8 mx-auto mb-2 text-slate-400" />
-                  <p className="text-sm font-medium text-slate-700">
+                  <Upload className="w-8 h-8 mx-auto mb-2 text-slate-400 dark:text-zinc-500" />
+                  <p className="text-sm font-medium text-slate-700 dark:text-zinc-200">
                     Upload Proof Screenshot
                   </p>
-                  <p className="text-xs text-slate-500 mt-1">PNG, JPG up to 5 MB</p>
+                  <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">PNG, JPG up to 5 MB</p>
                   <input
                     type="file"
                     accept="image/*"

@@ -7,43 +7,17 @@ import { toast } from "sonner";
 import { start as startRobot, useRobotRunner } from "@/lib/robotRunner";
 import type { DigitContractKind } from "@/lib/types/positions";
 
-/* ------------------------------------------------------------------ */
-/*  Types                                                             */
-/* ------------------------------------------------------------------ */
-type Market = {
-  id: number;
-  name: string;
-  display_name?: string;
-  market_type?: { name: string };
-};
+type Market = { id: number; name: string; display_name?: string; market_type?: { name: string } };
+type Robot = { id: number; name: string; is_s_digit_robot: boolean; default_digit_contract_type?: string };
+type ScanCategory = "overunder" | "matches" | "evenodd" | "risefall";
+type ScanResult = { market: Market; contractKind: DigitContractKind; barrier?: number; score: number; pct: number[] };
 
-type Robot = {
-  id: number;
-  name: string;
-  is_s_digit_robot: boolean;
-  default_digit_contract_type?: string;
-};
-
-type ScanCategory = "overunder" | "matches" | "evenodd";
-
-type ScanResult = {
-  market: Market;
-  contractKind: DigitContractKind;
-  barrier?: number;
-  score: number;
-  pct: number[];
-};
-
-/* ------------------------------------------------------------------ */
-/*  Helpers                                                           */
-/* ------------------------------------------------------------------ */
 function getIsSashi(): boolean {
   if (typeof window === "undefined") return false;
   try {
     const raw = localStorage.getItem("user_session");
     if (!raw) return false;
-    const parsed = JSON.parse(raw) as { is_sashi?: boolean };
-    return parsed?.is_sashi === true;
+    return (JSON.parse(raw) as { is_sashi?: boolean })?.is_sashi === true;
   } catch {
     return false;
   }
@@ -62,54 +36,32 @@ function seededDist(seed: string): number[] {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
-
   const raw = Array.from({ length: 10 }, () => 8 + rand() * 6);
   const total = raw.reduce((a, b) => a + b, 0);
   return raw.map((v) => +((v / total) * 100).toFixed(2));
 }
 
-function scoreMarket(
-  market: Market,
-  category: ScanCategory,
-  jitter: number,
-): ScanResult {
+function scoreMarket(market: Market, category: ScanCategory, jitter: number): ScanResult {
   const seed = `${market.id}-${market.name}-${Math.floor(Date.now() / 3000)}-${jitter}`;
   const pct = seededDist(seed);
-
   if (category === "evenodd") {
     const evenScore = pct[0] + pct[2] + pct[4] + pct[6] + pct[8];
     const oddScore = 100 - evenScore;
     const useEven = evenScore >= oddScore;
-    return {
-      market,
-      contractKind: useEven ? "even" : "odd",
-      score: Math.max(evenScore, oddScore),
-      pct,
-    };
+    return { market, contractKind: useEven ? "even" : "odd", score: Math.max(evenScore, oddScore), pct };
   }
-
   if (category === "matches") {
-    let maxIdx = 0;
     let minIdx = 0;
-    pct.forEach((v, i) => {
-      if (v > pct[maxIdx]) maxIdx = i;
-      if (v < pct[minIdx]) minIdx = i;
-    });
-    const differsScore = 100 - pct[minIdx];
-    return {
-      market,
-      contractKind: "differs",
-      barrier: minIdx,
-      score: differsScore,
-      pct,
-    };
+    pct.forEach((v, i) => { if (v < pct[minIdx]) minIdx = i; });
+    return { market, contractKind: "differs", barrier: minIdx, score: 100 - pct[minIdx], pct };
   }
-
-  let best: { kind: "over" | "under"; barrier: number; score: number } = {
-    kind: "over",
-    barrier: 5,
-    score: 0,
-  };
+  if (category === "risefall") {
+    const riseScore = pct.slice(5).reduce((a, v) => a + v, 0);
+    const fallScore = 100 - riseScore;
+    const useRise = riseScore >= fallScore;
+    return { market, contractKind: useRise ? "rise" : "fall", score: Math.max(riseScore, fallScore), pct };
+  }
+  let best: { kind: "over" | "under"; barrier: number; score: number } = { kind: "over", barrier: 5, score: 0 };
   for (let b = 0; b <= 9; b++) {
     const overSum = pct.slice(b + 1).reduce((a, v) => a + v, 0);
     const underSum = pct.slice(0, b).reduce((a, v) => a + v, 0);
@@ -119,15 +71,7 @@ function scoreMarket(
   return { market, contractKind: best.kind, barrier: best.barrier, score: best.score, pct };
 }
 
-/* ------------------------------------------------------------------ */
-/*  Component                                                         */
-/* ------------------------------------------------------------------ */
-type Props = {
-  markets: Market[];
-  onStarted: () => void;
-  /** Hide the floating button (e.g. when robot panel is open) */
-  hidden?: boolean;
-};
+type Props = { markets: Market[]; onStarted: () => void; hidden?: boolean };
 
 export default function AIScannerFAB({ markets, onStarted, hidden = false }: Props) {
   const [open, setOpen] = useState(false);
@@ -137,28 +81,17 @@ export default function AIScannerFAB({ markets, onStarted, hidden = false }: Pro
   const [category, setCategory] = useState<ScanCategory>("overunder");
   const [maxRuns] = useState("100");
   const [multiplier] = useState("2");
-
   const [scanning, setScanning] = useState(false);
   const [scanIdx, setScanIdx] = useState(0);
   const [pickedRobot, setPickedRobot] = useState<Robot | null>(null);
   const [loadingRobot, setLoadingRobot] = useState(true);
   const [isSashi, setIsSashi] = useState(false);
   const [mounted, setMounted] = useState(false);
-
   const { isRunning } = useRobotRunner();
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    setIsSashi(getIsSashi());
-  }, []);
-
-  // Close AI Scanner modal if parent tells us to hide
-  useEffect(() => {
-    if (hidden) setOpen(false);
-  }, [hidden]);
+  useEffect(() => setMounted(true), []);
+  useEffect(() => setIsSashi(getIsSashi()), []);
+  useEffect(() => { if (hidden) setOpen(false); }, [hidden]);
 
   useEffect(() => {
     const load = async () => {
@@ -166,36 +99,20 @@ export default function AIScannerFAB({ markets, onStarted, hidden = false }: Pro
       try {
         const { api } = await import("@/lib/api");
         const res = await api.getUserRobots();
-
         const raw = (res?.data ?? res) as any;
-        const list = Array.isArray(raw)
-          ? raw
-          : Array.isArray(raw?.user_robots)
-            ? raw.user_robots
-            : [];
-
+        const list = Array.isArray(raw) ? raw : Array.isArray(raw?.user_robots) ? raw.user_robots : [];
         const sDigit = list
           .map((ur: any) => ur.robot)
           .filter((r: any) => r && r.is_s_digit_robot === true)
-          .map(
-            (r: any): Robot => ({
-              id: Number(r.id),
-              name: String(r.name || ""),
-              is_s_digit_robot: true,
-              default_digit_contract_type:
-                typeof r.default_digit_contract_type === "string"
-                  ? r.default_digit_contract_type
-                  : undefined,
-            }),
-          );
-
-        const unique = sDigit.filter(
-          (r: Robot, i: number, arr: Robot[]) => arr.findIndex((x) => x.id === r.id) === i,
-        );
-
+          .map((r: any): Robot => ({
+            id: Number(r.id),
+            name: String(r.name || ""),
+            is_s_digit_robot: true,
+            default_digit_contract_type: typeof r.default_digit_contract_type === "string" ? r.default_digit_contract_type : undefined,
+          }));
+        const unique = sDigit.filter((r: Robot, i: number, arr: Robot[]) => arr.findIndex((x) => x.id === r.id) === i);
         setPickedRobot(unique[0] || null);
-      } catch (err) {
-        console.error("AIScannerFAB: failed to load owned S-Digit robot", err);
+      } catch {
         setPickedRobot(null);
       } finally {
         setLoadingRobot(false);
@@ -205,56 +122,34 @@ export default function AIScannerFAB({ markets, onStarted, hidden = false }: Pro
   }, []);
 
   const runScan = async () => {
-    if (markets.length === 0) {
-      toast.error("No markets available to scan");
-      return;
-    }
-    if (!pickedRobot) {
-      toast.error("No S-Digit Robot found on your account. Purchase one to use the AI Scanner.");
-      return;
-    }
-
+    if (!markets.length) return toast.error("No markets available to scan");
+    if (!pickedRobot) return toast.error("No S-Digit Robot found on your account.");
     const stakeNum = Math.max(0.5, parseFloat(stake) || 0.5);
-    const targetNum = Math.max(0, parseFloat(targetProfit) || 0);
-    const stopNum = Math.max(0, parseFloat(stopLoss) || 0);
-
     setScanning(true);
     setScanIdx(0);
-
     const results: ScanResult[] = [];
     for (let i = 0; i < markets.length; i++) {
       setScanIdx(i);
-      const r = scoreMarket(markets[i], category, i);
-      results.push(r);
+      results.push(scoreMarket(markets[i], category, i));
       await new Promise((r) => setTimeout(r, 380));
     }
-
     results.sort((a, b) => b.score - a.score);
     const winner = results[0];
-
     setScanning(false);
     setOpen(false);
-
-    toast.success(
-      `AI picked ${winner.market.display_name || winner.market.name} · ${winner.contractKind.toUpperCase()}${winner.barrier !== undefined ? ` ${winner.barrier}` : ""} (${winner.score.toFixed(1)}% edge)`,
-      { duration: 6000 },
-    );
-
-    const useSashiEngine = isSashi && pickedRobot !== null;
-
+    toast.success(`AI picked ${winner.market.display_name || winner.market.name} · ${winner.contractKind.toUpperCase()}${winner.contractKind === "rise" || winner.contractKind === "fall" || winner.barrier === undefined ? "" : ` ${winner.barrier}`}`, { duration: 6000 });
     startRobot({
       market: winner.market.name || winner.market.display_name || "Volatility Market",
       contractKind: winner.contractKind,
-      barrier: winner.barrier,
+      barrier: winner.contractKind === "rise" || winner.contractKind === "fall" ? undefined : winner.barrier,
       initialStake: stakeNum,
       multiplier: parseFloat(multiplier) || 2,
-      targetProfit: targetNum,
-      stopLoss: stopNum,
+      targetProfit: Math.max(0, parseFloat(targetProfit) || 0),
+      stopLoss: Math.max(0, parseFloat(stopLoss) || 0),
       maxRuns: parseInt(maxRuns, 10) || 100,
       marketId: winner.market.id,
-      robotId: useSashiEngine ? pickedRobot!.id : undefined,
+      robotId: isSashi && pickedRobot ? pickedRobot.id : undefined,
     });
-
     onStarted();
   };
 
@@ -264,203 +159,81 @@ export default function AIScannerFAB({ markets, onStarted, hidden = false }: Pro
     return m ? m.display_name || m.name : "";
   }, [scanning, scanIdx, markets]);
 
-  // Don't show the floating button when hidden by parent or when its own modal is open
   const showButton = mounted && !hidden && !open;
 
-  // ── FAB ───────────────────────────────────────────────────────────
   const fab = showButton && (
     <button
       onClick={() => setOpen(true)}
       disabled={isRunning}
       aria-label="AI Scanner"
-      style={{
-        position: "fixed",
-        bottom: "6rem",
-        left: "50%",
-        transform: "translateX(-50%)",
-        zIndex: 9999,
-        width: "4rem",
-        height: "4rem",
-      }}
-      className="
-        rounded-full flex items-center justify-center
-        text-white font-bold text-lg tracking-wider
-        bg-gradient-to-br from-indigo-500 via-purple-500 to-fuchsia-500
-        shadow-[0_0_30px_rgba(168,85,247,0.65)]
-        ring-2 ring-white/20
-        transition-transform active:scale-95 hover:scale-105
-        disabled:opacity-60 disabled:cursor-not-allowed
-        ai-fab-glow
-      "
+      style={{ position: "fixed", bottom: "6rem", left: "50%", transform: "translateX(-50%)", zIndex: 9999, width: "4rem", height: "4rem" }}
+      className="rounded-full flex items-center justify-center text-white font-bold text-lg bg-gradient-to-br from-indigo-500 via-purple-500 to-fuchsia-500 shadow-[0_0_30px_rgba(168,85,247,0.65)] disabled:opacity-60"
     >
-      <span className="absolute inset-0 rounded-full bg-purple-500/40 blur-xl -z-10 animate-pulse" />
-      <Sparkles size={14} className="absolute top-2 right-2 text-white/80 z-[1]" />
-      <span className="relative z-[1] drop-shadow-md">AI</span>
+      <Sparkles size={14} className="absolute top-2 right-2 text-white/80" />
+      <span className="relative z-[1]">AI</span>
     </button>
   );
 
-  // ── Modal ─────────────────────────────────────────────────────────
   const modal = open && (
-    <div
-      className="fixed inset-0 z-[99999] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4"
-      onClick={() => !scanning && setOpen(false)}
-    >
-      <div
-        className="w-full sm:max-w-md bg-slate-900 border border-slate-700 sm:rounded-3xl rounded-t-3xl overflow-hidden shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="relative px-6 py-5 border-b border-slate-800 bg-gradient-to-r from-indigo-600/20 via-purple-600/20 to-fuchsia-600/20">
+    <div className="fixed inset-0 z-[99999] flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4" onClick={() => !scanning && setOpen(false)}>
+      <div className="w-full sm:max-w-md bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 sm:rounded-3xl rounded-t-3xl overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="relative px-6 py-5 border-b border-border bg-slate-50 dark:bg-zinc-900">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-fuchsia-500 flex items-center justify-center shadow-[0_0_20px_rgba(168,85,247,0.6)]">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-fuchsia-500 flex items-center justify-center">
               <Sparkles size={18} className="text-white" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-white">AI Market Scanner</h3>
-              <p className="text-xs text-slate-400">
-                Auto-picks the strongest market & trades it
-              </p>
+              <h3 className="text-lg font-bold text-foreground">AI Market Scanner</h3>
+              <p className="text-xs text-muted-foreground">Auto-picks the strongest market & trades it</p>
             </div>
           </div>
           {!scanning && (
-            <button
-              onClick={() => setOpen(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white"
-            >
+            <button onClick={() => setOpen(false)} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground">
               <X size={20} />
             </button>
           )}
         </div>
 
-        {/* Body */}
         {scanning ? (
           <div className="p-8 flex flex-col items-center gap-5">
-            <div className="relative">
-              <Loader2 size={54} className="text-purple-400 animate-spin" />
-              <Sparkles
-                size={20}
-                className="absolute inset-0 m-auto text-fuchsia-300 animate-pulse"
-              />
-            </div>
+            <Loader2 size={54} className="text-purple-500 animate-spin" />
             <div className="text-center">
-              <div className="text-white font-semibold">Scanning markets…</div>
-              <div className="text-xs text-slate-400 mt-1 truncate max-w-[260px]">
-                {currentScanLabel}
-              </div>
-              <div className="mt-3 text-[11px] text-slate-500">
-                {scanIdx + 1} / {markets.length}
-              </div>
+              <div className="text-foreground font-semibold">Scanning markets…</div>
+              <div className="text-xs text-muted-foreground mt-1 truncate max-w-[260px]">{currentScanLabel}</div>
+              <div className="mt-3 text-[11px] text-muted-foreground">{scanIdx + 1} / {markets.length}</div>
             </div>
-            <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-indigo-500 to-fuchsia-500 transition-all duration-300"
-                style={{
-                  width: `${((scanIdx + 1) / Math.max(1, markets.length)) * 100}%`,
-                }}
-              />
+            <div className="w-full h-1.5 bg-slate-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-indigo-500 to-fuchsia-500" style={{ width: `${((scanIdx + 1) / Math.max(1, markets.length)) * 100}%` }} />
             </div>
           </div>
         ) : (
           <div className="p-5 space-y-4">
-            <div>
-              <label className="text-xs font-semibold text-slate-400 mb-2 block uppercase tracking-wide">
-                Market Type
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {(
-                  [
-                    { key: "overunder", label: "Over/Under" },
-                    { key: "matches", label: "Match/Diff" },
-                    { key: "evenodd", label: "Even/Odd" },
-                  ] as { key: ScanCategory; label: string }[]
-                ).map((c) => (
-                  <button
-                    key={c.key}
-                    onClick={() => setCategory(c.key)}
-                    className={`
-                      relative py-2.5 rounded-xl text-xs font-medium transition
-                      ${
-                        category === c.key
-                          ? "bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-white"
-                          : "bg-slate-800 text-slate-400 hover:text-white"
-                      }
-                    `}
-                  >
-                    <span className="relative z-[1]">{c.label}</span>
-                  </button>
-                ))}
-              </div>
+            <div className="grid grid-cols-2 gap-2">
+              {(["overunder", "matches", "evenodd", "risefall"] as ScanCategory[]).map((key) => (
+                <button
+                  key={key}
+                  onClick={() => setCategory(key)}
+                  className={`py-2.5 rounded-xl text-xs font-medium ${category === key ? "bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-white" : "bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300"}`}
+                >
+                  {key === "overunder" ? "Over/Under" : key === "matches" ? "Match/Diff" : key === "risefall" ? "Rise/Fall" : "Even/Odd"}
+                </button>
+              ))}
             </div>
-
-            <NumberField
-              icon={<DollarSign size={14} />}
-              label="Stake Amount"
-              value={stake}
-              onChange={setStake}
-              step="0.5"
-              min="0.5"
-              prefix="$"
-            />
-
+            <NumberField icon={<DollarSign size={14} />} label="Stake Amount" value={stake} onChange={setStake} prefix="$" />
             <div className="grid grid-cols-2 gap-3">
-              <NumberField
-                icon={<Target size={14} className="text-emerald-400" />}
-                label="Target Profit"
-                value={targetProfit}
-                onChange={setTargetProfit}
-                step="1"
-                min="0"
-                prefix="$"
-              />
-              <NumberField
-                icon={<ShieldAlert size={14} className="text-rose-400" />}
-                label="Stop Loss"
-                value={stopLoss}
-                onChange={setStopLoss}
-                step="1"
-                min="0"
-                prefix="$"
-              />
+              <NumberField icon={<Target size={14} className="text-emerald-500" />} label="Target Profit" value={targetProfit} onChange={setTargetProfit} prefix="$" />
+              <NumberField icon={<ShieldAlert size={14} className="text-rose-500" />} label="Stop Loss" value={stopLoss} onChange={setStopLoss} prefix="$" />
             </div>
-
-            {loadingRobot && (
-              <div className="text-center text-xs text-slate-500 py-1">
-                Loading AI engine…
-              </div>
-            )}
             {!loadingRobot && !pickedRobot && (
-              <div className="text-center text-xs text-amber-400 py-1">
-                No S-Digit Robot on your account. Purchase one to enable AI scanning.
-              </div>
+              <div className="text-center text-xs text-amber-600 dark:text-amber-400">No S-Digit Robot on your account.</div>
             )}
-            {!loadingRobot && pickedRobot && !isSashi && (
-              <div className="text-center text-[11px] text-slate-500 py-1 px-3">
-                Standard account — trades run on the live market engine with real profit/loss.
-              </div>
-            )}
-
             <button
               onClick={runScan}
               disabled={loadingRobot || !pickedRobot}
-              className="
-                relative w-full py-3.5 rounded-2xl font-bold text-white
-                bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500
-                shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50
-                transition-all active:scale-[.98] disabled:opacity-50 disabled:cursor-not-allowed
-                flex items-center justify-center gap-2
-              "
+              className="w-full py-3.5 rounded-2xl font-bold text-white bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500 disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              <span className="relative z-[1] flex items-center gap-2">
-                <Zap size={18} />
-                Scan & Trade
-              </span>
+              <Zap size={18} /> Scan & Trade
             </button>
-
-            <p className="text-[10px] text-slate-500 text-center px-4">
-              The AI scores every market in the selected category, picks the
-              strongest edge, and auto-trades using the engine that fits
-              your account. You can watch every trade live.
-            </p>
           </div>
         )}
       </div>
@@ -471,65 +244,24 @@ export default function AIScannerFAB({ markets, onStarted, hidden = false }: Pro
     <>
       {mounted && createPortal(fab, document.body)}
       {mounted && createPortal(modal, document.body)}
-
-      <style>{`
-        @keyframes aiFabPulse {
-          0%, 100% { box-shadow: 0 0 25px rgba(168,85,247,0.55), 0 0 60px rgba(99,102,241,0.25); }
-          50%      { box-shadow: 0 0 40px rgba(217,70,239,0.75), 0 0 100px rgba(168,85,247,0.4); }
-        }
-        .ai-fab-glow { animation: aiFabPulse 2.4s ease-in-out infinite; }
-
-        @media (min-width: 1024px) {
-          button[aria-label="AI Scanner"] {
-            bottom: 2rem !important;
-          }
-        }
-      `}</style>
     </>
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  NumberField                                                       */
-/* ------------------------------------------------------------------ */
-function NumberField({
-  icon,
-  label,
-  value,
-  onChange,
-  step,
-  min,
-  prefix,
-}: {
-  icon?: React.ReactNode;
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  step?: string;
-  min?: string;
-  prefix?: string;
-}) {
+function NumberField({ icon, label, value, onChange, prefix }: { icon?: React.ReactNode; label: string; value: string; onChange: (v: string) => void; prefix?: string }) {
   return (
     <div>
-      <label className="text-[11px] font-semibold text-slate-400 mb-1.5 flex items-center gap-1.5 uppercase tracking-wide">
+      <label className="text-[11px] font-semibold text-muted-foreground mb-1.5 flex items-center gap-1.5 uppercase tracking-wide">
         {icon}
         {label}
       </label>
       <div className="relative">
-        {prefix && (
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">
-            {prefix}
-          </span>
-        )}
+        {prefix && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">{prefix}</span>}
         <input
           type="number"
-          step={step}
-          min={min}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className={`w-full bg-slate-800 border border-slate-700 focus:border-purple-500 outline-none
-                      rounded-xl py-2.5 ${prefix ? "pl-7" : "pl-3"} pr-3 text-white text-sm font-medium
-                      transition-colors`}
+          className={`w-full bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 focus:border-purple-500 outline-none rounded-xl py-2.5 ${prefix ? "pl-7" : "pl-3"} pr-3 text-foreground text-sm font-medium`}
         />
       </div>
     </div>

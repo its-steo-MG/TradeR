@@ -18,18 +18,18 @@ function actionLabel(a: StatementEntry["action"]) {
 }
 
 function actionClass(a: StatementEntry["action"]) {
-  if (a === "buy") return "bg-rose-500/15 text-rose-400 border-rose-500/30";
+  if (a === "buy") return "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30";
   if (a === "sell")
-    return "bg-emerald-500/15 text-emerald-400 border-emerald-500/30";
-  return "bg-slate-700/40 text-slate-300 border-slate-700";
+    return "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30";
+  return "bg-muted text-muted-foreground border-border";
 }
 
 export default function Statement({ entries }: Props) {
   if (entries.length === 0) {
     return (
-      <div className="rounded-lg border border-slate-800 bg-slate-900/40 py-12 text-center">
-        <div className="text-slate-500 text-sm">No transactions yet</div>
-        <div className="text-slate-600 text-xs mt-1">
+      <div className="rounded-lg border border-border bg-card py-12 text-center">
+        <div className="text-muted-foreground text-sm">No transactions yet</div>
+        <div className="text-muted-foreground/70 text-xs mt-1">
           Every buy and sell will appear here
         </div>
       </div>
@@ -38,8 +38,7 @@ export default function Statement({ entries }: Props) {
 
   return (
     <div className="space-y-2">
-      {/* Header row (table-like) */}
-      <div className="hidden md:grid grid-cols-12 gap-2 px-3 py-2 text-[10px] tracking-wider font-semibold text-slate-500 uppercase border-b border-slate-800">
+      <div className="hidden md:grid grid-cols-12 gap-2 px-3 py-2 text-[10px] tracking-wider font-semibold text-muted-foreground uppercase border-b border-border">
         <div className="col-span-2">Date</div>
         <div className="col-span-2">Ref</div>
         <div className="col-span-1">Action</div>
@@ -49,7 +48,7 @@ export default function Statement({ entries }: Props) {
         <div className="col-span-2 text-right">Balance</div>
       </div>
 
-      <div className="rounded-lg border border-slate-800 bg-slate-900/40 divide-y divide-slate-800">
+      <div className="rounded-lg border border-border bg-card divide-y divide-border">
         {entries.map((e) => {
           const { date, time } = fmtDateTime(e.timestamp);
           return (
@@ -57,7 +56,6 @@ export default function Statement({ entries }: Props) {
               key={e.id}
               className="px-3 py-2.5 md:grid md:grid-cols-12 md:gap-2 md:items-center"
             >
-              {/* Mobile card */}
               <div className="md:hidden flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
@@ -66,40 +64,35 @@ export default function Statement({ entries }: Props) {
                     >
                       {actionLabel(e.action)}
                     </span>
-                    <span className="text-xs text-slate-300 font-mono">
-                      {e.refId}
-                    </span>
+                    <span className="text-xs text-foreground font-mono">{e.refId}</span>
                   </div>
-                  <div className="text-xs text-slate-200 truncate mt-1">
-                    {e.description}
-                  </div>
-                  <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                  <div className="text-xs text-foreground truncate mt-1">{e.description}</div>
+                  <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
                     {date} {time}
                   </div>
                 </div>
                 <div className="text-right shrink-0">
                   {e.credit > 0 && (
-                    <div className="text-sm font-semibold tabular-nums text-emerald-400">
+                    <div className="text-sm font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
                       +${e.credit.toFixed(2)}
                     </div>
                   )}
                   {e.debit > 0 && (
-                    <div className="text-sm font-semibold tabular-nums text-rose-400">
+                    <div className="text-sm font-semibold tabular-nums text-rose-600 dark:text-rose-400">
                       -${e.debit.toFixed(2)}
                     </div>
                   )}
-                  <div className="text-[10px] text-slate-500 tabular-nums">
+                  <div className="text-[10px] text-muted-foreground tabular-nums">
                     Bal ${e.balance.toFixed(2)}
                   </div>
                 </div>
               </div>
 
-              {/* Desktop row */}
-              <div className="hidden md:block col-span-2 text-xs text-slate-400 font-mono">
+              <div className="hidden md:block col-span-2 text-xs text-muted-foreground font-mono">
                 <div>{date}</div>
-                <div className="text-slate-500">{time}</div>
+                <div className="text-muted-foreground/70">{time}</div>
               </div>
-              <div className="hidden md:block col-span-2 text-xs text-slate-300 font-mono truncate">
+              <div className="hidden md:block col-span-2 text-xs text-foreground font-mono truncate">
                 {e.refId}
               </div>
               <div className="hidden md:block col-span-1">
@@ -109,16 +102,16 @@ export default function Statement({ entries }: Props) {
                   {actionLabel(e.action)}
                 </span>
               </div>
-              <div className="hidden md:block col-span-3 text-xs text-slate-200 truncate">
+              <div className="hidden md:block col-span-3 text-xs text-foreground truncate">
                 {e.description}
               </div>
-              <div className="hidden md:block col-span-1 text-right text-xs tabular-nums text-emerald-400">
+              <div className="hidden md:block col-span-1 text-right text-xs tabular-nums text-emerald-600 dark:text-emerald-400">
                 {e.credit > 0 ? `+$${e.credit.toFixed(2)}` : "—"}
               </div>
-              <div className="hidden md:block col-span-1 text-right text-xs tabular-nums text-rose-400">
+              <div className="hidden md:block col-span-1 text-right text-xs tabular-nums text-rose-600 dark:text-rose-400">
                 {e.debit > 0 ? `-$${e.debit.toFixed(2)}` : "—"}
               </div>
-              <div className="hidden md:block col-span-2 text-right text-xs font-semibold tabular-nums text-slate-200">
+              <div className="hidden md:block col-span-2 text-right text-xs font-semibold tabular-nums text-foreground">
                 ${e.balance.toFixed(2)}
               </div>
             </div>

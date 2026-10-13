@@ -3,37 +3,33 @@
 /**
  * Digit analysis engine — scans EVERY volatility market for:
  *   - Even / Odd
- *   - Over / Under  (all barriers 0-8 / 1-9, not just 2 and 4)
- *   - Matches / Differs (all digits 0-9)
- *
- * Digits come from YOUR feed (@/lib/marketFeeds -> @/lib/ticks) and the edge is
- * scored against YOUR payout table (@/lib/contracts), so a signal only fires
- * when the empirical hit rate beats what the broker needs to break even.
+ *   - Over / Under
+ *   - Rise / Fall
+ *   - Matches / Differs
  */
 
 import { getPayout, contractLabel, isWinningDigit, type ContractKind } from "@/lib/contracts";
 
-export type Family = "evenodd" | "overunder" | "matchdiff";
+export type Family = "evenodd" | "overunder" | "matchdiff" | "risefall";
 
 export type Signal = {
   family: Family;
   market: string;
   kind: ContractKind;
   barrier?: number | undefined;
-  label: string; // "Over 3"
+  label: string;
   hits: number;
   samples: number;
-  observed: number; // observed hit rate
-  expected: number; // theoretical hit rate
-  lower: number; // Wilson lower bound
-  breakeven: number; // 1 / payout
-  edge: number; // lower * payout - 1  (expected value per unit staked)
+  observed: number;
+  expected: number;
+  lower: number;
+  breakeven: number;
+  edge: number;
   payout: number;
   score: number;
-  streak: number; // consecutive trailing ticks that confirm the setup
+  streak: number;
 };
 
-/** Wilson score lower bound. Punishes small samples so we don't chase noise. */
 export function wilsonLower(hits: number, n: number, z = 1.64) {
   if (n === 0) return 0;
   const p = hits / n;
@@ -73,7 +69,7 @@ function build(
   const payout = getPayout(kind, barrier);
   const breakeven = 1 / payout;
   const lower = wilsonLower(hits, samples);
-  const edge = lower * payout - 1; // expected value per 1 unit staked
+  const edge = lower * payout - 1;
   const observed = samples ? hits / samples : 0;
   const streak = trailing(digits, (d) => isWinningDigit(kind, barrier, d));
   const score = edge * 100 + Math.min(streak, 6) * 0.3;
@@ -105,19 +101,18 @@ export function analyseMarket(market: string, digits: number[], window = 200): S
   const hitsOf = (kind: ContractKind, barrier?: number) =>
     d.filter((x) => isWinningDigit(kind, barrier, x)).length;
 
-  // EVEN / ODD
   out.push(build("evenodd", market, "even", undefined, hitsOf("even"), n, 0.5, d));
   out.push(build("evenodd", market, "odd", undefined, hitsOf("odd"), n, 0.5, d));
 
-  // OVER / UNDER — every barrier
   for (let b = 0; b <= 8; b++) {
     out.push(build("overunder", market, "over", b, hitsOf("over", b), n, (9 - b) / 10, d));
+    out.push(build("risefall", market, "rise", b, hitsOf("rise", b), n, (9 - b) / 10, d));
   }
   for (let b = 1; b <= 9; b++) {
     out.push(build("overunder", market, "under", b, hitsOf("under", b), n, b / 10, d));
+    out.push(build("risefall", market, "fall", b, hitsOf("fall", b), n, b / 10, d));
   }
 
-  // MATCHES / DIFFERS — every digit
   for (let k = 0; k <= 9; k++) {
     const c = counts[k] ?? 0;
     out.push(build("matchdiff", market, "matches", k, c, n, 0.1, d));
@@ -130,7 +125,7 @@ export function analyseMarket(market: string, digits: number[], window = 200): S
 export type ScanResult = {
   family: Family;
   best: Signal | null;
-  ranked: Signal[]; // best signal per market, sorted
+  ranked: Signal[];
   perMarket: Record<string, Signal[]>;
 };
 
@@ -168,6 +163,10 @@ export function entryAdvice(s: Signal): string {
       return `Enter OVER ${s.barrier} right after a tick lands at or below ${s.barrier}. Skip if two overs already printed back to back.`;
     case "under":
       return `Enter UNDER ${s.barrier} right after a tick lands at or above ${s.barrier}. Skip after two consecutive unders.`;
+    case "rise":
+      return `Enter RISE ${s.barrier} after a tick lands at or below ${s.barrier}. Sashi bias favours the higher digit.`;
+    case "fall":
+      return `Enter FALL ${s.barrier} after a tick lands at or above ${s.barrier}. Sashi bias favours the lower digit.`;
     case "matches":
       return `Digit ${s.barrier} is over-printing here. Enter MATCHES ${s.barrier} on the next tick, max 3 attempts, then stop.`;
     case "differs":

@@ -63,7 +63,7 @@ self.addEventListener('push', (event) => {
     icon: '/images/traderiser-logo-192.png',
     badge: '/images/traderiser-logo-192.png',
     vibrate: [200, 100, 200],
-    data: { url: data.url || '/' }, // Optional URL to open on click
+    data: { url: data.url || '/' },
   });
 });
 
@@ -85,12 +85,19 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-// Skip waiting on install to activate the service worker immediately
+// Do NOT skipWaiting on install. The new version waits until the user taps Restart.
 self.addEventListener('install', () => {
-  self.skipWaiting();
+  // waiting state — UpdateAvailable will ask the user
 });
 
-// Claim clients on activation to take control immediately
+// Only claim clients after the user confirms the update
 self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
+});
+
+// Page sends this when the user taps Restart
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });

@@ -2,6 +2,7 @@
 
 import { Eye, EyeOff, Zap, TrendingUp } from "lucide-react";
 import { formatCurrency } from "@/lib/format-currency";
+import Image from "next/image";
 
 interface BalanceCardProps {
   balance: number;
@@ -9,7 +10,7 @@ interface BalanceCardProps {
   isRealAccount: boolean;
   showBalance: boolean;
   onToggleBalance: () => void;
-  accountType?: string; // "demo" | "standard" | "pro-fx" | "mt5" | "mt5-demo"
+  accountType?: string;
 }
 
 export function BalanceCard({
@@ -25,119 +26,62 @@ export function BalanceCard({
   const isMt5Demo = accountType === "mt5-demo";
   const isDemoAccount = accountType === "demo" || isMt5Demo;
 
-  // Color Logic
-  let mainColor = "blue";
-  let gradientFrom = "from-blue-600";
-  let gradientTo = "to-blue-800";
-  let accentColor = "blue";
-  let statusColor = "amber";
+  let from = "from-blue-600";
+  let to = "to-blue-800";
+  if (isProFx) { from = "from-purple-600"; to = "to-purple-800"; }
+  else if (isMt5Real) { from = "from-teal-600"; to = "to-teal-800"; }
+  else if (isMt5Demo) { from = "from-amber-500"; to = "to-amber-700"; }
+  else if (isRealAccount) { from = "from-orange-500"; to = "to-orange-700"; }
 
-  if (isProFx) {
-    mainColor = "purple";
-    gradientFrom = "from-purple-600";
-    gradientTo = "to-purple-800";
-    accentColor = "purple";
-    statusColor = "green";
-  } else if (isMt5Real) {
-    mainColor = "teal";
-    gradientFrom = "from-teal-600";
-    gradientTo = "to-teal-800";
-    accentColor = "teal";
-    statusColor = "green";
-  } else if (isMt5Demo) {
-    mainColor = "amber";
-    gradientFrom = "from-amber-600";
-    gradientTo = "to-amber-700";
-    accentColor = "amber";
-    statusColor = "amber";
-  } else if (isRealAccount) {
-    mainColor = "orange";
-    gradientFrom = "from-orange-600";
-    gradientTo = "to-orange-800";
-    accentColor = "orange";
-    statusColor = "green";
-  }
+  const label = isMt5Demo ? "MT5 Demo" : isDemoAccount ? "Demo" : isMt5Real ? "MT5 Real" : isProFx ? "Pro-FX" : "Live";
+
+  const iconSrc = isProFx
+    ? "/pro-fx-account-icon.png"
+    : isDemoAccount
+    ? "/demo-account-icon.png"
+    : "/real-account-icon.png";
+  const iconAlt = isProFx ? "Pro-FX" : isDemoAccount ? "Demo Account" : "Real Account";
 
   return (
-    <div className="w-full mb-8">
-      <div className="relative group perspective">
-        <div className={`relative rounded-3xl p-8 lg:p-12 glass backdrop-blur-2xl overflow-hidden border border-white/15 shadow-2xl hover:shadow-3xl transition-all duration-500 group/card bg-gradient-to-br ${gradientFrom} ${gradientTo}`}>
-
-          <div className="relative z-10 space-y-8">
-            {/* Header */}
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-4">
-                <div className="relative">
-                  <div className={`absolute inset-0 bg-gradient-to-br from-${mainColor}-400 to-pink-500 rounded-full blur-lg opacity-0 group-hover/card:opacity-40 transition-opacity duration-500`} />
-                  <img
-                    src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/traderiser-logo-512-XQKYiMKYDs3FHo4yZyfpTS70vqF8qV.png"
-                    alt="Traderiser"
-                    className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-full shadow-xl ring-2 ring-white/20"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs sm:text-sm text-white/70 uppercase tracking-widest font-semibold">
-                    {isMt5Demo ? "MT5 Demo" : isDemoAccount ? "Demo" : isMt5Real ? "MT5 Real" : isProFx ? "Pro-FX" : "Live"} Account
-                  </p>
-                  <h3 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-white via-white/90 to-white bg-clip-text text-transparent">
-                    {isMt5Demo ? "MT5 Demo" : isDemoAccount ? "Demo" : isMt5Real ? "MT5 Real" : isProFx ? "Pro-FX" : "Real"}
-                  </h3>
-                </div>
-              </div>
-            </div>
-
-            {/* Balance Section */}
-            <div className="space-y-4">
-              <div className="flex items-baseline justify-between">
-                <p className="text-xs sm:text-sm text-white/60 uppercase tracking-widest font-semibold">Account Balance</p>
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10">
-                  {isDemoAccount || isMt5Demo ? (
-                    <><Zap size={14} className="text-amber-400" /><span className="text-xs text-amber-300 font-semibold">Demo</span></>
-                  ) : (
-                    <><TrendingUp size={14} className={`text-${statusColor}-400`} /><span className={`text-xs text-${statusColor}-300 font-semibold`}>Live</span></>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between gap-4 py-4 px-6 rounded-2xl bg-white/5 border border-white/10 group/balance hover:bg-white/8 hover:border-white/20 transition-all duration-300">
-                <div className="flex-1">
-                  <h2 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight bg-gradient-to-r from-white via-white/90 to-white/80 bg-clip-text text-transparent">
-                    {showBalance ? `$${formatCurrency(balance)}` : "••••••••"}
-                  </h2>
-                </div>
-                <button
-                  onClick={onToggleBalance}
-                  className="flex-shrink-0 p-3 sm:p-4 hover:bg-white/10 rounded-xl transition-all duration-200 group/eye"
-                  aria-label={showBalance ? "Hide balance" : "Show balance"}
-                >
-                  {showBalance ? (
-                    <Eye size={24} className={`text-${accentColor}-400 group-hover/eye:text-${accentColor}-300 transition-colors`} />
-                  ) : (
-                    <EyeOff size={24} className="text-white/40 group-hover/eye:text-white/60 transition-colors" />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* Footer Info */}
-            <div className="grid grid-cols-2 gap-4 pt-6 border-t border-white/10">
-              <div className="space-y-1">
-                <p className="text-xs text-white/50 uppercase tracking-widest font-semibold">Account Holder</p>
-                <p className="text-sm sm:text-base font-bold text-white uppercase tracking-wide">{username}</p>
-              </div>
-              <div className="space-y-1 text-right">
-                <p className="text-xs text-white/50 uppercase tracking-widest font-semibold">Status</p>
-                <div className="flex items-center justify-end gap-2">
-                  <div className={`w-2 h-2 rounded-full bg-${statusColor}-400 animate-pulse`} />
-                  <p className={`text-sm sm:text-base font-semibold text-${statusColor}-400`}>
-                    {isDemoAccount || isMt5Demo ? "Sandbox" : "Active"}
-                  </p>
-                </div>
-              </div>
+    <section className={`relative overflow-hidden rounded-[1.8rem] border border-white/30 bg-gradient-to-br ${from} ${to} p-6 text-white shadow-2xl sm:p-8`}>
+      <div className="pointer-events-none absolute -right-8 -bottom-10 h-36 w-36 rounded-full bg-white/20 blur-2xl" />
+      <div className="relative z-10">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl border border-white/30 bg-white/15">
+              <Image src={iconSrc} alt={iconAlt} width={36} height={36} className="h-9 w-9 object-cover" />
+            </span>
+            <div>
+              <p className="text-xs uppercase tracking-[0.16em] text-white/80">{label} account</p>
+              <h3 className="text-lg font-bold">{label}</h3>
             </div>
           </div>
+          <span className="flex items-center gap-1.5 rounded-full border border-white/30 bg-white/20 px-3 py-1 text-xs font-semibold">
+            {isDemoAccount ? <Zap size={13} /> : <TrendingUp size={13} />}
+            {isDemoAccount ? "Demo" : "Live"}
+          </span>
+        </div>
+
+        <div className="mt-6">
+          <p className="text-xs uppercase tracking-[0.16em] text-white/70">Total balance</p>
+          <div className="mt-2 flex items-center justify-between rounded-2xl border border-white/25 bg-black/20 px-5 py-4">
+            <h2 className="text-3xl font-black tracking-tight sm:text-4xl">
+              {showBalance ? `$${formatCurrency(balance)}` : "••••••••"}
+            </h2>
+            <button onClick={onToggleBalance} className="rounded-xl p-2 hover:bg-white/10" aria-label="Toggle balance">
+              {showBalance ? <Eye size={22} /> : <EyeOff size={22} />}
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between text-sm">
+          <span className="uppercase tracking-wide text-white/90">{username}</span>
+          <span className="flex items-center gap-2">
+            <span className={`h-2 w-2 rounded-full ${isDemoAccount ? "bg-amber-300" : "bg-emerald-300"}`} />
+            {isDemoAccount ? "Sandbox" : "Active"}
+          </span>
         </div>
       </div>
-    </div>
+    </section>
   );
 }

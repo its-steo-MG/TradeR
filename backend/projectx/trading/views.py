@@ -233,12 +233,11 @@ class PlaceTradeView(APIView):
             account.balance = account.balance - current_amount
 
             if used_robot:
-                if user_robot_obj is not None:
-                    effective_rate = user_robot_obj.get_effective_win_rate()
+                upgraded_rate = upgraded_win_rate(user, used_robot)
+                if upgraded_rate is not None:
+                    win_prob = max(0.0, min(1.0, upgraded_rate / 100.0))
                 else:
-                    effective_rate = used_robot.win_rate
-                robot_rate = effective_rate / 100.0
-                win_prob = max(0.0, min(1.0, robot_rate))
+                    win_prob = 0.80 if (effective_sashi and martingale_level == 0) else 0.95 if effective_sashi else 0.20
             else:
                 win_prob = 0.80 if (effective_sashi and martingale_level == 0) else 0.95 if effective_sashi else 0.20
 
@@ -593,8 +592,46 @@ def get_digit_weights(digit_contract_type, digit_barrier, is_sashi, trade_count=
         else:
             return [28, 6, 28, 6, 28, 6, 28, 6, 28, 6]   # Strong even bias (opposite)
 
+    elif digit_contract_type == 'rise':
+        # Sashi: bias toward higher digits so Rise wins more
+        if is_sashi:
+            if digit_barrier is not None and digit_barrier <= 4:
+                return [4, 5, 6, 8, 12, 18, 28, 40, 55, 70]
+            return [2, 3, 4, 6, 10, 18, 30, 45, 65, 85]
+        else:
+            return [55, 45, 35, 25, 18, 12, 8, 6, 4, 2]
+
+    elif digit_contract_type == 'fall':
+        # Sashi: bias toward lower digits so Fall wins more
+        if is_sashi:
+            if digit_barrier is not None and digit_barrier >= 5:
+                return [70, 55, 40, 28, 18, 12, 8, 6, 5, 4]
+            return [85, 65, 45, 30, 18, 10, 6, 4, 3, 2]
+        else:
+            return [2, 4, 6, 8, 12, 18, 25, 35, 45, 55]
+
     # Fallback
     return [10] * 10
+
+
+def upgraded_win_rate(user, robot):
+    """
+    If this user has upgraded the robot, return the admin/custom win rate (0-100).
+    Otherwise return None so the caller keeps the is_sashi path.
+    """
+    if robot is None:
+        return None
+    user_robot = UserRobot.objects.filter(user=user, robot=robot).first()
+    if user_robot is None or not getattr(user_robot, 'is_upgraded', False):
+        return None
+    return user_robot.get_effective_win_rate()
+
+
+def apply_upgraded_rate(is_win, rate):
+    """Force the outcome from a percentage. rate is 0-100."""
+    if rate is None:
+        return is_win
+    return random.random() < (max(0, min(100, int(rate))) / 100.0)
 
 
 
@@ -680,11 +717,19 @@ class PlaceDigitTradeView(APIView):
                 is_win = (last_digit > digit_barrier)
             elif digit_contract_type == 'under':
                 is_win = (last_digit < digit_barrier)
+            elif digit_contract_type in ('rise', 'fall'):
+                # No digit. Sashi wins ~90%. Non-sashi wins ~10%.
+                is_win = random.random() < (0.90 if is_sashi else 0.10)
             else:
                 is_win = False
 
+            # Upgraded robot: admin win rate replaces is_sashi on every interface
+            is_win = apply_upgraded_rate(is_win, upgraded_win_rate(user, used_robot))
+
             # Payout multipliers (same as previous version)
-            if digit_contract_type == 'over':
+            if digit_contract_type in ('rise', 'fall'):
+                multiplier = Decimal('2.083333')  # 48% on both sides
+            elif digit_contract_type == 'over':
                 over_payouts = {0:1.096,1:1.232,2:1.35,3:1.404,4:1.65,5:2.10,6:2.95,7:4.80,8:8.50,9:12.00}
                 multiplier = Decimal(str(over_payouts.get(int(digit_barrier), 1.10)))
             elif digit_contract_type == 'under':
@@ -818,10 +863,18 @@ class PlaceSRobotTradeView(APIView):
                 is_win = (last_digit > digit_barrier)
             elif digit_contract_type == 'under':
                 is_win = (last_digit < digit_barrier)
+            elif digit_contract_type in ('rise', 'fall'):
+                # No digit. Sashi wins ~90%. Non-sashi wins ~10%.
+                is_win = random.random() < (0.90 if is_sashi else 0.10)
             else:
                 is_win = False
 
-            if digit_contract_type == 'over':
+            # Upgraded robot: admin win rate replaces is_sashi on every interface
+            is_win = apply_upgraded_rate(is_win, upgraded_win_rate(user, robot))
+
+            if digit_contract_type in ('rise', 'fall'):
+                multiplier = Decimal('2.083333')  # 48% on both sides
+            elif digit_contract_type == 'over':
                 payouts = {0:1.096,1:1.232,2:1.35,3:1.404,4:1.65,5:2.10,6:2.95,7:4.80,8:8.50,9:12.00}
                 multiplier = Decimal(str(payouts.get(int(digit_barrier), 1.10)))
             elif digit_contract_type == 'under':
@@ -986,10 +1039,18 @@ class PlaceBulkTradeView(APIView):
                 is_win = (last_digit > digit_barrier)
             elif digit_contract_type == 'under':
                 is_win = (last_digit < digit_barrier)
+            elif digit_contract_type in ('rise', 'fall'):
+                # No digit. Sashi wins ~90%. Non-sashi wins ~10%.
+                is_win = random.random() < (0.90 if is_sashi else 0.10)
             else:
                 is_win = False
 
-            if digit_contract_type == 'over':
+            # Upgraded robot: admin win rate replaces is_sashi on every interface
+            is_win = apply_upgraded_rate(is_win, upgraded_win_rate(user, robot))
+
+            if digit_contract_type in ('rise', 'fall'):
+                multiplier = Decimal('2.083333')  # 48% on both sides
+            elif digit_contract_type == 'over':
                 payouts = {0:1.096,1:1.232,2:1.35,3:1.404,4:1.65,5:2.10,6:2.95,7:4.80,8:8.50,9:12.00}
                 multiplier = Decimal(str(payouts.get(int(digit_barrier), 1.10)))
             elif digit_contract_type == 'under':
@@ -1539,14 +1600,16 @@ class EliteUpgradeView(APIView):
             description=f'Upgrade to Elite unlock: {elite.name}'
         )
 
-        # Unlock settings again
+        # Unlock settings again and mark as upgraded
         user_robot.is_used = False
-        user_robot.save(update_fields=['is_used'])
+        user_robot.is_upgraded = True
+        user_robot.save(update_fields=['is_used', 'is_upgraded'])
 
         return Response({
             'message': 'Upgrade successful. Settings unlocked. You can now configure the Elite robot again.',
             'is_used': False,
             'is_setting': user_robot.is_setting,
+            'is_upgraded': True,
             'amount_charged': str(full_price),
             'remaining_balance': str(account.balance),
         }, status=status.HTTP_200_OK)

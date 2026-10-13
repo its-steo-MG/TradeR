@@ -11,131 +11,66 @@ interface DashboardHeaderProps {
   accountType: string;
 }
 
-export function DashboardHeader({
-  username,
-  email,
-  isRealAccount,
-  accountType,
-}: DashboardHeaderProps) {
-  const displayAccountType =
-    accountType.charAt(0).toUpperCase() + accountType.slice(1);
-
+export function DashboardHeader({ username, isRealAccount, accountType }: DashboardHeaderProps) {
   const [activeIndex, setActiveIndex] = useState(0);
-
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const platforms = [
-    {
-      name: "MT5",
-      logo: "/mt5.png", 
-      color: "from-orange-500 to-red-600",
-      fill: true,
-    },
-    {
-      name: "Traderiser",
-      logo: "/images/traderiser-logo-192.png",
-      color: "from-blue-500 to-purple-600",
-      fill: false,
-    },
-    {
-      name: "Deriv",
-      logo: "/deriv-account-icon.png",
-      color: "from-emerald-500 to-teal-600",
-      fill: true,
-    },
+    { name: "MT5", logo: "/mt5.png" },
+    { name: "Traderiser", logo: "/images/traderiser-logo-192.png" },
+    { name: "Deriv", logo: "/deriv-account-icon.png" },
   ];
 
-  // Auto-scroll effect
   useEffect(() => {
-    const interval = setInterval(() => {
-      setActiveIndex((prev) => (prev + 1) % platforms.length);
-    }, 2800);
-
-    return () => clearInterval(interval);
+    const t = setInterval(() => setActiveIndex((i) => (i + 1) % platforms.length), 2800);
+    return () => clearInterval(t);
   }, []);
 
   return (
-    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 mb-8">
-      {/* Welcome Section */}
-      <div className="flex-1 space-y-4">
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <div className="absolute inset-0 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full blur-lg opacity-0 group-hover:opacity-40 transition-opacity duration-500" />
-            <img
-              src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/traderiser-logo-512-XQKYiMKYDs3FHo4yZyfpTS70vqF8qV.png"
-              alt="Traderiser"
-              className="relative w-10 h-10 sm:w-12 sm:h-12 rounded-full shadow-lg ring-2 ring-white/20"
-            />
+    <header className="relative mx-auto w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200/90 bg-white/80 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-zinc-900/60">
+      {/* Soft top shine only — not over the text */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/70 to-transparent dark:from-white/10" />
+
+      <div className="relative flex items-center justify-between gap-3 px-4 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <img
+            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/traderiser-logo-512-XQKYiMKYDs3FHo4yZyfpTS70vqF8qV.png"
+            alt="Traderiser"
+            className="h-10 w-10 shrink-0 rounded-xl shadow-sm ring-1 ring-slate-200 dark:ring-white/20"
+          />
+          <div className="min-w-0">
+            <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500 dark:text-zinc-400">
+              {greeting}
+            </p>
+            <h1 className="truncate text-lg font-bold tracking-tight text-slate-900 sm:text-xl dark:text-white">
+              {username}
+            </h1>
+            <div className="mt-1.5 flex items-center gap-1.5 text-[10px]">
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 capitalize text-slate-600 dark:bg-white/10 dark:text-zinc-300">
+                {accountType}
+              </span>
+              <span className={`rounded-full px-2 py-0.5 ${isRealAccount ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300" : "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300"}`}>
+                {isRealAccount ? "Live" : "Practice"}
+              </span>
+            </div>
           </div>
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-black bg-gradient-to-r from-white via-purple-100 to-white bg-clip-text text-transparent tracking-tight">
-            Welcome back, {username}
-          </h1>
-        </div>
-        
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="px-4 py-2 rounded-full glass border border-white/15 text-xs sm:text-sm font-semibold uppercase tracking-widest bg-gradient-to-r from-purple-500/10 to-pink-500/10 hover:from-purple-500/20 hover:to-pink-500/20 transition-all duration-300">
-            {displayAccountType}
-          </span>
-          <span className="hidden sm:inline text-white/30">•</span>
-          <span className="hidden sm:inline text-sm text-white/60">{email}</span>
-        </div>
-      </div>
-
-      {/* Scrolling Platforms Banner */}
-      <div className="glass rounded-3xl px-8 py-6 border border-white/10 backdrop-blur-2xl shadow-xl overflow-hidden">
-        <div className="flex items-center justify-center gap-6 relative"> {/* Reduced gap */}
-          {platforms.map((plat, index) => {
-            const isActive = index === activeIndex;
-            
-            // Increased logo sizes
-            const logoSize = plat.fill ? 110 : 82;
-
-            return (
-              <div
-                key={plat.name}
-                className={cn(
-                  "flex flex-col items-center transition-all duration-700 ease-out",
-                  isActive ? "scale-125 opacity-100 z-10" : "scale-75 opacity-60"
-                )}
-              >
-                {/* Clean logo - No card */}
-                <div className="relative flex items-center justify-center">
-                  <Image
-                    src={plat.logo}
-                    alt={plat.name}
-                    width={logoSize}
-                    height={logoSize}
-                    className={cn(
-                      "transition-all drop-shadow-md",
-                      plat.fill 
-                        ? "object-cover scale-110" 
-                        : "object-contain"
-                    )}
-                  />
-                </div>
-
-                <p className={cn(
-                  "text-xs font-medium mt-3 transition-colors",
-                  isActive ? "text-white" : "text-white/50"
-                )}>
-                  {plat.name}
-                </p>
-              </div>
-            );
-          })}
         </div>
 
-        {/* Subtle indicator */}
-        <div className="flex justify-center gap-1 mt-5">
-          {platforms.map((_, i) => (
+        <div className="drop-on-top relative z-[1] flex shrink-0 items-center gap-2.5 overflow-hidden rounded-2xl border border-white/70 bg-white/30 px-3 py-2 backdrop-blur-lg dark:border-white/20 dark:bg-white/10">
+          {platforms.map((p, i) => (
             <div
-              key={i}
+              key={p.name}
               className={cn(
-                "w-1.5 h-1.5 rounded-full transition-all",
-                i === activeIndex ? "bg-white scale-125" : "bg-white/30"
+                "relative z-[1] flex flex-col items-center transition-all duration-500",
+                i === activeIndex ? "scale-110 opacity-100" : "scale-95 opacity-50"
               )}
-            />
+            >
+              <Image src={p.logo} alt={p.name} width={36} height={36} className="h-9 w-9 object-contain" />
+              <span className="mt-0.5 text-[9px] font-medium text-slate-600 dark:text-zinc-300">{p.name}</span>
+            </div>
           ))}
         </div>
       </div>
-    </div>
+    </header>
   );
 }

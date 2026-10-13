@@ -110,12 +110,20 @@ export default function DigitsTradingLayout({ children }: DigitsTradingLayoutPro
       : (user?.accounts || []).filter((acc) => acc.account_type === "demo");
 
   if (isLoading)
-    return <div className="min-h-screen flex items-center justify-center bg-black text-white">Loading...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+        Loading...
+      </div>
+    );
   if (error)
-    return <div className="min-h-screen flex items-center justify-center text-red-400 bg-black">{error}</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center text-red-500 bg-background">
+        {error}
+      </div>
+    );
 
   return (
-    <div className="min-h-screen flex flex-col bg-black text-white">
+    <div className="min-h-screen flex flex-col bg-background text-foreground">
       <TopNavbar
         isLoggedIn={isLoggedIn}
         user={user}
@@ -127,9 +135,8 @@ export default function DigitsTradingLayout({ children }: DigitsTradingLayoutPro
         onLogout={handleLogout}
       />
 
-      {/* Responsive shell: sidebar visible from lg+, content fills remaining width */}
       <div className="flex-1 flex w-full">
-        <aside className="hidden lg:block lg:w-64 xl:w-72 shrink-0 border-r border-slate-800 bg-slate-950/60">
+        <aside className="hidden lg:block lg:w-64 xl:w-72 shrink-0 border-r border-border bg-card">
           <Sidebar
             loginType={loginType}
             activeAccount={activeAccount}
@@ -137,7 +144,6 @@ export default function DigitsTradingLayout({ children }: DigitsTradingLayoutPro
           />
         </aside>
 
-        {/* Mobile sidebar (renders its own drawer/trigger inside the component) */}
         <div className="lg:hidden">
           <Sidebar
             loginType={loginType}

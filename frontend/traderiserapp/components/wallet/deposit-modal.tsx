@@ -17,12 +17,11 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
   const [selectedAccountType, setSelectedAccountType] = useState<"standard" | "pro-fx" | "mt5">(
     (localStorage.getItem("account_type") as "standard" | "pro-fx" | "mt5") || "standard"
   );
-  
-  // ========== NEW: Currency input mode ==========
+
   const [inputMode, setInputMode] = useState<"KES" | "USD">("KES");
   const [kesAmount, setKesAmount] = useState("");
   const [usdAmount, setUsdAmount] = useState("");
-  
+
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -31,9 +30,8 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
   const [hasMt5, setHasMt5] = useState(false);
 
   const conversionRate = 130.0;
-  const minimumDeposit = 5; // in USD
+  const minimumDeposit = 5;
 
-  // Keep both values in sync
   useEffect(() => {
     if (inputMode === "KES") {
       const kes = Number.parseFloat(kesAmount) || 0;
@@ -47,17 +45,20 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [walletsRes, mpesaRes] = await Promise.all([api.getWallets(), api.getMpesaNumber()]);
+        const [walletsRes, mpesaRes] = await Promise.all([
+          api.getWallets(),
+          api.getMpesaNumber(),
+        ]);
         if (walletsRes.error) throw new Error(walletsRes.error);
 
-        const normalizedWallets = walletsRes.data?.wallets.map((w: Wallet) => ({
-          ...w,
-          balance: Number(w.balance) || 0,
-        })) || [];
+        const normalizedWallets =
+          walletsRes.data?.wallets.map((w: Wallet) => ({
+            ...w,
+            balance: Number(w.balance) || 0,
+          })) || [];
 
         setWallets(normalizedWallets);
         setPhoneNumber(mpesaRes.data?.phone_number || "");
-
         setHasProFx(normalizedWallets.some((w: Wallet) => w.account_type === "pro-fx"));
         setHasMt5(normalizedWallets.some((w: Wallet) => w.account_type === "mt5"));
       } catch (error) {
@@ -68,7 +69,8 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
     fetchData();
 
     const handleSessionUpdate = () => {
-      const newType = (localStorage.getItem("account_type") as "standard" | "pro-fx" | "mt5") || "standard";
+      const newType =
+        (localStorage.getItem("account_type") as "standard" | "pro-fx" | "mt5") || "standard";
       setSelectedAccountType(newType);
       fetchData();
     };
@@ -93,7 +95,10 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
     e.preventDefault();
 
     if (selectedAccountType === "pro-fx" && !hasProFx) {
-      onSetMessage({ type: "error", text: "You do not have a ProFX account. Please create one first." });
+      onSetMessage({
+        type: "error",
+        text: "You do not have a ProFX account. Please create one first.",
+      });
       return;
     }
 
@@ -108,7 +113,6 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
       return;
     }
 
-    // Always send KES amount to backend
     const kesToSend = Number.parseFloat(kesAmount) || 0;
 
     setIsSubmitting(true);
@@ -128,7 +132,10 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
       setTimeout(() => window.dispatchEvent(new Event("session-updated")), 100);
     } catch (err: unknown) {
       setError((err as Error).message || "Deposit failed");
-      onSetMessage({ type: "error", text: (err as Error).message || "Deposit failed" });
+      onSetMessage({
+        type: "error",
+        text: (err as Error).message || "Deposit failed",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -142,10 +149,16 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-end z-50">
-      <div className="bg-white w-full max-w-2xl rounded-t-3xl shadow-2xl animate-in slide-in-from-bottom mx-auto">
-        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-slate-200">
-          <button onClick={onClose} className="text-2xl font-bold text-slate-900">✕</button>
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-900">Deposit</h2>
+      <div className="bg-white dark:bg-zinc-900 w-full max-w-2xl rounded-t-3xl shadow-2xl border border-slate-200 dark:border-zinc-800 animate-in slide-in-from-bottom mx-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-slate-200 dark:border-zinc-800">
+          <button
+            onClick={onClose}
+            className="text-2xl font-bold text-slate-900 dark:text-white hover:text-slate-600 dark:hover:text-zinc-400"
+          >
+            ✕
+          </button>
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Deposit</h2>
           <div className="w-6" />
         </div>
 
@@ -154,14 +167,16 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
           {step === "account" && (
             <>
               <div>
-                <p className="text-slate-600 text-center mb-3 sm:mb-4 text-sm sm:text-base">To</p>
+                <p className="text-slate-600 dark:text-zinc-400 text-center mb-3 sm:mb-4 text-sm sm:text-base">
+                  To
+                </p>
                 <div className="flex gap-2 sm:gap-3 justify-center mb-6 sm:mb-8 flex-wrap">
                   <button
                     onClick={() => setSelectedAccountType("standard")}
                     className={`drop-on-top relative px-4 sm:px-6 py-2 sm:py-3 rounded-xl text-sm sm:text-base font-semibold transition-all ${
                       selectedAccountType === "standard"
                         ? "bg-purple-600 text-white"
-                        : "bg-slate-200 text-slate-600 hover:bg-slate-300"
+                        : "bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-zinc-700"
                     }`}
                   >
                     <span className="relative z-[1]">TradeR</span>
@@ -173,7 +188,7 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
                     className={`drop-on-top relative px-4 sm:px-6 py-2 sm:py-3 rounded-xl text-sm sm:text-base font-semibold transition-all ${
                       selectedAccountType === "pro-fx"
                         ? "bg-purple-600 text-white"
-                        : "bg-slate-200 text-slate-600 hover:bg-slate-300"
+                        : "bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-zinc-700"
                     } ${!hasProFx ? "opacity-50 cursor-not-allowed" : ""}`}
                   >
                     <span className="relative z-[1]">ProFX</span>
@@ -185,7 +200,7 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
                     className={`drop-on-top relative px-4 sm:px-6 py-2 sm:py-3 rounded-xl text-sm sm:text-base font-semibold transition-all ${
                       selectedAccountType === "mt5"
                         ? "bg-teal-600 text-white"
-                        : "bg-slate-200 text-slate-600 hover:bg-slate-300"
+                        : "bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-zinc-700"
                     } ${!hasMt5 ? "opacity-50 cursor-not-allowed" : ""}`}
                   >
                     <span className="relative z-[1]">MT5</span>
@@ -210,15 +225,15 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
           {/* Step 2: Amount */}
           {step === "amount" && (
             <>
-              {/* ========== CURRENCY SWITCHER ========== */}
+              {/* Currency Switcher */}
               <div className="flex justify-center mb-4">
-                <div className="inline-flex bg-slate-100 rounded-xl p-1">
+                <div className="inline-flex bg-slate-100 dark:bg-zinc-800 rounded-xl p-1">
                   <button
                     onClick={() => setInputMode("KES")}
                     className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
                       inputMode === "KES"
                         ? "bg-purple-600 text-white shadow-sm"
-                        : "text-slate-600 hover:text-slate-900"
+                        : "text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white"
                     }`}
                   >
                     KES
@@ -228,7 +243,7 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
                     className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
                       inputMode === "USD"
                         ? "bg-purple-600 text-white shadow-sm"
-                        : "text-slate-600 hover:text-slate-900"
+                        : "text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white"
                     }`}
                   >
                     USD
@@ -237,21 +252,21 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
               </div>
 
               <div>
-                <p className="text-slate-600 text-center mb-2 text-sm sm:text-base">
+                <p className="text-slate-600 dark:text-zinc-400 text-center mb-2 text-sm sm:text-base">
                   {inputMode === "KES" ? "You Pay" : "You Get"}
                 </p>
-                <div className="text-2xl sm:text-3xl font-bold text-slate-900 text-center mb-1">
+                <div className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white text-center mb-1">
                   {inputMode === "KES"
                     ? `${formatCurrency(kesAmount || "0")} KES`
                     : `${formatCurrency(usdAmount || "0.00")} USD`}
                 </div>
-                <p className="text-center text-slate-500 text-xs sm:text-sm mb-4 sm:mb-6">
+                <p className="text-center text-slate-500 dark:text-zinc-500 text-xs sm:text-sm mb-4 sm:mb-6">
                   Conversion rate: 1 USD = {formatCurrency(conversionRate)} KES
                 </p>
-                <p className="text-slate-600 text-center mb-2 text-sm sm:text-base">
+                <p className="text-slate-600 dark:text-zinc-400 text-center mb-2 text-sm sm:text-base">
                   {inputMode === "KES" ? "You Get" : "You Pay"}
                 </p>
-                <div className="text-2xl sm:text-3xl font-bold text-slate-900 text-center mb-6 sm:mb-8">
+                <div className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white text-center mb-6 sm:mb-8">
                   {inputMode === "KES"
                     ? `${formatCurrency(usdAmount || "0.00")} USD`
                     : `${formatCurrency(kesAmount || "0")} KES`}
@@ -259,21 +274,23 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
               </div>
 
               <div className="mb-4 sm:mb-6">
-                <label className="block text-slate-600 text-sm mb-2">M-Pesa Phone Number</label>
+                <label className="block text-slate-600 dark:text-zinc-400 text-sm mb-2">
+                  M-Pesa Phone Number
+                </label>
                 <input
                   type="tel"
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
                   placeholder="0712345678 or 254712345678 or +254712345678"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-purple-500 focus:outline-none transition-colors text-slate-900 placeholder-slate-400"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:border-purple-500 focus:outline-none transition-colors"
                 />
               </div>
 
-              <p className="text-center text-slate-600 text-xs sm:text-base">
+              <p className="text-center text-slate-600 dark:text-zinc-400 text-xs sm:text-base">
                 Minimum deposit amount is {minimumDeposit} USD
               </p>
 
-              {error && <p className="text-red-600 text-sm text-center">{error}</p>}
+              {error && <p className="text-red-500 text-sm text-center">{error}</p>}
 
               {/* Numpad */}
               <div className="grid grid-cols-3 gap-2 sm:gap-3">
@@ -281,32 +298,31 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
                   <button
                     key={num}
                     onClick={() => handleNumpadClick(num)}
-                    className="bg-slate-100 hover:bg-slate-200 text-slate-900 font-semibold py-3 sm:py-4 px-2 sm:px-6 rounded-2xl transition-colors text-base sm:text-xl"
+                    className="bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-900 dark:text-white font-semibold py-3 sm:py-4 px-2 sm:px-6 rounded-2xl transition-colors text-base sm:text-xl"
                   >
                     {num}
                   </button>
                 ))}
                 <button
                   onClick={() => handleNumpadClick(".")}
-                  className="bg-slate-100 hover:bg-slate-200 text-slate-900 font-semibold py-3 sm:py-4 px-2 sm:px-6 rounded-2xl transition-colors text-base sm:text-xl"
+                  className="bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-900 dark:text-white font-semibold py-3 sm:py-4 px-2 sm:px-6 rounded-2xl transition-colors text-base sm:text-xl"
                 >
                   .
                 </button>
                 <button
                   onClick={() => handleNumpadClick("0")}
-                  className="bg-slate-100 hover:bg-slate-200 text-slate-900 font-semibold py-3 sm:py-4 px-2 sm:px-6 rounded-2xl transition-colors text-base sm:text-xl"
+                  className="bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-900 dark:text-white font-semibold py-3 sm:py-4 px-2 sm:px-6 rounded-2xl transition-colors text-base sm:text-xl"
                 >
                   0
                 </button>
                 <button
                   onClick={() => handleNumpadClick("backspace")}
-                  className="bg-slate-100 hover:bg-slate-200 text-slate-900 font-semibold py-3 sm:py-4 px-2 sm:px-6 rounded-2xl transition-colors text-base sm:text-xl"
+                  className="bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-900 dark:text-white font-semibold py-3 sm:py-4 px-2 sm:px-6 rounded-2xl transition-colors text-base sm:text-xl"
                 >
                   ⌫
                 </button>
               </div>
 
-              {/* Deposit Button */}
               <button
                 onClick={handleProceed}
                 disabled={!(kesAmount || usdAmount) || isSubmitting}
@@ -324,11 +340,15 @@ export function DepositModal({ onClose, onSuccess, onSetMessage }: DepositModalP
             </>
           )}
 
-          {/* Confirmation Step */}
+          {/* Confirmation */}
           {step === "confirmation" && (
             <div className="text-center p-6">
-              <p className="text-lg font-semibold mb-4">STK has been sent to your phone</p>
-              <p className="text-sm text-gray-600 mb-6">Enter your PIN to complete the deposit</p>
+              <p className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+                STK has been sent to your phone
+              </p>
+              <p className="text-sm text-slate-600 dark:text-zinc-400 mb-6">
+                Enter your PIN to complete the deposit
+              </p>
               <button
                 onClick={handleOkay}
                 className="drop-on-top relative bg-purple-600 text-white py-2.5 px-6 rounded-xl font-semibold"

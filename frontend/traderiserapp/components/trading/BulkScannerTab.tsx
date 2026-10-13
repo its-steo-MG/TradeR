@@ -19,11 +19,8 @@ type UserRobotRaw = {
 type Props = {
   markets: Market[];
   onBatchStarted?: () => void;
-  /** Controlled open state (optional) */
   open?: boolean;
-  /** Called when open state should change */
   onOpenChange?: (open: boolean) => void;
-  /** Hide the pill button — used when the workspace tab drives the modal. */
   hideTrigger?: boolean;
 };
 
@@ -37,14 +34,10 @@ export default function BulkScannerTab({
   const [hasBulk, setHasBulk] = useState(false);
   const [internalOpen, setInternalOpen] = useState(false);
 
-  // Use controlled state if provided, otherwise fall back to internal state
   const open = controlledOpen ?? internalOpen;
   const setOpen = (value: boolean) => {
-    if (onOpenChange) {
-      onOpenChange(value);
-    } else {
-      setInternalOpen(value);
-    }
+    if (onOpenChange) onOpenChange(value);
+    else setInternalOpen(value);
   };
 
   useEffect(() => {
@@ -86,21 +79,11 @@ export default function BulkScannerTab({
     <>
       <button
         onClick={() => setOpen(true)}
-        className="
-          drop-on-top
-          relative inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl
-          text-xs font-semibold text-white
-          bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600
-          shadow-lg shadow-indigo-900/30
-          hover:brightness-110 active:scale-[0.98] transition-all
-        "
+        className="relative inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 shadow-lg hover:brightness-110 active:scale-[0.98] transition-all"
       >
-        <span className="relative z-[1] flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5" />
-          Bulk Scanner
-        </span>
+        <Sparkles className="w-3.5 h-3.5" />
+        Bulk Scanner
       </button>
-
       <BulkScannerModal
         open={open}
         onClose={() => setOpen(false)}

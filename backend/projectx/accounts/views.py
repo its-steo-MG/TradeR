@@ -26,9 +26,9 @@ class SignupView(APIView):
 
     def post(self, request):
         data = request.data
-        email = data.get('email')
+        email = (data.get('email') or '').strip().lower()
         password = data.get('password')
-        username = data.get('username')
+        username = (data.get('username') or '').strip()
         account_type = data.get('account_type', 'standard')
         platform = data.get('platform', 'traderiser')
         phone = data.get('phone', '')
@@ -40,46 +40,40 @@ class SignupView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        try:
-            # Existing user trying to create additional account
-            user = User.objects.get(email=email)
-            if not user.check_password(password):
-                return Response({'error': 'Invalid password'}, status=status.HTTP_401_UNAUTHORIZED)
+        if ' ' in username or len(username.split()) > 1:
+            return Response(
+                {'error': 'Username should only be 1 unique name (no spaces)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-            if not user.can_create_account(account_type, platform):
-                return Response({'error': 'Cannot create this account type on this platform'}, 
-                              status=status.HTTP_400_BAD_REQUEST)
+        if User.objects.filter(email__iexact=email).exists():
+            return Response(
+                {'error': 'Email already used'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-            with transaction.atomic():
-                Account.objects.create(user=user, platform=platform, account_type=account_type)
+        if User.objects.filter(username__iexact=username).exists():
+            return Response(
+                {'error': 'Username already used'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        except User.DoesNotExist:
-            # New user - create full default accounts across platforms
-            serializer = UserSerializer(data={'email': email, 'username': username, 'phone': phone})
-            if not serializer.is_valid():
-                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer = UserSerializer(data={'email': email, 'username': username, 'phone': phone})
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-            with transaction.atomic():
-                user = serializer.save()
-                user.set_password(password)
-                user.save()
-                # Create default accounts for all platforms
-                user.create_default_accounts()
+        with transaction.atomic():
+            user = serializer.save()
+            user.set_password(password)
+            user.save()
+            user.create_default_accounts()
 
-        # Authenticate the user
-        user = authenticate(request=request, username=email, password=password)
-        if not user:
-            return Response({'error': 'Authentication failed after account creation'}, 
-                          status=status.HTTP_401_UNAUTHORIZED)
-
-        # Handle referral
         if referral_code:
             try:
                 referrer = User.objects.get(referral_code=referral_code, is_marketo=True)
                 if user != referrer:
                     user.referred_by = referrer
                     user.save(update_fields=['referred_by'])
-
                     try:
                         send_mail(
                             subject="New Referral - Someone Joined via Your Link!",
@@ -90,27 +84,14 @@ class SignupView(APIView):
                             ),
                             from_email=None,
                             recipient_list=[referrer.email],
-                            html_message=f"""
-                            <h2>New Referral Notification</h2>
-                            <p>Hello <strong>{referrer.username}</strong>,</p>
-                            <p>A new user has joined TradeRiser using your referral link:</p>
-                            <p><strong>Username:</strong> {user.username}<br>
-                               <strong>Email:</strong> {user.email}</p>
-                            <p>Thank you for helping us grow!</p>
-                            <p>Best regards,<br>TradeRiser Team</p>
-                            """,
                             fail_silently=True,
                         )
                     except Exception as e:
                         logger.warning(f"Referral notification failed: {e}")
-
             except User.DoesNotExist:
-                pass  # silent fail
+                pass
 
-        # Generate JWT tokens
         refresh = RefreshToken.for_user(user)
-        
-        # Smart active account selection
         active_account = (
             user.accounts.filter(platform=platform, account_type=account_type).first() or
             user.accounts.filter(platform='traderiser', account_type='standard').first() or
@@ -150,7 +131,7 @@ class LoginView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        email = request.data.get('email')
+        email = (request.data.get('email') or '').strip().lower()
         password = request.data.get('password')
         account_type = request.data.get('account_type', 'standard')
         platform = request.data.get('platform', 'traderiser')
@@ -158,10 +139,18 @@ class LoginView(APIView):
         if not email or not password:
             return Response({'error': 'Email and password required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        user = authenticate(request=request, username=email, password=password)
-        if not user or not user.is_active:
-            return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            existing = User.objects.get(email__iexact=email)
+        except User.DoesNotExist:
+            return Response({'error': 'Wrong email'}, status=status.HTTP_401_UNAUTHORIZED)
 
+        if not existing.check_password(password):
+            return Response({'error': 'Wrong password'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        if not existing.is_active:
+            return Response({'error': 'Account is inactive'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        user = existing
         user.clean_up_expired_suspension()
 
         active_account = (

@@ -175,7 +175,7 @@ async function placeOne() {
   try {
     const basePayload = {
       market_id: cfg.marketId,
-      digit_contract_type: cfg.contractKind as "over" | "under" | "matches" | "differs" | "even" | "odd",
+      digit_contract_type: cfg.contractKind as "over" | "under" | "matches" | "differs" | "even" | "odd"| "rise" | "fall",
       digit_barrier: ["over", "under", "matches", "differs"].includes(cfg.contractKind)
         ? cfg.barrier
         : undefined,
@@ -417,7 +417,7 @@ export type BulkBatchConfig = {
   robotName?: string;
   marketId: number;
   marketName?: string;
-  contractKind: "over" | "under" | "matches" | "differs" | "even" | "odd";
+  contractKind: "over" | "under" | "matches" | "differs" | "even" | "odd"| "rise" | "fall";
   barrier?: number;
   stake: number;
   numTrades: number;

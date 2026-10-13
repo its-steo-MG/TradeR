@@ -42,7 +42,7 @@ export default function WinLossBurst({ trigger, durationMs = 3200 }: Props) {
   const digit = active.digit ?? null;
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden">
+    <div className="pointer-events-none relative z-30 overflow-visible">
       {/* very subtle tint so the chart area reacts too */}
       <div
         className="absolute inset-0 animate-[wlb-flash_700ms_ease-out_forwards]"
@@ -52,7 +52,7 @@ export default function WinLossBurst({ trigger, durationMs = 3200 }: Props) {
       {/* Flag pinned to the tip of the chart line (right edge, vertically centered).
           The leader line + dot mimics Deriv's "current price" marker. */}
       <div
-        className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2 animate-[wlb-flag-in_420ms_cubic-bezier(.2,.9,.3,1.2)_forwards]"
+        className="relative flex items-center gap-2 animate-[wlb-flag-in_420ms_cubic-bezier(.2,.9,.3,1.2)_forwards]"
         style={{ filter: `drop-shadow(0 4px 10px ${ringColor})` }}
       >
         {/* leader dot pulsing on the price tip */}
@@ -105,9 +105,9 @@ export default function WinLossBurst({ trigger, durationMs = 3200 }: Props) {
           100% { opacity: 0; }
         }
         @keyframes wlb-flag-in {
-          0%   { transform: translate(20px, -50%) scale(.7); opacity: 0; }
-          60%  { transform: translate(0, -50%)    scale(1.08); opacity: 1; }
-          100% { transform: translate(0, -50%)    scale(1);    opacity: 1; }
+          0%   { transform: translate(12px, 8px) scale(.6); opacity: 0; }
+          45%  { transform: translate(0, 0) scale(1.12); opacity: 1; }
+          100% { transform: translate(0, 0) scale(1); opacity: 1; }
         }
       `}</style>
     </div>

@@ -218,16 +218,24 @@ export default function TradingLayout({ children }: TradingLayoutProps) {
       ? (user?.accounts || []).filter((acc) => acc.account_type !== "demo")
       : (user?.accounts || []).filter((acc) => acc.account_type === "demo");
 
-  if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center text-white">Loading...</div>;
+ if (isLoading) {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+        Loading...
+      </div>
+    );
   }
-
+  
   if (error) {
-    return <div className="min-h-screen flex items-center justify-center text-red-400">{error}</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background text-red-500">
+        {error}
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-black text-white">
+    <div className="min-h-screen flex flex-col bg-background text-foreground">
       <TopNavbar
         isLoggedIn={isLoggedIn}
         user={user}

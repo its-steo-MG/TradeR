@@ -123,7 +123,19 @@ export default function ManagementPage() {
   const showCredentialsForm = currentRequest?.status === "payment_verified"
 
   return (
-    <div className="flex min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+    <div className="relative flex min-h-screen text-foreground overflow-hidden">
+      <div className="fixed inset-0 z-0 hidden dark:block pointer-events-none">
+        <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950 to-black" />
+        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-purple-950/30 to-pink-950/20" />
+        <div className="absolute top-1/4 -left-40 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 -right-40 w-96 h-96 bg-pink-600/8 rounded-full blur-3xl" />
+      </div>
+      <div className="fixed inset-0 z-0 block dark:hidden pointer-events-none">
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-slate-100" />
+        <div className="absolute top-1/4 -left-40 w-96 h-96 bg-purple-400/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 -right-40 w-96 h-96 bg-pink-400/8 rounded-full blur-3xl" />
+      </div>
+      <div className="relative z-10 flex min-h-screen w-full">
       <Sidebar
         loginType={loginType}
         activeAccount={activeAccount}
@@ -137,13 +149,13 @@ export default function ManagementPage() {
           <div className="text-center space-y-2 sm:space-y-3 px-2">
             <div className="flex items-center justify-center gap-2 sm:gap-3 flex-wrap">
               <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-pink-500 to-pink-600 flex items-center justify-center flex-shrink-0">
-                <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-slate-900 dark:text-white" />
               </div>
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white text-balance">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white text-balance">
                 Account Management Service
               </h1>
             </div>
-            <p className="text-white/70 text-base sm:text-lg">Get professional trading management on your account</p>
+            <p className="text-slate-500 dark:text-zinc-400 text-base sm:text-lg">Get professional trading management on your account</p>
           </div>
 
           {/* Status Tracker - Always show if there's a current request */}
@@ -170,14 +182,14 @@ export default function ManagementPage() {
 
             {/* Waiting Message for Active Status */}
             {currentRequest?.status === "credentials_pending" && (
-              <div className="bg-gradient-to-br from-purple-500/10 to-purple-600/10 border border-purple-500/20 rounded-xl p-4 sm:p-6">
+              <div className="bg-gradient-to-br from-purple-500/10 to-purple-600/10 border border-purple-400/40 dark:border-purple-500/30 rounded-xl p-4 sm:p-6">
                 <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4">
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0">
-                    <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-purple-400" />
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-purple-500/15 dark:bg-purple-500/20 backdrop-blur-md flex items-center justify-center flex-shrink-0">
+                    <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600 dark:text-purple-400" />
                   </div>
                   <div>
-                    <h3 className="text-lg sm:text-xl font-semibold text-white mb-2">Waiting for Admin Activation</h3>
-                    <p className="text-sm sm:text-base text-white/70">
+                    <h3 className="text-lg sm:text-xl font-semibold text-slate-900 dark:text-white mb-2">Waiting for Admin Activation</h3>
+                    <p className="text-sm sm:text-base text-slate-500 dark:text-zinc-400">
                       Your credentials have been submitted successfully. Our admin team will review and activate your
                       account management shortly. You will receive an email notification once activated.
                     </p>
@@ -188,43 +200,43 @@ export default function ManagementPage() {
 
             {/* Active Management Info */}
             {currentRequest?.status === "active" && (
-              <div className="bg-gradient-to-br from-green-500/10 to-green-600/10 border border-green-500/20 rounded-xl p-4 sm:p-6">
+              <div className="bg-gradient-to-br from-green-500/10 to-green-600/10 border border-emerald-400/40 dark:border-emerald-500/30 rounded-xl p-4 sm:p-6">
                 <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4">
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0">
-                    <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-green-400" />
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-emerald-500/15 dark:bg-emerald-500/20 backdrop-blur-md flex items-center justify-center flex-shrink-0">
+                    <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600 dark:text-emerald-400" />
                   </div>
                   <div className="flex-1 w-full">
-                    <h3 className="text-lg sm:text-xl font-semibold text-white mb-2">Management Active</h3>
-                    <p className="text-sm sm:text-base text-white/70 mb-4">
+                    <h3 className="text-lg sm:text-xl font-semibold text-slate-900 dark:text-white mb-2">Management Active</h3>
+                    <p className="text-sm sm:text-base text-slate-500 dark:text-zinc-400 mb-4">
                       Your account is currently being managed by our professional team.
                     </p>
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                      <div className="bg-black/20 rounded-lg p-3">
-                        <p className="text-white/60 text-xs sm:text-sm">Target</p>
-                        <p className="text-white font-semibold text-base sm:text-lg">
+                      <div className="bg-white/50 dark:bg-white/5 backdrop-blur-md rounded-lg p-3">
+                        <p className="text-slate-500 dark:text-zinc-400 text-xs sm:text-sm">Target</p>
+                        <p className="text-slate-900 dark:text-white font-semibold text-base sm:text-lg">
                           ${currentRequest.target_profit.toFixed(2)}
                         </p>
                       </div>
-                      <div className="bg-black/20 rounded-lg p-3">
-                        <p className="text-white/60 text-xs sm:text-sm">Current P/L</p>
+                      <div className="bg-white/50 dark:bg-white/5 backdrop-blur-md rounded-lg p-3">
+                        <p className="text-slate-500 dark:text-zinc-400 text-xs sm:text-sm">Current P/L</p>
                         <p
                           className={`font-semibold text-base sm:text-lg ${
-                            currentRequest.current_pnl >= 0 ? "text-green-400" : "text-red-400"
+                            currentRequest.current_pnl >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
                           }`}
                         >
                           ${currentRequest.current_pnl.toFixed(2)}
                         </p>
                       </div>
                       {currentRequest.days && (
-                        <div className="bg-black/20 rounded-lg p-3">
-                          <p className="text-white/60 text-xs sm:text-sm">Duration</p>
-                          <p className="text-white font-semibold text-base sm:text-lg">{currentRequest.days} days</p>
+                        <div className="bg-white/50 dark:bg-white/5 backdrop-blur-md rounded-lg p-3">
+                          <p className="text-slate-500 dark:text-zinc-400 text-xs sm:text-sm">Duration</p>
+                          <p className="text-slate-900 dark:text-white font-semibold text-base sm:text-lg">{currentRequest.days} days</p>
                         </div>
                       )}
                       {currentRequest.daily_target_profit && (
-                        <div className="bg-black/20 rounded-lg p-3">
-                          <p className="text-white/60 text-xs sm:text-sm">Daily Target</p>
-                          <p className="text-white font-semibold text-base sm:text-lg">
+                        <div className="bg-white/50 dark:bg-white/5 backdrop-blur-md rounded-lg p-3">
+                          <p className="text-slate-500 dark:text-zinc-400 text-xs sm:text-sm">Daily Target</p>
+                          <p className="text-slate-900 dark:text-white font-semibold text-base sm:text-lg">
                             ${currentRequest.daily_target_profit.toFixed(2)}
                           </p>
                         </div>
@@ -240,6 +252,7 @@ export default function ManagementPage() {
           </div>
         </div>
       </main>
+      </div>
     </div>
   )
 }

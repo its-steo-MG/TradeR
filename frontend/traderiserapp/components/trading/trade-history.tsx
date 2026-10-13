@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/lib/api";
-import { motion, AnimatePresence } from "framer-motion";
 import { CheckCircle, XCircle, ChevronRight } from "lucide-react";
 import { formatCurrency } from "@/lib/format-currency";
 import { Button } from "@/components/ui/button";
@@ -11,16 +10,16 @@ import { Button } from "@/components/ui/button";
 interface Trade {
   id: string | number;
   market: string | { name: string } | null;
-  direction: string | null;           // Can be null for digit trades
+  direction: string | null;
   amount: number;
   is_win: boolean;
   profit: number;
   created_at: string;
-  entrySpot?: number
-  exitSpot?: number
+  entrySpot?: number;
+  exitSpot?: number;
   trade_type_id?: number;
   buyPrice?: number;
-  last_digit_outcome?: number;        // Added for digit trades
+  last_digit_outcome?: number;
   is_digit_trade?: boolean;
   digit_contract_type?: string;
 }
@@ -37,15 +36,15 @@ export function TradeHistory({ sessionTrades }: TradeHistoryProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const tradesPerPage = 10;
 
-  // Fetch trade types
   useEffect(() => {
     const fetchTradeTypes = async () => {
       try {
         const response = await api.getTradeTypes();
-        const { data, error } = response as { data?: { id: number; name: string }[]; error?: unknown };
-        if (!error && Array.isArray(data)) {
-          setTradeTypes(data);
-        }
+        const { data, error } = response as {
+          data?: { id: number; name: string }[];
+          error?: unknown;
+        };
+        if (!error && Array.isArray(data)) setTradeTypes(data);
       } catch (err) {
         console.error("Failed to fetch trade types:", err);
       }
@@ -53,30 +52,23 @@ export function TradeHistory({ sessionTrades }: TradeHistoryProps) {
     fetchTradeTypes();
   }, []);
 
-  // Fetch all trades
   useEffect(() => {
     const fetchAllTrades = async () => {
       setIsLoading(true);
       try {
-        const response = (await api.getTradeHistory()) as { 
-          data?: { trades: Trade[] }; 
-          error?: unknown 
+        const response = (await api.getTradeHistory()) as {
+          data?: { trades: Trade[] };
+          error?: unknown;
         };
-
         const { data, error } = response;
 
         if (error) {
-          toast({ 
-            title: "Error", 
-            description: "Failed to load trade history", 
-            variant: "destructive" 
-          });
+          toast({ title: "Error", description: "Failed to load trade history", variant: "destructive" });
           setIsLoading(false);
           return;
         }
 
         const tradeData = Array.isArray(data?.trades) ? data.trades : [];
-        
         const enhancedData = tradeData.map((t: Trade) => ({
           ...t,
           entrySpot: t.entrySpot ? Number(t.entrySpot) : undefined,
@@ -84,15 +76,10 @@ export function TradeHistory({ sessionTrades }: TradeHistoryProps) {
           buyPrice: Number(t.amount),
         }));
 
-        const sortedTrades = enhancedData.reverse();
-        setAllTrades(sortedTrades);
+        setAllTrades(enhancedData.reverse());
         setCurrentPage(1);
-      } catch (err) {
-        toast({ 
-          title: "Error", 
-          description: "Failed to fetch trade history", 
-          variant: "destructive" 
-        });
+      } catch {
+        toast({ title: "Error", description: "Failed to fetch trade history", variant: "destructive" });
       } finally {
         setIsLoading(false);
       }
@@ -101,219 +88,94 @@ export function TradeHistory({ sessionTrades }: TradeHistoryProps) {
     fetchAllTrades();
   }, [toast]);
 
-  // Safe direction label handler (FIXED)
   const getDirectionLabel = (direction: string | null, tradeTypeId?: number) => {
-    if (!direction) {
-      return "DIGIT"; // For digit trades where direction is null
-    }
-
+    if (!direction) return "DIGIT";
     const tradeType = tradeTypes.find((t) => t.id === tradeTypeId);
     const tradeTypeName = tradeType?.name?.toLowerCase() || "";
-
-    switch (tradeTypeName) {
-      case "rise/fall":
-        return direction.toLowerCase() === "rise" ? "RISE" : "FALL";
-      case "buy/sell":
-      default:
-        return direction.toUpperCase();
-    }
+    if (tradeTypeName === "rise/fall") return direction.toLowerCase() === "rise" ? "RISE" : "FALL";
+    return direction.toUpperCase();
   };
 
-  const totalPages = Math.ceil(allTrades.length / tradesPerPage);
+  const totalPages = Math.max(1, Math.ceil(allTrades.length / tradesPerPage));
   const startIndex = (currentPage - 1) * tradesPerPage;
-  const endIndex = startIndex + tradesPerPage;
-  const displayTrades = allTrades.slice(startIndex, endIndex);
-
-  const handleNextPage = () => {
-    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
-  };
-
-  const handlePreviousPage = () => {
-    if (currentPage > 1) setCurrentPage(currentPage - 1);
-  };
+  const displayTrades = allTrades.slice(startIndex, startIndex + tradesPerPage);
 
   return (
-    <div className="w-full">
-      <h2 className="text-base sm:text-lg lg:text-xl font-bold text-white mb-4 sm:mb-6">Trade History</h2>
+    <section className="overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white via-indigo-50/50 to-sky-50 p-3 shadow-sm dark:border-zinc-800 dark:from-zinc-950 dark:via-zinc-950 dark:to-zinc-950 sm:p-5 md:p-6">
+      <div className="mb-3 flex items-baseline justify-between gap-2 sm:mb-4">
+        <h3 className="text-base font-semibold text-slate-900 dark:text-white sm:text-lg">Trade History</h3>
+        <span className="shrink-0 text-xs text-slate-500 dark:text-zinc-400">{allTrades.length}</span>
+      </div>
 
       {isLoading ? (
-        <p className="text-white/60 text-sm sm:text-base">Loading trades...</p>
+        <p className="py-8 text-center text-sm text-slate-500 dark:text-zinc-400 sm:py-10">Loading trades...</p>
       ) : allTrades.length === 0 ? (
-        <p className="text-white/60 text-sm sm:text-base">No trades yet</p>
+        <p className="py-8 text-center text-sm text-slate-500 dark:text-zinc-400 sm:py-10">No trades yet</p>
       ) : (
         <>
-          {/* Mobile: Card Layout */}
-          <div className="lg:hidden space-y-3">
-            <AnimatePresence>
-              {displayTrades.map((trade, idx) => (
-                <motion.div
+          <div className="space-y-2">
+            {displayTrades.map((trade) => {
+              const win = trade.is_win;
+              const market = typeof trade.market === "string" ? trade.market : trade.market?.name || "Unknown Market";
+              return (
+                <div
                   key={trade.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ delay: idx * 0.05 }}
-                  className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition-all backdrop-blur-sm"
+                  className="drop-on-top relative !flex w-full items-center gap-2 overflow-hidden rounded-xl border border-white/70 bg-white/40 px-2.5 py-2.5 backdrop-blur-md dark:border-white/10 dark:bg-white/5 sm:gap-3 sm:rounded-2xl sm:px-3 sm:py-3"
                 >
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="text-sm font-semibold text-white truncate flex-1 mr-2">
-                      {typeof trade.market === "string" 
-                        ? trade.market 
-                        : trade.market?.name || "Unknown Market"}
-                    </span>
-                    <span
-                      className={`px-2 py-1 rounded-lg text-xs font-bold whitespace-nowrap ${
-                        trade.is_win 
-                          ? "bg-green-500/20 text-green-400" 
-                          : "bg-red-500/20 text-red-400"
-                      }`}
-                    >
-                      {getDirectionLabel(trade.direction, trade.trade_type_id)}
-                    </span>
+                  <span
+                    className={`relative z-[1] flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border sm:h-11 sm:w-11 sm:rounded-2xl ${
+                      win
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-600 dark:border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-400"
+                        : "border-red-200 bg-red-50 text-red-500 dark:border-red-500/30 dark:bg-red-500/20 dark:text-red-400"
+                    }`}
+                  >
+                    {win ? <CheckCircle size={15} /> : <XCircle size={15} />}
+                  </span>
+
+                  <div className="relative z-[1] min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium capitalize text-slate-900 dark:text-white">{market}</p>
+                    <p className="truncate text-[11px] text-slate-500 dark:text-zinc-400 sm:text-xs">
+                      {getDirectionLabel(trade.direction, trade.trade_type_id)} • ${Number(trade.buyPrice || trade.amount).toFixed(2)}
+                    </p>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4 text-xs sm:text-sm text-white/60">
-                    <div>
-                      <span className="block">Amount</span>
-                      <span className="font-semibold text-white">
-                        ${Number(trade.buyPrice || trade.amount).toFixed(2)}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="block">Spots</span>
-                      <span className="font-semibold text-white/80">
-                        {(trade.entrySpot ?? 0).toFixed(2)} / {(trade.exitSpot ?? 0).toFixed(2)}
-                      </span>
-                    </div>
+                  <div className="relative z-[1] shrink-0 text-right">
+                    <p className={`whitespace-nowrap text-xs font-semibold sm:text-sm ${win ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}`}>
+                      {win ? "+" : "-"}${Math.abs(Number(trade.profit)).toFixed(2)}
+                    </p>
+                    <p className="whitespace-nowrap text-[10px] text-slate-500 dark:text-zinc-400 sm:text-[11px]">
+                      {new Date(trade.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </p>
                   </div>
-
-                  <div className="flex justify-between items-center mt-3 pt-3 border-t border-white/10">
-                    <div className="flex items-center gap-2">
-                      {trade.is_win ? (
-                        <CheckCircle className="w-4 h-4 text-green-400" />
-                      ) : (
-                        <XCircle className="w-4 h-4 text-red-400" />
-                      )}
-                      <span className={`font-bold text-sm ${trade.is_win ? "text-green-400" : "text-red-400"}`}>
-                        {trade.is_win ? "WIN" : "LOSS"}
-                      </span>
-                    </div>
-                    <motion.span
-                      className={`font-bold text-sm sm:text-base ${
-                        Number(trade.profit) >= 0 ? "text-green-400" : "text-red-400"
-                      }`}
-                      animate={{ scale: [1, 1.05, 1] }}
-                      transition={{ duration: 0.3, delay: 0.1 }}
-                    >
-                      ${Number(trade.profit).toFixed(2)}
-                    </motion.span>
-                  </div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
+                </div>
+              );
+            })}
           </div>
 
-          {/* Desktop: Table Layout */}
-          <div className="hidden lg:block">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-white/60 border-b border-white/10">
-                    <th className="py-3 px-4 w-[25%]">Market</th>
-                    <th className="py-3 px-4 w-[15%]">Direction</th>
-                    <th className="py-3 px-4 w-[20%]">Spots</th>
-                    <th className="py-3 px-4 w-[12%]">Amount</th>
-                    <th className="py-3 px-4 w-[13%]">Result</th>
-                    <th className="py-3 px-4 w-[15%]">P/L</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <AnimatePresence>
-                    {displayTrades.map((trade, idx) => (
-                      <motion.tr
-                        key={trade.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ delay: idx * 0.05 }}
-                        className="border-b border-white/5 hover:bg-white/5 transition-all"
-                      >
-                        <td className="py-3 px-4 text-white truncate">
-                          {typeof trade.market === "string" 
-                            ? trade.market 
-                            : trade.market?.name || "Unknown Market"}
-                        </td>
-                        <td className="py-3 px-4">
-                          <span
-                            className={`px-2 py-1 rounded-lg font-bold text-xs ${
-                              trade.is_win 
-                                ? "bg-green-500/20 text-green-400" 
-                                : "bg-red-500/20 text-red-400"
-                            }`}
-                          >
-                            {getDirectionLabel(trade.direction, trade.trade_type_id)}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-white/60">
-                          {(trade.entrySpot ?? 0).toFixed(2)} / {(trade.exitSpot ?? 0).toFixed(2)}
-                        </td>
-                        <td className="py-3 px-4 text-white">
-                          ${formatCurrency(trade.buyPrice || trade.amount)}
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-2">
-                            {trade.is_win ? (
-                              <CheckCircle className="w-4 h-4 text-green-400" />
-                            ) : (
-                              <XCircle className="w-4 h-4 text-red-400" />
-                            )}
-                            <span className={`font-bold ${trade.is_win ? "text-green-400" : "text-red-400"}`}>
-                              {trade.is_win ? "WIN" : "LOSS"}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <motion.span
-                            className={`font-bold ${Number(trade.profit) >= 0 ? "text-green-400" : "text-red-400"}`}
-                            animate={{ scale: [1, 1.05, 1] }}
-                            transition={{ duration: 0.3, delay: 0.1 }}
-                          >
-                            ${Number(trade.profit).toFixed(2)}
-                          </motion.span>
-                        </td>
-                      </motion.tr>
-                    ))}
-                  </AnimatePresence>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Pagination */}
-          <div className="mt-6 flex items-center justify-between px-4 py-3 rounded-lg bg-white/5 border border-white/10">
-            <div className="text-sm text-white/60">
-              Page <span className="font-bold text-white">{currentPage}</span> of{" "}
-              <span className="font-bold text-white">{totalPages}</span> • Total trades:{" "}
-              <span className="font-bold text-white">{allTrades.length}</span>
-            </div>
+          <div className="mt-4 flex items-center justify-between gap-2">
+            <p className="text-xs text-slate-500 dark:text-zinc-400">
+              Page <span className="font-bold text-slate-900 dark:text-white">{currentPage}</span> of{" "}
+              <span className="font-bold text-slate-900 dark:text-white">{totalPages}</span>
+            </p>
             <div className="flex gap-2">
               <Button
-                onClick={handlePreviousPage}
+                onClick={() => currentPage > 1 && setCurrentPage(currentPage - 1)}
                 disabled={currentPage === 1}
-                className="px-4 py-2 bg-white/10 hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all"
+                className="h-9 rounded-xl bg-white/70 px-3 text-xs font-semibold text-slate-900 disabled:opacity-50 dark:bg-white/10 dark:text-white"
               >
                 Previous
               </Button>
               <Button
-                onClick={handleNextPage}
+                onClick={() => currentPage < totalPages && setCurrentPage(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                className="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg flex items-center gap-2 transition-all"
+                className="flex h-9 items-center gap-1 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 px-3 text-xs font-semibold text-white disabled:opacity-50"
               >
-                Next <ChevronRight className="w-4 h-4" />
+                Next <ChevronRight className="h-3.5 w-3.5" />
               </Button>
             </div>
           </div>
         </>
       )}
-    </div>
+    </section>
   );
 }

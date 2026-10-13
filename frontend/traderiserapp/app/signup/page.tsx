@@ -105,6 +105,11 @@ export default function SignupPage() {
       setIsLoading(false);
       return;
     }
+    if (formData.username.includes(" ") || formData.username.trim().split(/\s+/).length > 1) {
+      toast.error("Username should only be 1 unique name (no spaces)");
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const response = await api.signup({

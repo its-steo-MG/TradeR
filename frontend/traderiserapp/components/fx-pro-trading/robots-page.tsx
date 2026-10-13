@@ -359,7 +359,7 @@ export default function RobotsPage({ setIsNavVisible }: PageProps) {
               </CardHeader>
               <CardContent className="space-y-3">
                 {userRobots.map((ur) => (
-                  <div key={ur.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border">
+                  <div key={ur.id} className="flex items-center justify-between p-3 bg-white/40 dark:bg-white/50 dark:bg-white/40 dark:bg-white/5 backdrop-blur-md rounded-lg border border-white/40 dark:border-white/40 dark:border-white/10">
                     <div>
                       <div className="font-semibold flex items-center gap-2">
                         {ur.robot.name}
@@ -392,7 +392,7 @@ export default function RobotsPage({ setIsNavVisible }: PageProps) {
                   <span className="font-medium">Next cycle in {countdown}s</span>
                 </div>
 
-                <div className="flex-1 bg-card rounded-xl border overflow-hidden">
+                <div className="flex-1 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl rounded-xl border border-white/40 dark:border-white/40 dark:border-white/10 overflow-hidden">
                   <RobotTradingLogs
                     logs={logs}
                     isRunning={true}

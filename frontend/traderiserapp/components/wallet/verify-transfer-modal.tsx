@@ -53,8 +53,7 @@ export function VerifyTransferModal({
       window.dispatchEvent(new Event("session-updated"));
       onClose();
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "Invalid OTP";
+      const message = err instanceof Error ? err.message : "Invalid OTP";
       setError(message);
       onSetMessage({ type: "error", text: message });
     } finally {
@@ -65,8 +64,6 @@ export function VerifyTransferModal({
   const handleResendOTP = async () => {
     setIsSubmitting(true);
     try {
-      // If you have a dedicated resend endpoint, replace the comment below
-      // const res = await api.resendTransferOTP({ transaction_id: parseInt(transactionId, 10) });
       toast.success("New OTP sent to your email");
       setTimeLeft(60);
       setCanResend(false);
@@ -88,25 +85,25 @@ export function VerifyTransferModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl animate-in slide-in-from-bottom duration-300 mx-auto p-6 sm:p-8">
-        <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-6">
-          <h3 className="text-xl sm:text-2xl font-bold text-slate-900">
+      <div className="bg-white dark:bg-zinc-900 w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-200 dark:border-zinc-800 animate-in slide-in-from-bottom duration-300 mx-auto p-6 sm:p-8">
+        <div className="flex items-center justify-between border-b border-slate-200 dark:border-zinc-800 pb-4 mb-6">
+          <h3 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">
             Verify Transfer
           </h3>
           <button
             onClick={onClose}
-            className="text-2xl font-bold text-slate-900 hover:text-slate-600"
+            className="text-2xl font-bold text-slate-900 dark:text-white hover:text-slate-600 dark:hover:text-zinc-400"
           >
             ×
           </button>
         </div>
 
-        <p className="text-center text-slate-600 text-lg mb-6">
+        <p className="text-center text-slate-600 dark:text-zinc-400 text-lg mb-6">
           Enter 6-digit OTP sent to your email
         </p>
 
         <div className="text-center mb-6">
-          <p className="text-4xl font-bold tracking-widest">
+          <p className="text-4xl font-bold tracking-widest text-slate-900 dark:text-white">
             {otpCode.padEnd(6, "_")}
           </p>
         </div>
@@ -116,27 +113,27 @@ export function VerifyTransferModal({
             <button
               key={n}
               onClick={() => handleNumpadClick(n)}
-              className="bg-slate-100 hover:bg-slate-200 text-slate-900 font-semibold py-5 rounded-2xl text-2xl transition-colors"
+              className="bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-900 dark:text-white font-semibold py-5 rounded-2xl text-2xl transition-colors"
             >
               {n}
             </button>
           ))}
-          <div /> {/* Spacer */}
+          <div />
           <button
             onClick={() => handleNumpadClick("0")}
-            className="bg-slate-100 hover:bg-slate-200 text-slate-900 font-semibold py-5 rounded-2xl text-2xl transition-colors"
+            className="bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-900 dark:text-white font-semibold py-5 rounded-2xl text-2xl transition-colors"
           >
             0
           </button>
           <button
             onClick={() => handleNumpadClick("backspace")}
-            className="bg-slate-100 hover:bg-slate-200 text-slate-900 font-semibold py-5 rounded-2xl text-2xl transition-colors"
+            className="bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-900 dark:text-white font-semibold py-5 rounded-2xl text-2xl transition-colors"
           >
             ⌫
           </button>
         </div>
 
-        {error && <p className="text-red-600 text-center mb-4">{error}</p>}
+        {error && <p className="text-red-500 text-center mb-4">{error}</p>}
 
         <button
           onClick={handleVerifyOTP}
@@ -149,7 +146,7 @@ export function VerifyTransferModal({
         <button
           onClick={handleResendOTP}
           disabled={!canResend || isSubmitting}
-          className="w-full text-purple-600 hover:text-purple-700 disabled:text-slate-400 font-medium text-center"
+          className="w-full text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 disabled:text-slate-400 dark:disabled:text-zinc-600 font-medium text-center"
         >
           {canResend ? "Resend OTP" : `Resend in ${timeLeft}s`}
         </button>

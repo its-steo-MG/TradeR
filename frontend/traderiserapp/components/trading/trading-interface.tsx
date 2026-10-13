@@ -86,7 +86,8 @@ export function TradingInterface({
   }
 
   const selectedTradeTypeName = tradeTypes.find((t) => t.id === selectedTradeType)?.name
-  const { primary: primaryLabel, secondary: secondaryLabel } = getDirectionLabels(selectedTradeTypeName)
+  const { primary: primaryLabel, secondary: secondaryLabel } =
+    getDirectionLabels(selectedTradeTypeName)
 
   useEffect(() => {
     setDirection(primaryLabel.toLowerCase())
@@ -122,7 +123,6 @@ export function TradingInterface({
         stopLoss: Number.parseFloat(stopLoss) || 0,
       }
 
-      // The queue will handle the actual API call to prevent duplicate deductions
       onStartTrading?.({ ...params, profit: 0 })
 
       toast({
@@ -143,13 +143,16 @@ export function TradingInterface({
 
   return (
     <div className="space-y-6">
+      {/* Market */}
       <div>
-        <label className="block text-sm font-medium text-white mb-2">Market</label>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
+          Market
+        </label>
         <Select onValueChange={onMarketSelect} value={selectedMarket || ""}>
-          <SelectTrigger className="w-full bg-white/5 border-white/20 text-white h-10">
+          <SelectTrigger className="w-full bg-white dark:bg-zinc-800 border-slate-200 dark:border-zinc-700 text-slate-900 dark:text-white h-10">
             <SelectValue placeholder="Select market" />
           </SelectTrigger>
-          <SelectContent className="bg-black border border-gray-300 shadow-lg">
+          <SelectContent className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 shadow-lg">
             {markets.map((market) => (
               <SelectItem key={market.id} value={market.name}>
                 {market.name}
@@ -158,16 +161,20 @@ export function TradingInterface({
           </SelectContent>
         </Select>
       </div>
+
+      {/* Trade Type */}
       <div>
-        <label className="block text-sm font-medium text-white mb-2">Trade Type</label>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
+          Trade Type
+        </label>
         <Select
           onValueChange={(value) => setSelectedTradeType(Number(value))}
           value={selectedTradeType?.toString() || ""}
         >
-          <SelectTrigger className="w-full bg-white/5 border-white/20 text-white h-10">
+          <SelectTrigger className="w-full bg-white dark:bg-zinc-800 border-slate-200 dark:border-zinc-700 text-slate-900 dark:text-white h-10">
             <SelectValue placeholder="Select trade type" />
           </SelectTrigger>
-          <SelectContent className="bg-black border border-gray-300 shadow-lg">
+          <SelectContent className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 shadow-lg">
             {tradeTypes.map((type) => (
               <SelectItem key={type.id} value={type.id.toString()}>
                 {type.name}
@@ -176,15 +183,19 @@ export function TradingInterface({
           </SelectContent>
         </Select>
       </div>
+
+      {/* Direction */}
       <div>
-        <label className="block text-sm font-medium text-white mb-2">Direction</label>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
+          Direction
+        </label>
         <div className="flex gap-3">
           <button
             onClick={() => setDirection(primaryLabel.toLowerCase())}
             className={`flex-1 py-2 rounded-lg font-semibold transition-colors ${
               direction === primaryLabel.toLowerCase()
                 ? "bg-green-600 text-white"
-                : "bg-white/5 border-2 border-white/20 text-white/70"
+                : "bg-slate-100 dark:bg-zinc-800 border-2 border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-zinc-700"
             }`}
           >
             {primaryLabel}
@@ -194,60 +205,81 @@ export function TradingInterface({
             className={`flex-1 py-2 rounded-lg font-semibold transition-colors ${
               direction === secondaryLabel.toLowerCase()
                 ? "bg-red-600 text-white"
-                : "bg-white/5 border-2 border-white/20 text-white/70"
+                : "bg-slate-100 dark:bg-zinc-800 border-2 border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-300 hover:bg-slate-200 dark:hover:bg-zinc-700"
             }`}
           >
             {secondaryLabel}
           </button>
         </div>
       </div>
+
+      {/* Amount */}
       <div>
-        <label className="block text-sm font-medium text-white mb-2">Amount (USD)</label>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
+          Amount (USD)
+        </label>
         <Input
           type="number"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           placeholder="Enter amount"
-          className="w-full bg-white/5 border-white/20 text-white placeholder:text-white/40 h-10"
+          className="w-full bg-white dark:bg-zinc-800 border-slate-200 dark:border-zinc-700 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 h-10"
           min="1"
           max={balance}
         />
-        <p className="text-xs text-white/50 mt-2">Available: ${formatCurrency(balance)}</p>
+        <p className="text-xs text-slate-500 dark:text-zinc-400 mt-2">
+          Available: ${formatCurrency(balance)}
+        </p>
       </div>
+
+      {/* Target Profit */}
       <div>
-        <label className="block text-sm font-medium text-white mb-2">Target Profit (USD)</label>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
+          Target Profit (USD)
+        </label>
         <Input
           type="number"
           value={targetProfit}
           onChange={(e) => setTargetProfit(e.target.value)}
           placeholder="Optional"
-          className="w-full bg-white/5 border-white/20 text-white placeholder:text-white/40 h-10"
+          className="w-full bg-white dark:bg-zinc-800 border-slate-200 dark:border-zinc-700 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 h-10"
           min="0"
         />
       </div>
+
+      {/* Stop Loss */}
       <div>
-        <label className="block text-sm font-medium text-white mb-2">Stop Loss (USD)</label>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-2">
+          Stop Loss (USD)
+        </label>
         <Input
           type="number"
           value={stopLoss}
           onChange={(e) => setStopLoss(e.target.value)}
           placeholder="Optional"
-          className="w-full bg-white/5 border-white/20 text-white placeholder:text-white/40 h-10"
+          className="w-full bg-white dark:bg-zinc-800 border-slate-200 dark:border-zinc-700 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-zinc-500 h-10"
           min="0"
         />
       </div>
+
+      {/* Martingale */}
       <div className="flex items-center gap-3">
         <input
           type="checkbox"
           id="martingale"
           checked={useMartingale}
           onChange={(e) => setUseMartingale(e.target.checked)}
-          className="w-4 h-4 rounded border-white/20"
+          className="w-4 h-4 rounded border-slate-300 dark:border-zinc-600"
         />
-        <label htmlFor="martingale" className="text-sm font-medium text-white cursor-pointer">
+        <label
+          htmlFor="martingale"
+          className="text-sm font-medium text-slate-700 dark:text-slate-200 cursor-pointer"
+        >
           Use Martingale
         </label>
       </div>
+
+      {/* Place Trade */}
       <Button
         onClick={handlePlaceTrade}
         disabled={isLoading || !selectedMarket || !selectedTradeType || !amount}

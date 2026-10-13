@@ -130,7 +130,9 @@ export function TradeExecutionQueue({
       if (baseTradeParams.targetProfit > 0 && totalSessionProfit >= baseTradeParams.targetProfit) {
         setShouldStopTrading(true)
         setTargetProfitReached(true)
-        const robotName = selectedRobot ? userRobots.find((r) => r.robot.id === selectedRobot)?.robot.name : null
+        const robotName = selectedRobot
+          ? userRobots.find((r) => r.robot.id === selectedRobot)?.robot.name
+          : null
 
         const newMessage = {
           text: robotName
@@ -172,7 +174,9 @@ export function TradeExecutionQueue({
         if (baseTradeParams.targetProfit > 0 && totalSessionProfit >= baseTradeParams.targetProfit) {
           setShouldStopTrading(true)
           setTargetProfitReached(true)
-          const robotName = selectedRobot ? userRobots.find((r) => r.robot.id === selectedRobot)?.robot.name : null
+          const robotName = selectedRobot
+            ? userRobots.find((r) => r.robot.id === selectedRobot)?.robot.name
+            : null
 
           const newMessage = {
             text: robotName
@@ -205,7 +209,9 @@ export function TradeExecutionQueue({
         const currentAmount = trade.amount * Math.pow(martingaleMultiplier, trade.martingale_level)
 
         setLocalTrades((prev) =>
-          prev.map((t) => (t.id === trade.id ? { ...t, status: "executing", timeLeft: 5, amount: currentAmount } : t)),
+          prev.map((t) =>
+            t.id === trade.id ? { ...t, status: "executing", timeLeft: 5, amount: currentAmount } : t,
+          ),
         )
 
         try {
@@ -231,7 +237,9 @@ export function TradeExecutionQueue({
             })
             setLocalTrades((prev) =>
               prev.map((t) =>
-                t.id === trade.id ? { ...t, status: "completed", profit: -currentAmount, isWin: false } : t,
+                t.id === trade.id
+                  ? { ...t, status: "completed", profit: -currentAmount, isWin: false }
+                  : t,
               ),
             )
             onTradeComplete(trade.id, -currentAmount, false, currentAmount)
@@ -266,9 +274,15 @@ export function TradeExecutionQueue({
                     status: "completed",
                     isWin: tradeData.is_win,
                     profit: profitValue,
-                    entrySpot: tradeData.entry_spot ? Number.parseFloat(String(tradeData.entry_spot)) : undefined,
-                    exitSpot: tradeData.exit_spot ? Number.parseFloat(String(tradeData.exit_spot)) : undefined,
-                    currentSpot: tradeData.current_spot ? Number.parseFloat(String(tradeData.current_spot)) : undefined,
+                    entrySpot: tradeData.entry_spot
+                      ? Number.parseFloat(String(tradeData.entry_spot))
+                      : undefined,
+                    exitSpot: tradeData.exit_spot
+                      ? Number.parseFloat(String(tradeData.exit_spot))
+                      : undefined,
+                    currentSpot: tradeData.current_spot
+                      ? Number.parseFloat(String(tradeData.current_spot))
+                      : undefined,
                   }
                 : t,
             ),
@@ -279,9 +293,15 @@ export function TradeExecutionQueue({
             profitValue,
             tradeData.is_win,
             currentAmount,
-            tradeData.entry_spot ? Number.parseFloat(String(tradeData.entry_spot)) : undefined,
-            tradeData.exit_spot ? Number.parseFloat(String(tradeData.exit_spot)) : undefined,
-            tradeData.current_spot ? Number.parseFloat(String(tradeData.current_spot)) : undefined,
+            tradeData.entry_spot
+              ? Number.parseFloat(String(tradeData.entry_spot))
+              : undefined,
+            tradeData.exit_spot
+              ? Number.parseFloat(String(tradeData.exit_spot))
+              : undefined,
+            tradeData.current_spot
+              ? Number.parseFloat(String(tradeData.current_spot))
+              : undefined,
           )
 
           setProcessedTradeIds((prev) => new Set([...prev, trade.id]))
@@ -289,7 +309,11 @@ export function TradeExecutionQueue({
           if (!shouldStopTrading && isTradingActive) {
             let nextMartingaleLevel = 0
             let nextAmount = baseTradeParams.amount
-            if (trade.use_martingale && !tradeData.is_win && trade.martingale_level + 1 < maxLevels) {
+            if (
+              trade.use_martingale &&
+              !tradeData.is_win &&
+              trade.martingale_level + 1 < maxLevels
+            ) {
               nextMartingaleLevel = trade.martingale_level + 1
               nextAmount = baseTradeParams.amount
             }
@@ -304,7 +328,8 @@ export function TradeExecutionQueue({
             setLocalTrades((prev) => [...prev, nextTrade])
           }
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : "Failed to execute trade"
+          const errorMessage =
+            error instanceof Error ? error.message : "Failed to execute trade"
           toast({
             title: "Error",
             description: errorMessage,
@@ -312,7 +337,9 @@ export function TradeExecutionQueue({
           })
           setLocalTrades((prev) =>
             prev.map((t) =>
-              t.id === trade.id ? { ...t, status: "completed", profit: -currentAmount, isWin: false } : t,
+              t.id === trade.id
+                ? { ...t, status: "completed", profit: -currentAmount, isWin: false }
+                : t,
             ),
           )
           onTradeComplete(trade.id, -currentAmount, false, currentAmount)
@@ -367,6 +394,7 @@ export function TradeExecutionQueue({
 
   return (
     <div className="relative">
+      {/* ========== SUCCESS / LOSS MESSAGE MODAL (solid opaque) ========== */}
       <AnimatePresence>
         {message && !messageAcknowledged && (
           <motion.div
@@ -380,7 +408,7 @@ export function TradeExecutionQueue({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/50"
               onClick={(e) => e.preventDefault()}
             />
 
@@ -389,44 +417,37 @@ export function TradeExecutionQueue({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ duration: 0.3, ease: "easeOut" }}
-              className="relative z-10 p-8 rounded-3xl shadow-2xl max-w-sm w-full overflow-hidden"
-              style={{
-                background: "rgba(255, 255, 255, 0.15)",
-                backdropFilter: "blur(20px)",
-                border: "1px solid rgba(255, 255, 255, 0.3)",
-                boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1), inset 0 0 20px rgba(255, 255, 255, 0.2)",
-              }}
+              className="relative z-10 p-8 rounded-3xl shadow-2xl max-w-sm w-full overflow-hidden bg-white dark:bg-[#18181b] border border-slate-200 dark:border-zinc-700"
             >
-              <div
-                className="absolute inset-0 pointer-events-none"
-                style={{
-                  background: message.isProfit
-                    ? "linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(34, 197, 94, 0) 100%)"
-                    : "linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0) 100%)",
-                }}
-              />
-
               <div className="relative z-10">
                 <div className="flex justify-center mb-6">
                   <div
-                    className="p-4 rounded-full"
-                    style={{
-                      background: message.isProfit ? "rgba(34, 197, 94, 0.2)" : "rgba(239, 68, 68, 0.2)",
-                      border: `2px solid ${message.isProfit ? "rgba(34, 197, 94, 0.4)" : "rgba(239, 68, 68, 0.4)"}`,
-                    }}
+                    className={`p-4 rounded-full ${
+                      message.isProfit
+                        ? "bg-green-100 dark:bg-green-500/20 border-2 border-green-300 dark:border-green-500/40"
+                        : "bg-red-100 dark:bg-red-500/20 border-2 border-red-300 dark:border-red-500/40"
+                    }`}
                   >
                     {message.isProfit ? (
-                      <CheckCircle className="w-12 h-12 text-green-400" />
+                      <CheckCircle className="w-12 h-12 text-green-600 dark:text-green-400" />
                     ) : (
-                      <XCircle className="w-12 h-12 text-red-400" />
+                      <XCircle className="w-12 h-12 text-red-600 dark:text-red-400" />
                     )}
                   </div>
                 </div>
 
                 <div className="text-center mb-8">
-                  <p className="text-base font-semibold leading-relaxed text-white mb-4">{message.text}</p>
+                  <p className="text-base font-semibold leading-relaxed text-slate-900 dark:text-white mb-4">
+                    {message.text}
+                  </p>
                   {message.amount !== undefined && (
-                    <p className={`text-4xl font-bold ${message.isProfit ? "text-green-300" : "text-red-300"}`}>
+                    <p
+                      className={`text-4xl font-bold ${
+                        message.isProfit
+                          ? "text-green-600 dark:text-green-400"
+                          : "text-red-600 dark:text-red-400"
+                      }`}
+                    >
                       ${formatCurrency(message.amount)}
                     </p>
                   )}
@@ -437,14 +458,11 @@ export function TradeExecutionQueue({
                     setMessageAcknowledged(true)
                     setMessage(null)
                   }}
-                  className="w-full font-bold py-3 rounded-xl transition-all text-white"
-                  style={{
-                    background: message.isProfit
-                      ? "linear-gradient(135deg, rgba(34, 197, 94, 0.8) 0%, rgba(22, 163, 74, 0.8) 100%)"
-                      : "linear-gradient(135deg, rgba(239, 68, 68, 0.8) 0%, rgba(220, 38, 38, 0.8) 100%)",
-                    backdropFilter: "blur(10px)",
-                    border: `1px solid ${message.isProfit ? "rgba(34, 197, 94, 0.5)" : "rgba(239, 68, 68, 0.5)"}`,
-                  }}
+                  className={`w-full font-bold py-3 rounded-xl transition-all text-white ${
+                    message.isProfit
+                      ? "bg-green-600 hover:bg-green-700"
+                      : "bg-red-600 hover:bg-red-700"
+                  }`}
                 >
                   View Trade & Exit
                 </Button>
@@ -454,24 +472,26 @@ export function TradeExecutionQueue({
         )}
       </AnimatePresence>
 
+      {/* ========== BOTTOM EXECUTION PANEL (solid opaque) ========== */}
       <motion.div
         initial={{ opacity: 0, y: 50 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 50 }}
-        className="fixed bottom-0 left-0 right-0 sm:bottom-6 sm:left-auto sm:right-6 sm:max-w-md z-40 bg-gradient-to-br from-gray-800/40 to-gray-900/40 rounded-t-3xl sm:rounded-3xl shadow-2xl border border-white/10 backdrop-blur-2xl"
+        className="fixed bottom-0 left-0 right-0 sm:bottom-6 sm:left-auto sm:right-6 sm:max-w-md z-40 bg-white dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-200 dark:border-zinc-800"
       >
-        <div className="flex justify-between items-center px-4 sm:px-6 py-4 border-b border-white/5">
-          <h3 className="text-lg font-bold text-white">Trade Execution</h3>
+        <div className="flex justify-between items-center px-4 sm:px-6 py-4 border-b border-slate-200 dark:border-zinc-800">
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white">Trade Execution</h3>
           <button
             disabled={message !== null && !messageAcknowledged}
             onClick={() => {
               onClose?.()
             }}
-            className="text-white/60 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
+
         <div className="max-h-96 overflow-y-auto p-4 sm:p-6 space-y-4">
           <AnimatePresence>
             {localTrades.map((trade) => (
@@ -480,23 +500,29 @@ export function TradeExecutionQueue({
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition-all"
+                className="p-4 rounded-xl bg-slate-50 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 hover:border-slate-300 dark:hover:border-zinc-600 transition-all"
               >
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-semibold text-white">
+                  <span className="text-sm font-semibold text-slate-900 dark:text-white">
                     {trade.market} ({trade.direction.toUpperCase()}){" "}
-                    {trade.martingale_level > 0 ? `(Martingale Level ${trade.martingale_level})` : ""}
+                    {trade.martingale_level > 0
+                      ? `(Martingale Level ${trade.martingale_level})`
+                      : ""}
                   </span>
-                  <span className="text-xs text-white/60">Trade ID: {trade.id}</span>
+                  <span className="text-xs text-slate-500 dark:text-zinc-400">
+                    Trade ID: {trade.id}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-white/60">Amount:</span>
-                  <span className="text-white">${trade.amount.toFixed(2)}</span>
+                  <span className="text-slate-500 dark:text-zinc-400">Amount:</span>
+                  <span className="text-slate-900 dark:text-white">
+                    ${trade.amount.toFixed(2)}
+                  </span>
                 </div>
                 {trade.entrySpot !== undefined && (
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-white/60">Entry Spot:</span>
-                    <span className="text-white">
+                    <span className="text-slate-500 dark:text-zinc-400">Entry Spot:</span>
+                    <span className="text-slate-900 dark:text-white">
                       {(typeof trade.entrySpot === "number"
                         ? trade.entrySpot
                         : Number.parseFloat(trade.entrySpot || "0")
@@ -506,50 +532,69 @@ export function TradeExecutionQueue({
                 )}
                 {trade.status === "executing" && trade.timeLeft !== undefined && (
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-white/60">Time Left:</span>
-                    <span className="text-white">{trade.timeLeft}s</span>
+                    <span className="text-slate-500 dark:text-zinc-400">Time Left:</span>
+                    <span className="text-slate-900 dark:text-white">{trade.timeLeft}s</span>
                   </div>
                 )}
                 {trade.status === "completed" && trade.profit !== undefined && (
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-white/60">P/L:</span>
+                    <span className="text-slate-500 dark:text-zinc-400">P/L:</span>
                     <motion.span
-                      className={`font-bold ${trade.isWin ? "text-green-400" : "text-red-400"}`}
+                      className={`font-bold ${
+                        trade.isWin
+                          ? "text-green-600 dark:text-green-400"
+                          : "text-red-600 dark:text-red-400"
+                      }`}
                       animate={{ scale: [1, 1.1, 1] }}
                       transition={{ duration: 0.5 }}
                     >
                       {trade.isWin ? "WIN" : "LOSS"} • $
-                      {typeof trade.profit === "number" && !isNaN(trade.profit) ? trade.profit.toFixed(2) : "0.00"}
+                      {typeof trade.profit === "number" && !isNaN(trade.profit)
+                        ? trade.profit.toFixed(2)
+                        : "0.00"}
                     </motion.span>
                   </div>
                 )}
-                {trade.status === "pending" && <div className="text-xs text-white/60">Waiting...</div>}
+                {trade.status === "pending" && (
+                  <div className="text-xs text-slate-500 dark:text-zinc-400">Waiting...</div>
+                )}
               </motion.div>
             ))}
           </AnimatePresence>
         </div>
-        <div className="border-t border-white/5 px-4 sm:p-6 py-4 bg-white/5 space-y-4">
+
+        <div className="border-t border-slate-200 dark:border-zinc-800 px-4 sm:px-6 py-4 bg-slate-50 dark:bg-zinc-800/50 space-y-4">
           <div className="flex justify-between items-center">
-            <p className="text-xs text-white/60">Trades execute in less than 5 seconds</p>
+            <p className="text-xs text-slate-500 dark:text-zinc-400">
+              Trades execute in less than 5 seconds
+            </p>
             <div className="text-sm font-bold">
-              <span className="text-white/60">Profit/Loss: </span>
-              <span className={totalSessionProfit >= 0 ? "text-green-400" : "text-red-400"}>
+              <span className="text-slate-500 dark:text-zinc-400">Profit/Loss: </span>
+              <span
+                className={
+                  totalSessionProfit >= 0
+                    ? "text-green-600 dark:text-green-400"
+                    : "text-red-600 dark:text-red-400"
+                }
+              >
                 ${formatCurrency(totalSessionProfit)}
               </span>
             </div>
           </div>
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <p className="text-xs text-white/60">Contracts</p>
-              <p className="text-sm font-bold text-white">{totalContracts}</p>
+              <p className="text-xs text-slate-500 dark:text-zinc-400">Contracts</p>
+              <p className="text-sm font-bold text-slate-900 dark:text-white">
+                {totalContracts}
+              </p>
             </div>
             <div>
-              <p className="text-xs text-white/60">Won</p>
-              <p className="text-sm font-bold text-green-400">{wins}</p>
+              <p className="text-xs text-slate-500 dark:text-zinc-400">Won</p>
+              <p className="text-sm font-bold text-green-600 dark:text-green-400">{wins}</p>
             </div>
             <div>
-              <p className="text-xs text-white/60">Lost</p>
-              <p className="text-sm font-bold text-red-400">{losses}</p>
+              <p className="text-xs text-slate-500 dark:text-zinc-400">Lost</p>
+              <p className="text-sm font-bold text-red-600 dark:text-red-400">{losses}</p>
             </div>
           </div>
           <Button

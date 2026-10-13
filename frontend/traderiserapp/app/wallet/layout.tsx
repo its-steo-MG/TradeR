@@ -7,7 +7,7 @@ import { Sidebar } from "@/components/sidebar";
 import { TopNavbar } from "@/components/top-navbar";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-import type { Account } from "@/types/account";   // ← Import shared type
+import type { Account } from "@/types/account";
 
 interface User {
   username: string;
@@ -15,7 +15,7 @@ interface User {
   phone: string;
   is_sashi: boolean;
   is_email_verified: boolean;
-  accounts: Account[];           // ← Uses shared Account
+  accounts: Account[];
 }
 
 interface Wallet {
@@ -164,7 +164,6 @@ export default function WalletLayout({ children }: WalletLayoutProps) {
     };
   }, [isModalActive]);
 
-  // Fixed handleSwitchAccount - matches TopNavbar + safe API call
   const handleSwitchAccount = async (account: Account) => {
     if (!account || !user) {
       toast.error("No account selected");
@@ -172,15 +171,14 @@ export default function WalletLayout({ children }: WalletLayoutProps) {
     }
 
     try {
-      // Convert id to number for the API (this was causing the TS error)
       const accountId = Number(account.id);
       if (isNaN(accountId)) {
         toast.error("Invalid account ID");
         return;
       }
 
-      const res: ApiResponse<unknown> = await api.switchAccount({ 
-        account_id: accountId 
+      const res: ApiResponse<unknown> = await api.switchAccount({
+        account_id: accountId,
       });
 
       if (res.error) {
@@ -277,9 +275,6 @@ export default function WalletLayout({ children }: WalletLayoutProps) {
     window.location.href = "/login";
   };
 
-  // FIXED: "real" must exclude BOTH "demo" and "mt5-demo" — previously only
-  // "demo" was excluded, so MT5 Demo leaked into the real-account switcher
-  // on the Wallet page (top navbar + sidebar select).
   const availableAccounts: Account[] =
     loginType === "real"
       ? (user?.accounts || []).filter(
@@ -290,15 +285,23 @@ export default function WalletLayout({ children }: WalletLayoutProps) {
         );
 
   if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center text-black">Loading...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+        Loading...
+      </div>
+    );
   }
 
   if (error) {
-    return <div className="min-h-screen flex items-center justify-center text-red-400">{error}</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background text-destructive">
+        {error}
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-white text-black">
+    <div className="min-h-screen flex flex-col bg-background text-foreground">
       <TopNavbar
         isLoggedIn={isLoggedIn}
         user={user}
@@ -313,9 +316,8 @@ export default function WalletLayout({ children }: WalletLayoutProps) {
         loginType={loginType}
         activeAccount={activeAccount}
         accounts={availableAccounts}
-        // onSwitchAccount={handleSwitchAccount}   // Uncomment once Sidebar is updated
       />
-      <main className="flex-1 w-full overflow-auto">{children}</main>
+      <main className="flex-1 w-full overflow-auto md:pl-64">{children}</main>
     </div>
   );
 }

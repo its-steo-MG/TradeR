@@ -62,52 +62,61 @@ export default function DashboardPage() {
 
     const user = rawData.user as Record<string, unknown>;
 
-    // Normalize user.accounts
     const normalizedUserAccounts: Account[] = Array.isArray(user.accounts)
-      ? user.accounts.map((acc: unknown) => {
-          if (!acc || typeof acc !== "object") return null;
-          const a = acc as Record<string, unknown>;
+      ? user.accounts
+          .map((acc: unknown) => {
+            if (!acc || typeof acc !== "object") return null;
+            const a = acc as Record<string, unknown>;
 
-          return {
-            id: Number(a.id),
-            account_type: String(a.account_type || ""),
-            balance: Number(a.balance) || 0,
-            kyc_verified: Boolean(a.kyc_verified),
-          };
-        }).filter((acc): acc is Account => acc !== null)
+            return {
+              id: Number(a.id),
+              account_type: String(a.account_type || ""),
+              balance: Number(a.balance) || 0,
+              kyc_verified: Boolean(a.kyc_verified),
+            };
+          })
+          .filter((acc): acc is Account => acc !== null)
       : [];
 
-    // Normalize accounts array
     const normalizedAccounts = Array.isArray(rawData.accounts)
-      ? (rawData.accounts as unknown[]).map((acc: unknown) => {
-          if (!acc || typeof acc !== "object") return null;
-          const a = acc as Record<string, unknown>;
+      ? (rawData.accounts as unknown[])
+          .map((acc: unknown) => {
+            if (!acc || typeof acc !== "object") return null;
+            const a = acc as Record<string, unknown>;
 
-          const transactions: Transaction[] = Array.isArray(a.transactions)
-            ? (a.transactions as unknown[]).map((tx: unknown) => {
-                if (!tx || typeof tx !== "object") return null;
-                const t = tx as Record<string, unknown>;
+            const transactions: Transaction[] = Array.isArray(a.transactions)
+              ? (a.transactions as unknown[])
+                  .map((tx: unknown) => {
+                    if (!tx || typeof tx !== "object") return null;
+                    const t = tx as Record<string, unknown>;
 
-                return {
-                  id: Number(t.id),
-                  amount: Number(t.amount) || 0,
-                  transaction_type: (
-                    ["deposit", "withdrawal", "trade"].includes(String(t.transaction_type))
-                      ? (t.transaction_type as "deposit" | "withdrawal" | "trade")
-                      : "deposit"
-                  ),
-                  description: String(t.description || ""),
-                  created_at: String(t.created_at || ""),
-                };
-              }).filter((tx): tx is Transaction => tx !== null)
-            : [];
+                    return {
+                      id: Number(t.id),
+                      amount: Number(t.amount) || 0,
+                      transaction_type: (
+                        ["deposit", "withdrawal", "trade"].includes(
+                          String(t.transaction_type)
+                        )
+                          ? (t.transaction_type as
+                              | "deposit"
+                              | "withdrawal"
+                              | "trade")
+                          : "deposit"
+                      ),
+                      description: String(t.description || ""),
+                      created_at: String(t.created_at || ""),
+                    };
+                  })
+                  .filter((tx): tx is Transaction => tx !== null)
+              : [];
 
-          return {
-            account_type: String(a.account_type || ""),
-            balance: Number(a.balance) || 0,
-            transactions,
-          };
-        }).filter((acc): acc is NonNullable<typeof acc> => acc !== null)
+            return {
+              account_type: String(a.account_type || ""),
+              balance: Number(a.balance) || 0,
+              transactions,
+            };
+          })
+          .filter((acc): acc is NonNullable<typeof acc> => acc !== null)
       : [];
 
     return {
@@ -153,7 +162,8 @@ export default function DashboardPage() {
         setLoginType(activeType === "demo" ? "demo" : "real");
       })
       .catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : "Failed to load dashboard";
+        const message =
+          err instanceof Error ? err.message : "Failed to load dashboard";
         setError(message);
       })
       .finally(() => setLoading(false));
@@ -170,7 +180,8 @@ export default function DashboardPage() {
       };
 
       window.addEventListener("session-updated", handleSessionUpdate);
-      return () => window.removeEventListener("session-updated", handleSessionUpdate);
+      return () =>
+        window.removeEventListener("session-updated", handleSessionUpdate);
     }
   }, []);
 
@@ -181,7 +192,8 @@ export default function DashboardPage() {
       showSuccess("Demo balance reset to $10,000");
       window.dispatchEvent(new Event("session-updated"));
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to reset demo balance";
+      const message =
+        err instanceof Error ? err.message : "Failed to reset demo balance";
       showError(message);
     }
   };
@@ -195,20 +207,24 @@ export default function DashboardPage() {
       fetchData();
       window.dispatchEvent(new Event("session-updated"));
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to create Pro-FX account";
+      const message =
+        err instanceof Error ? err.message : "Failed to create Pro-FX account";
       showError(message);
     }
   };
 
   const isRealAccount = loginType === "real";
-  const selectedAccountData = data?.accounts?.find((a) => a.account_type === selectedAccount);
-  const hasProFx = data?.user?.accounts?.some((acc) => acc.account_type === "pro-fx") ?? false;
+  const selectedAccountData = data?.accounts?.find(
+    (a) => a.account_type === selectedAccount
+  );
+  const hasProFx =
+    data?.user?.accounts?.some((acc) => acc.account_type === "pro-fx") ?? false;
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-white bg-black">
+      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-b-2 border-white mx-auto mb-4" />
+          <div className="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-b-2 border-foreground mx-auto mb-4" />
           <p className="text-base sm:text-xl">Loading dashboard...</p>
         </div>
       </div>
@@ -217,11 +233,13 @@ export default function DashboardPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-red-400 bg-black">
+      <div className="min-h-screen flex items-center justify-center bg-background text-destructive">
         <div className="text-center max-w-md p-4 sm:p-6">
           <div className="text-4xl sm:text-6xl mb-4">⚠️</div>
           <h2 className="text-lg sm:text-xl font-bold mb-2">Error</h2>
-          <p className="mb-4 sm:mb-6 text-sm sm:text-base">{error}</p>
+          <p className="mb-4 sm:mb-6 text-sm sm:text-base text-muted-foreground">
+            {error}
+          </p>
           <button
             onClick={() => window.location.reload()}
             className="px-4 py-2 sm:px-6 sm:py-3 bg-gradient-to-r from-pink-600 to-purple-600 text-white rounded-lg font-bold text-sm sm:text-base"
@@ -234,8 +252,10 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="relative min-h-screen text-white overflow-hidden">
-      <div className="fixed inset-0 z-0">
+    <div className="relative min-h-screen text-foreground overflow-hidden">
+      {/* ========== BACKGROUND ========== */}
+      {/* Dark mode: your beautiful original gradient + floating orbs */}
+      <div className="fixed inset-0 z-0 dark:block hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950 to-black" />
         <div className="absolute inset-0 bg-gradient-to-br from-transparent via-purple-950/30 to-pink-950/20" />
         <div className="absolute top-1/4 -left-40 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl animate-float" />
@@ -243,9 +263,16 @@ export default function DashboardPage() {
         <div className="absolute top-1/2 left-1/3 w-96 h-96 bg-purple-700/8 rounded-full blur-3xl animate-float delay-500" />
       </div>
 
-      <div className="relative z-10 px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10">
-        <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8">
-          <div className="animate-in fade-in slide-in-from-top-10 duration-700">
+      {/* Light mode: clean soft background */}
+      <div className="fixed inset-0 z-0 block dark:hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-slate-100" />
+        <div className="absolute top-1/4 -left-40 w-96 h-96 bg-purple-400/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 -right-40 w-96 h-96 bg-pink-400/8 rounded-full blur-3xl" />
+      </div>
+
+      <div className="relative z-10 px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10 dashboard-refresh">
+        <div className="max-w-7xl mx-auto space-y-5 sm:space-y-6">
+          <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-2 motion-safe:duration-500">
             <DashboardHeader
               username={data?.user?.username ?? ""}
               email={data?.user?.email ?? ""}
@@ -254,7 +281,7 @@ export default function DashboardPage() {
             />
           </div>
 
-          <div className="animate-in fade-in slide-in-from-top-10 duration-700 delay-100">
+          <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-2 motion-safe:duration-500 delay-100">
             <BalanceCard
               balance={selectedAccountData?.balance || 0}
               username={data?.user?.username ?? ""}
@@ -265,10 +292,10 @@ export default function DashboardPage() {
             />
           </div>
 
-          <div className="animate-in fade-in slide-in-from-bottom-5 duration-700 delay-200">
-            <ActionButtons 
+          <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-500 delay-200">
+            <ActionButtons
               isDemo={
-                loginType === "demo" || 
+                loginType === "demo" ||
                 activeAccount?.account_type === "mt5-demo" ||
                 activeAccount?.account_type === "demo"
               }
@@ -276,14 +303,13 @@ export default function DashboardPage() {
             />
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-4 animate-in fade-in slide-in-from-bottom-5 duration-700 delay-300">
+          <div className="flex flex-col sm:flex-row gap-4 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-500 delay-300">
             {isRealAccount ? (
               !hasProFx && (
                 <Button
                   onClick={handleCreateProFx}
-                  className="w-full sm:flex-1 relative group bg-gradient-to-br from-purple-600 via-purple-700 to-purple-800 text-white font-bold py-4 px-6 rounded-2xl overflow-hidden text-sm sm:text-base transition-all duration-300 hover:shadow-2xl hover:shadow-purple-500/50 transform hover:-translate-y-1 active:translate-y-0"
+                  className="dashboard-glass-action dashboard-glass-action-primary w-full sm:flex-1"
                 >
-                  <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                   <span className="relative flex items-center justify-center gap-2">
                     <span className="text-lg">✨</span>
                     Create Pro-FX Account
@@ -293,9 +319,8 @@ export default function DashboardPage() {
             ) : (
               <Button
                 onClick={handleResetDemo}
-                className="w-full sm:flex-1 relative group bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 text-white font-bold py-4 px-6 rounded-2xl overflow-hidden text-sm sm:text-base transition-all duration-300 hover:shadow-2xl hover:shadow-blue-500/50 transform hover:-translate-y-1 active:translate-y-0"
+                className="dashboard-glass-action dashboard-glass-action-primary w-full sm:flex-1"
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                 <span className="relative flex items-center justify-center gap-2">
                   <span className="text-lg">🔄</span>
                   Reset Demo Balance to $10,000
@@ -304,15 +329,19 @@ export default function DashboardPage() {
             )}
           </div>
 
-          <div className="animate-in fade-in slide-in-from-bottom-5 duration-700 delay-400">
-            <div className="glass rounded-3xl overflow-hidden border border-white/10 shadow-4xl hover:shadow-3xl transition-all duration-300">
-              <TradingViewWidget symbol={selectedAccount === "pro-fx" ? "EURUSD" : "NASDAQ:AAPL"} />
+          <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-500 delay-400">
+            <div className="min-w-0">
+              <TradingViewWidget
+                symbol={selectedAccount === "pro-fx" ? "EURUSD" : "NASDAQ:AAPL"}
+              />
             </div>
           </div>
 
-          <div className="animate-in fade-in slide-in-from-bottom-5 duration-700 delay-500">
-            <div className="glass rounded-3xl overflow-hidden border border-white/15 shadow-2xl hover:shadow-3xl transition-all duration-300">
-              <TransactionHistory transactions={selectedAccountData?.transactions || []} />
+          <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-500 delay-500">
+            <div className="min-w-0">
+              <TransactionHistory
+                transactions={selectedAccountData?.transactions || []}
+              />
             </div>
           </div>
         </div>

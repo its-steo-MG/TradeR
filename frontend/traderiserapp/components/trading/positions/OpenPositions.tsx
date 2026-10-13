@@ -19,6 +19,8 @@ function contractLabel(p: OpenPosition): string {
     case "differs": return `Differs ${p.barrier}`;
     case "even": return "Even";
     case "odd": return "Odd";
+    case "rise": return "Rise";
+    case "fall": return "Fall";
   }
 }
 
@@ -37,9 +39,9 @@ export default function OpenPositions({
 
   if (positions.length === 0) {
     return (
-      <div className="rounded-lg border border-slate-800 bg-slate-900/40 py-12 text-center">
-        <div className="text-slate-500 text-sm">No open positions</div>
-        <div className="text-slate-600 text-xs mt-1">
+      <div className="rounded-lg border border-border bg-card py-12 text-center">
+        <div className="text-muted-foreground text-sm">No open positions</div>
+        <div className="text-muted-foreground/70 text-xs mt-1">
           Place a trade to see it here
         </div>
       </div>
@@ -47,7 +49,7 @@ export default function OpenPositions({
   }
 
   return (
-    <div className="rounded-lg border border-slate-800 bg-slate-900/40 divide-y divide-slate-800">
+    <div className="rounded-lg border border-border bg-card divide-y divide-border">
       {positions.map((p) => {
         const isOpen = expanded === p.id;
         const potentialProfit = p.potentialPayout - p.stake;
@@ -59,32 +61,32 @@ export default function OpenPositions({
               className="w-full flex items-center gap-3 text-left"
             >
               {isOpen ? (
-                <ChevronDown size={16} className="text-slate-500 shrink-0" />
+                <ChevronDown size={16} className="text-muted-foreground shrink-0" />
               ) : (
-                <ChevronRight size={16} className="text-slate-500 shrink-0" />
+                <ChevronRight size={16} className="text-muted-foreground shrink-0" />
               )}
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-white">
+                  <span className="text-sm font-semibold text-foreground">
                     {contractLabel(p)}
                   </span>
                 </div>
-                <div className="text-[11px] text-slate-500 truncate">
+                <div className="text-[11px] text-muted-foreground truncate">
                   {p.refId} · {p.marketName}
                 </div>
               </div>
 
               <div className="text-right">
-                <div className="text-xs text-slate-400">Stake</div>
-                <div className="text-sm font-semibold tabular-nums text-white">
+                <div className="text-xs text-muted-foreground">Stake</div>
+                <div className="text-sm font-semibold tabular-nums text-foreground">
                   ${p.stake.toFixed(2)}
                 </div>
               </div>
 
               <div className="text-right ml-3">
-                <div className="text-xs text-slate-400">Payout</div>
-                <div className="text-sm font-semibold tabular-nums text-emerald-400">
+                <div className="text-xs text-muted-foreground">Payout</div>
+                <div className="text-sm font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
                   ${p.potentialPayout.toFixed(2)}
                 </div>
               </div>
@@ -93,37 +95,36 @@ export default function OpenPositions({
             {isOpen && (
               <div className="mt-3 ml-6 space-y-2 text-xs">
                 <div className="grid grid-cols-2 gap-y-1.5">
-                  <span className="text-slate-500">Ref ID</span>
-                  <span className="text-slate-200 font-mono">{p.refId}</span>
+                  <span className="text-muted-foreground">Ref ID</span>
+                  <span className="text-foreground font-mono">{p.refId}</span>
 
-                  <span className="text-slate-500">Contract</span>
-                  <span className="text-slate-200">{contractLabel(p)}</span>
+                  <span className="text-muted-foreground">Contract</span>
+                  <span className="text-foreground">{contractLabel(p)}</span>
 
-                  <span className="text-slate-500">Entry spot</span>
-                  <span className="text-slate-200 tabular-nums">
-                    {p.entrySpot.toFixed(2)} <span className="text-slate-500">(digit {p.entryDigit})</span>
+                  <span className="text-muted-foreground">Entry spot</span>
+                  <span className="text-foreground tabular-nums">
+                    {p.entrySpot.toFixed(2)}{" "}
+                    <span className="text-muted-foreground">(digit {p.entryDigit})</span>
                   </span>
 
-                  <span className="text-slate-500">Current spot</span>
-                  <span className="text-slate-200 tabular-nums">
+                  <span className="text-muted-foreground">Current spot</span>
+                  <span className="text-foreground tabular-nums">
                     {currentSpot != null ? currentSpot.toFixed(2) : "—"}{" "}
-                    {currentDigit != null && <span className="text-slate-500">(digit {currentDigit})</span>}
+                    {currentDigit != null && (
+                      <span className="text-muted-foreground">(digit {currentDigit})</span>
+                    )}
                   </span>
 
-                  <span className="text-slate-500">Potential profit</span>
-                  <span className="text-emerald-400 tabular-nums">
+                  <span className="text-muted-foreground">Potential profit</span>
+                  <span className="text-emerald-600 dark:text-emerald-400 tabular-nums">
                     +${potentialProfit.toFixed(2)}
                   </span>
 
-                  <span className="text-slate-500">Opened at</span>
-                  <span className="text-slate-200 font-mono">
-                    {fmtTime(p.createdAt)}
-                  </span>
+                  <span className="text-muted-foreground">Opened at</span>
+                  <span className="text-foreground font-mono">{fmtTime(p.createdAt)}</span>
 
-                  <span className="text-slate-500">Account</span>
-                  <span className="text-slate-200 capitalize">
-                    {p.accountType}
-                  </span>
+                  <span className="text-muted-foreground">Account</span>
+                  <span className="text-foreground capitalize">{p.accountType}</span>
                 </div>
 
                 <button
@@ -131,7 +132,7 @@ export default function OpenPositions({
                     e.stopPropagation();
                     onStop(p.id);
                   }}
-                  className="mt-2 w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 hover:bg-rose-500/20 transition text-sm font-medium"
+                  className="mt-2 w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 transition text-sm font-medium"
                 >
                   Cancel Position
                 </button>

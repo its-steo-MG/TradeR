@@ -11,15 +11,16 @@ type Props = {
   onOpenRobotPanel: () => void;
 };
 
-export default function TopBar({ 
-  muted, 
-  onToggleMute, 
+export default function TopBar({
+  muted,
+  onToggleMute,
   activeAccount: propActiveAccount,
-  onOpenRobotPanel 
+  onOpenRobotPanel,
 }: Props) {
-
   const [balance, setBalance] = useState<number>(0);
-  const [activeAccount, setActiveAccount] = useState<Account | null>(propActiveAccount || null);
+  const [activeAccount, setActiveAccount] = useState<Account | null>(
+    propActiveAccount || null
+  );
 
   const loadRealBalance = useCallback(() => {
     const raw = localStorage.getItem("user_session");
@@ -63,22 +64,17 @@ export default function TopBar({
     }
   }, []);
 
-  // Listen for session updates
   useEffect(() => {
     loadRealBalance();
-
     const handleSessionUpdate = () => loadRealBalance();
-
     window.addEventListener("session-updated", handleSessionUpdate);
     window.addEventListener("storage", handleSessionUpdate);
-
     return () => {
       window.removeEventListener("session-updated", handleSessionUpdate);
       window.removeEventListener("storage", handleSessionUpdate);
     };
   }, [loadRealBalance]);
 
-  // Sync with prop
   useEffect(() => {
     if (propActiveAccount) {
       setActiveAccount(propActiveAccount);
@@ -86,42 +82,36 @@ export default function TopBar({
     }
   }, [propActiveAccount]);
 
-  // Determine icon based on account type
   const accountType = activeAccount?.account_type || "standard";
-  const iconSrc = accountType === "demo" 
-    ? "/demo-account-icon.png" 
-    : "/real-account-icon.png";
+  const iconSrc =
+    accountType === "demo" ? "/demo-account-icon.png" : "/real-account-icon.png";
 
   return (
-    <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-800 bg-slate-950">
-      {/* Real / Demo Balance Display */}
-      <button className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-full pl-1 pr-3 py-1 hover:bg-slate-800 transition-colors flex-1">
-        <div className="w-6 h-6 rounded-full overflow-hidden border border-slate-700 flex-shrink-0">
-          <img 
+    <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-card">
+      <button className="flex items-center gap-2 bg-muted border border-border rounded-full pl-1 pr-3 py-1 hover:bg-muted/80 transition-colors flex-1">
+        <div className="w-6 h-6 rounded-full overflow-hidden border border-border flex-shrink-0">
+          <img
             src={iconSrc}
             alt={`${accountType.toUpperCase()} Account`}
             className="w-full h-full object-cover"
           />
         </div>
-
-        <span className="text-blue-400 text-sm font-medium">
+        <span className="text-blue-600 dark:text-blue-400 text-sm font-medium">
           ${Number(balance || 0).toFixed(2)}
         </span>
-        <ChevronDown size={14} className="text-slate-400" />
+        <ChevronDown size={14} className="text-muted-foreground" />
       </button>
 
-      {/* Sound Toggle */}
-      <button 
-        onClick={onToggleMute} 
-        className="p-2 rounded-full bg-slate-900 border border-slate-800 text-blue-400 hover:bg-slate-800 transition-colors"
+      <button
+        onClick={onToggleMute}
+        className="p-2 rounded-full bg-muted border border-border text-blue-600 dark:text-blue-400 hover:bg-muted/80 transition-colors"
       >
         {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
       </button>
 
-      {/* S-DIGIT ROBOT BUTTON */}
-      <button 
+      <button
         onClick={onOpenRobotPanel}
-        className="p-2 rounded-full bg-slate-900 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 hover:border-emerald-400 transition-all active:scale-95"
+        className="p-2 rounded-full bg-muted border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-all active:scale-95"
         title="Load S-Digit Robot"
       >
         <Bot size={20} strokeWidth={2.5} />

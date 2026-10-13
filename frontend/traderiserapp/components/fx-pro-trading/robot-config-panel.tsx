@@ -111,8 +111,8 @@ export default function RobotConfigPanel({
   }
 
   return (
-    <Card className="bg-gradient-to-br from-slate-900 to-zinc-950 border border-white/10 overflow-hidden">
-      <CardHeader className="bg-gradient-to-r from-pink-600/20 to-purple-600/20 border-b border-white/10">
+    <Card className="bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl border border-white/40 dark:border-white/40 dark:border-white/10 overflow-hidden">
+      <CardHeader className="bg-pink-500/10 dark:bg-pink-500/15 backdrop-blur-md border-b border-white/40 dark:border-white/40 dark:border-white/10">
         <div className="flex items-center gap-3">
           <Zap className="w-6 h-6 text-pink-500" />
           <CardTitle className="text-xl font-bold">Robot Configuration</CardTitle>
@@ -123,11 +123,11 @@ export default function RobotConfigPanel({
         {/* EA Mode Banner */}
         {isEA && (
           <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4">
-            <div className="flex items-center gap-2 text-amber-400 mb-3">
+            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 mb-3">
               <Zap className="w-5 h-5" />
               <span className="font-bold text-lg">EXPERT ADVISOR (EA) AI</span>
             </div>
-            <p className="text-sm text-amber-300 leading-relaxed">
+            <p className="text-sm text-amber-700 dark:text-amber-300 leading-relaxed">
               This is a highly Advanced AI Automatic Expert Advisor.<br />
               It will automatically open and manage multiple positions according to its logic.
             </p>
@@ -136,12 +136,12 @@ export default function RobotConfigPanel({
 
         {/* Robot Selection */}
         <div>
-          <label className="block text-sm font-medium mb-2 text-white/80">Select Robot</label>
+          <label className="block text-sm font-medium mb-2 text-slate-600 dark:text-white/80">Select Robot</label>
           <Select 
             value={selectedRobotId?.toString() || ""} 
             onValueChange={(val) => setSelectedRobotId(Number(val))}
           >
-            <SelectTrigger className="bg-zinc-900 border-white/20">
+            <SelectTrigger className="bg-white/60 dark:bg-white/60 dark:bg-zinc-900/60/60 backdrop-blur-md border-white/40 dark:border-white/40 dark:border-white/10 text-slate-900 dark:text-slate-900 dark:text-white">
               <SelectValue placeholder="Choose a robot" />
             </SelectTrigger>
             <SelectContent>
@@ -156,12 +156,12 @@ export default function RobotConfigPanel({
 
         {/* Pair Selection */}
         <div>
-          <label className="block text-sm font-medium mb-2 text-white/80">Trading Pair</label>
+          <label className="block text-sm font-medium mb-2 text-slate-600 dark:text-white/80">Trading Pair</label>
           <Select 
             value={selectedPairId?.toString() || ""} 
             onValueChange={(val) => setSelectedPairId(Number(val))}
           >
-            <SelectTrigger className="bg-zinc-900 border-white/20">
+            <SelectTrigger className="bg-white/60 dark:bg-white/60 dark:bg-zinc-900/60/60 backdrop-blur-md border-white/40 dark:border-white/40 dark:border-white/10 text-slate-900 dark:text-slate-900 dark:text-white">
               <SelectValue placeholder="Choose pair" />
             </SelectTrigger>
             <SelectContent>
@@ -176,9 +176,9 @@ export default function RobotConfigPanel({
 
         {/* Timeframe */}
         <div>
-          <label className="block text-sm font-medium mb-2 text-white/80">Timeframe</label>
+          <label className="block text-sm font-medium mb-2 text-slate-600 dark:text-white/80">Timeframe</label>
           <Select value={timeframe} onValueChange={setTimeframe}>
-            <SelectTrigger className="bg-zinc-900 border-white/20">
+            <SelectTrigger className="bg-white/60 dark:bg-white/60 dark:bg-zinc-900/60/60 backdrop-blur-md border-white/40 dark:border-white/40 dark:border-white/10 text-slate-900 dark:text-slate-900 dark:text-white">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -194,7 +194,7 @@ export default function RobotConfigPanel({
         {/* Stake - Only for non-EA robots */}
         {!isEA && (
           <div>
-            <label className="block text-sm font-medium mb-2 text-white/80 flex items-center gap-2">
+            <label className="block text-sm font-medium mb-2 text-slate-600 dark:text-white/80 flex items-center gap-2">
               <DollarSign className="w-4 h-4" />
               Stake per Trade ($)
             </label>
@@ -204,31 +204,31 @@ export default function RobotConfigPanel({
               min="1"
               value={stake}
               onChange={(e) => setStake(e.target.value)}
-              className="bg-zinc-900 border-white/20 text-white"
+              className="bg-white/60 dark:bg-white/60 dark:bg-zinc-900/60/60 backdrop-blur-md border-white/40 dark:border-white/40 dark:border-white/10 text-slate-900 dark:text-white text-slate-900 dark:text-white"
               placeholder="10.00"
             />
-            <p className="text-xs text-white/50 mt-1">Amount deducted per trade</p>
+            <p className="text-xs text-slate-400 dark:text-white/50 mt-1">Amount deducted per trade</p>
           </div>
         )}
 
         {/* Summary */}
         {selectedRobot && selectedPairId && (
-          <div className="bg-zinc-900/70 border border-white/10 rounded-2xl p-4 text-sm">
-            <div className="font-semibold mb-3 text-white/90">Configuration Summary</div>
-            <div className="space-y-2 text-white/70">
+          <div className="bg-white/40 dark:bg-white/50 dark:bg-white/40 dark:bg-white/5 backdrop-blur-md border border-white/40 dark:border-white/40 dark:border-white/10 rounded-2xl p-4 text-sm">
+            <div className="font-semibold mb-3 text-slate-700 dark:text-white/90">Configuration Summary</div>
+            <div className="space-y-2 text-slate-500 dark:text-white/70">
               <div className="flex justify-between">
                 <span>Robot:</span>
-                <span className="font-medium text-white">{selectedRobot.name}</span>
+                <span className="font-medium text-slate-900 dark:text-white">{selectedRobot.name}</span>
               </div>
               <div className="flex justify-between">
                 <span>Pair:</span>
-                <span className="font-medium text-white">
+                <span className="font-medium text-slate-900 dark:text-white">
                   {pairs.find(p => p.id === selectedPairId)?.name}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span>Timeframe:</span>
-                <span className="font-medium text-white">
+                <span className="font-medium text-slate-900 dark:text-white">
                   {TIMEFRAMES.find(t => t.value === timeframe)?.label}
                 </span>
               </div>

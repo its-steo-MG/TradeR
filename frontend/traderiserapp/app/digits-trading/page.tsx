@@ -480,8 +480,22 @@ export default function TradingPage() {
             current?.lastDigit ??
             0
         );
+        const isSashi = (() => {
+          try {
+            const raw = localStorage.getItem("user_session");
+            if (!raw) return false;
+            return (JSON.parse(raw) as { is_sashi?: boolean }).is_sashi === true;
+          } catch {
+            return false;
+          }
+        })();
+
         let isWin = trade.is_win === true;
-        if (trade.is_win === undefined || trade.is_win === null) {
+        if (kind === "rise" || kind === "fall") {
+          // Backend decides 90% for Sashi, 10% for non-Sashi.
+          // Chart follows the result: Rise wins by rising, Fall wins by falling.
+          isWin = trade.is_win === true;
+        } else if (trade.is_win === undefined || trade.is_win === null) {
           isWin = isWinningDigit(
             kind,
             ["over", "under", "matches", "differs"].includes(kind) ? barrier : undefined,
@@ -492,7 +506,13 @@ export default function TradingPage() {
           Number(rootData.total_profit ?? trade.total_profit ?? trade.profit ?? 0)
         );
 
-        tickFeed.forceNextDigit(realDigit);
+        if (kind === "rise" || kind === "fall") {
+          // Win → chart moves in the contract direction. Loss → opposite.
+          const shouldRise = kind === "rise" ? isWin : !isWin;
+          tickFeed.forcePriceMove(shouldRise ? "up" : "down");
+        } else {
+          tickFeed.forceNextDigit(realDigit);
+        }
         const revealTick = await waitForNextTick();
 
         setDisplayedLastDigit(revealTick.lastDigit);
@@ -613,6 +633,26 @@ export default function TradingPage() {
         right: { label: `Differs ${barrier}`, payout: stake * getPayout("differs"), pct: 89, tone: "red" as const, onClick: () => handlePlaceTrade("differs") },
       };
     }
+    if (mode === "risefall") {
+      // Fixed 48% on both sides. No barrier digit.
+      const riseFallPayout = 1 / 0.48;
+      return {
+        left: {
+          label: "Rise",
+          payout: stake * riseFallPayout,
+          pct: 48,
+          tone: "green" as const,
+          onClick: () => handlePlaceTrade("rise"),
+        },
+        right: {
+          label: "Fall",
+          payout: stake * riseFallPayout,
+          pct: 48,
+          tone: "red" as const,
+          onClick: () => handlePlaceTrade("fall"),
+        },
+      };
+    }
     const overPayout = getPayout("over", barrier);
     const underPayout = getPayout("under", barrier);
     return {
@@ -637,7 +677,7 @@ export default function TradingPage() {
 
   /** Contract kind currently armed — used by the Manual Trader badge overlay. */
   const activeKind: DigitContractKind =
-    mode === "evenodd" ? "even" : mode === "matches" ? "matches" : "over";
+    mode === "evenodd" ? "even" : mode === "matches" ? "matches" : mode === "risefall" ? "rise" : "over";
 
   const isManual = terminalTab === "manual";
   const isAnalysis = terminalTab === "analysis";
@@ -654,7 +694,11 @@ export default function TradingPage() {
   }, [minimized, armed]);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
+    <div className="relative min-h-screen text-foreground flex flex-col overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-black dark:via-zinc-950 dark:to-black" />
+      <div className="pointer-events-none absolute -top-24 -left-24 h-72 w-72 rounded-full bg-purple-400/20 blur-3xl dark:bg-purple-600/30" />
+      <div className="pointer-events-none absolute top-1/3 -right-24 h-80 w-80 rounded-full bg-pink-300/20 blur-3xl dark:bg-fuchsia-600/20" />
+      <div className="relative z-10 flex min-h-screen flex-col">
       <TopBar
         muted={muted}
         onToggleMute={onToggleMute}
@@ -707,6 +751,7 @@ export default function TradingPage() {
                 // Keep DTrader's controls synchronized, but remain on Analysis.
                 if (sig.family === "evenodd") setMode("evenodd");
                 else if (sig.family === "overunder") setMode("overunder");
+                else if (sig.family === "risefall") setMode("risefall");
                 else setMode("matches");
                 if (typeof sig.barrier === "number") setBarrier(sig.barrier);
 
@@ -748,23 +793,23 @@ export default function TradingPage() {
           ) : tab === "trade" ? (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6">
               <div className="lg:col-span-8 space-y-5">
-                <div className="relative h-[19rem] sm:h-80 md:h-96 lg:h-[480px] xl:h-[560px] rounded-3xl bg-slate-900 border border-slate-700 overflow-hidden">
+                <div className="relative h-[19rem] sm:h-80 md:h-96 lg:h-[480px] xl:h-[560px] rounded-3xl bg-card border border-border overflow-hidden">
                   <div className="absolute top-2.5 left-2.5 sm:top-4 sm:left-4 z-20 max-w-[calc(100%-1.25rem)]">
-                    <div className="bg-slate-950/95 backdrop-blur-md px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-2xl flex items-center gap-2 sm:gap-3 border border-slate-700 shadow-sm max-w-[calc(100vw-3.5rem)]">
-                      <div className="text-blue-400 text-base sm:text-xl">📈</div>
+                    <div className="bg-card px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-2xl flex items-center gap-2 sm:gap-3 border border-border shadow-sm max-w-[calc(100vw-3.5rem)]">
+                      <div className="text-blue-600 dark:text-blue-400 text-base sm:text-xl">📈</div>
                       <select
                         value={selectedMarketId ?? ""}
                         onChange={(e) => setSelectedMarketId(Number(e.target.value))}
                         disabled={!marketsLoaded}
-                        className="bg-transparent text-white font-medium text-xs sm:text-sm focus:outline-none cursor-pointer py-1 pr-5 sm:pr-8 min-w-0 max-w-[9rem] sm:max-w-none sm:min-w-[200px] md:min-w-[260px] truncate appearance-none disabled:opacity-50"
+                        className="bg-transparent text-foreground font-medium text-xs sm:text-sm focus:outline-none cursor-pointer py-1 pr-5 sm:pr-8 min-w-0 max-w-[9rem] sm:max-w-none sm:min-w-[200px] md:min-w-[260px] truncate appearance-none disabled:opacity-50"
                       >
                         {markets.map((m) => (
-                          <option key={m.id} value={m.id} className="bg-slate-900 text-white py-2">
+                          <option key={m.id} value={m.id} className="bg-white text-slate-900 dark:bg-zinc-900 dark:text-white py-2">
                             {m.display_name || m.name}
                           </option>
                         ))}
                       </select>
-                      <div className="text-slate-400 pointer-events-none">▼</div>
+                      <div className="text-muted-foreground pointer-events-none">▼</div>
                     </div>
                   </div>
 
@@ -793,20 +838,22 @@ export default function TradingPage() {
                         current={current}
                         marketId={selectedMarketId}
                         isRefreshing={isRefreshing}
+                        chartType={mode === "risefall" ? "candle" : "line"}
+                        burst={mode === "risefall" ? burst : null}
                       />
-                      <WinLossBurst trigger={burst} />
+                      {mode !== "risefall" && <WinLossBurst trigger={burst} />}
                     </>
                   )}
                 </div>
 
-                {!isManual && (
+                {!isManual && mode !== "risefall" && (
                   <DigitStrip
                     key={`strip-${selectedMarketId ?? "none"}`}
                     pct={stats.pct}
                     maxIdx={stats.maxIdx}
                     minIdx={stats.minIdx}
                     currentDigit={displayedLastDigit}
-                    selected={mode === "overunder" || mode === "matches" ? barrier : null}
+                    selected={mode === "overunder" || mode === "matches" || mode === "risefall" ? barrier : null}
                     highlight={highlightDigit}
                     windowSize={statsWindow}
                     onWindowChange={setStatsWindow}
@@ -830,7 +877,7 @@ export default function TradingPage() {
                   <HistoryStrip history={history} netPnl={netPnl} />
                 </div>
 
-                {!isManual && (mode === "overunder" || mode === "matches") && (
+                {!isManual && mode !== "risefall" && (mode === "overunder" || mode === "matches") && (
                   <DigitPicker
                     digits={[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}
                     selected={barrier}
@@ -844,13 +891,13 @@ export default function TradingPage() {
                 <TradeButtons left={tradeUI.left} right={tradeUI.right} />
 
                 {isTrading && (
-                  <div className="text-center py-3 text-blue-400 font-medium">Placing trade...</div>
+                  <div className="text-center py-3 text-blue-600 dark:text-blue-400 font-medium">Placing trade...</div>
                 )}
                 {isRefreshing && !isTrading && (
-                  <div className="text-center py-3 text-blue-400 text-sm">Loading market data…</div>
+                  <div className="text-center py-3 text-blue-600 dark:text-blue-400 text-sm">Loading market data…</div>
                 )}
                 {!marketsLoaded && (
-                  <div className="text-center py-3 text-blue-400 text-sm">Loading markets...</div>
+                  <div className="text-center py-3 text-blue-600 dark:text-blue-400 text-sm">Loading markets...</div>
                 )}
               </div>
             </div>
@@ -879,6 +926,7 @@ export default function TradingPage() {
         onConfigure={() => setShowRobotPanel(true)}
         hidden={(showRobotPanel && !minimized) || showBulkScanner}
         defaultExpanded={dockExpanded}
+        onClose={() => setDockExpanded(false)}
       />
 
       <div className="lg:hidden">
@@ -886,16 +934,14 @@ export default function TradingPage() {
       </div>
 
       <div
-        className="hidden lg:flex fixed bottom-24 right-6 z-40 bg-slate-900/95 backdrop-blur-md
-                   border border-slate-700 rounded-2xl p-1.5 shadow-2xl
-                   ring-1 ring-black/40"
+        className="hidden lg:flex fixed bottom-24 right-6 z-40 bg-card border border-border rounded-2xl p-1.5 shadow-2xl"
       >
         <button
           onClick={() => setTab("trade")}
           className={`px-5 py-2.5 rounded-xl text-sm font-medium transition-colors ${
             tab === "trade"
               ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20"
-              : "text-slate-400 hover:text-white"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           Trade
@@ -905,7 +951,7 @@ export default function TradingPage() {
           className={`px-5 py-2.5 rounded-xl text-sm font-medium transition-colors ${
             tab === "positions"
               ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20"
-              : "text-slate-400 hover:text-white"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           Positions
@@ -914,16 +960,16 @@ export default function TradingPage() {
 
       {/* Robot CONFIG modal only — the live run view now lives in RobotDock */}
       {showRobotPanel && !minimized && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4">
           <div
-            className="w-full max-w-lg md:max-w-xl lg:max-w-3xl xl:max-w-4xl bg-slate-900 border border-slate-700 rounded-3xl overflow-hidden max-h-[95vh] flex flex-col shadow-2xl"
+            className="w-full max-w-lg md:max-w-xl lg:max-w-3xl xl:max-w-4xl bg-card border border-border rounded-3xl overflow-hidden max-h-[95vh] flex flex-col shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-700">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-border">
               <h3 className="font-semibold text-xl">S-Digit Robot</h3>
               <button
                 onClick={() => setShowRobotPanel(false)}
-                className="text-slate-400 hover:text-white text-3xl leading-none transition-colors"
+                className="text-muted-foreground hover:text-foreground text-3xl leading-none transition-colors"
               >
                 ×
               </button>
@@ -937,7 +983,7 @@ export default function TradingPage() {
                 }}
               />
               {(isRobotRunning || robotTransactions.length > 0) && (
-                <p className="mt-4 text-center text-xs text-slate-400">
+                <p className="mt-4 text-center text-xs text-muted-foreground">
                   A session is live — minimise this window and use the robot dock at the
                   bottom to watch executions while the chart stays visible.
                 </p>
@@ -946,6 +992,7 @@ export default function TradingPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
-
 "use client"
 
 import { useEffect, useRef } from "react"
+import { useTheme } from "next-themes"
 
 interface TradingViewWidgetProps {
   symbol?: string
@@ -9,14 +9,13 @@ interface TradingViewWidgetProps {
 
 export function TradingViewWidget({ symbol = "EURUSD" }: TradingViewWidgetProps) {
   const container = useRef<HTMLDivElement>(null)
+  const { resolvedTheme } = useTheme()
 
   useEffect(() => {
     if (!container.current) return
 
-    // Clear previous widget
     container.current.innerHTML = ""
 
-    // Create script element for TradingView widget
     const script = document.createElement("script")
     script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js"
     script.async = true
@@ -25,7 +24,7 @@ export function TradingViewWidget({ symbol = "EURUSD" }: TradingViewWidgetProps)
       symbol: symbol,
       interval: "D",
       timezone: "Etc/UTC",
-      theme: "dark",
+      theme: resolvedTheme === "dark" ? "dark" : "light",
       style: "1",
       locale: "en",
       allow_symbol_change: true,
@@ -34,10 +33,10 @@ export function TradingViewWidget({ symbol = "EURUSD" }: TradingViewWidgetProps)
     })
 
     container.current.appendChild(script)
-  }, [symbol])
+  }, [symbol, resolvedTheme])
 
   return (
-    <div className="rounded-2xl overflow-hidden bg-white/10 backdrop-blur-md border border-white/10 w-full">
+    <div className="rounded-2xl overflow-hidden bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 w-full">
       <div ref={container} className="w-full" style={{ height: "500px" }} />
     </div>
   )

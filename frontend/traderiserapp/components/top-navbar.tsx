@@ -4,9 +4,9 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { TrendingUp, LogOut, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { Account } from "@/types/account";   // ← Import the shared type
+import type { Account } from "@/types/account";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
-// Use the imported Account type
 interface User {
   username: string;
   email: string;
@@ -21,7 +21,7 @@ interface TopNavbarProps {
   showBalance?: boolean;
   activeAccount: Account | null;
   accounts: Account[];
-  onSwitchAccount: (account: Account) => void;        // ← Now consistent
+  onSwitchAccount: (account: Account) => void;
   onLogout?: () => void;
 }
 
@@ -40,7 +40,6 @@ export function TopNavbar({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeAccount, setActiveAccount] = useState<Account | null>(propActiveAccount);
 
-  // Sync with account-switch event
   useEffect(() => {
     const handler = (e: Event) => {
       const ev = e as CustomEvent<{ account: Account }>;
@@ -50,7 +49,6 @@ export function TopNavbar({
     return () => window.removeEventListener("account-switch", handler);
   }, []);
 
-  // Sync prop changes
   useEffect(() => {
     if (propActiveAccount) {
       setActiveAccount(propActiveAccount);
@@ -81,9 +79,10 @@ export function TopNavbar({
   const formatAccountType = (type: string) =>
     type ? type.charAt(0).toUpperCase() + type.slice(1) : "Unknown";
 
-  const formattedBalance = typeof accountBalance === "number" && !isNaN(accountBalance)
-    ? accountBalance.toFixed(2)
-    : "0.00";
+  const formattedBalance =
+    typeof accountBalance === "number" && !isNaN(accountBalance)
+      ? accountBalance.toFixed(2)
+      : "0.00";
 
   return (
     <nav className="sticky top-0 z-50 w-full bg-black/50 backdrop-blur-md border-b border-white/20">
@@ -93,7 +92,9 @@ export function TopNavbar({
             <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
               <TrendingUp className="w-5 h-5 text-black" />
             </div>
-            <span className="text-xl font-bold text-white hidden sm:inline">Traderiser</span>
+            <span className="text-xl font-bold text-white hidden sm:inline">
+              Traderiser
+            </span>
           </Link>
 
           {isLoggedIn && user && activeAccount ? (
@@ -101,7 +102,9 @@ export function TopNavbar({
               {showBalance && (
                 <>
                   <span className="text-sm text-white/70">Account Balance</span>
-                  <span className="text-lg font-bold text-white">${formattedBalance}</span>
+                  <span className="text-lg font-bold text-white">
+                    ${formattedBalance}
+                  </span>
                 </>
               )}
               <select
@@ -111,7 +114,8 @@ export function TopNavbar({
               >
                 {accounts.map((account) => (
                   <option key={String(account.id)} value={String(account.id)}>
-                    {formatAccountType(account.account_type)} (${Number(account.balance).toFixed(2)})
+                    {formatAccountType(account.account_type)} ($
+                    {Number(account.balance).toFixed(2)})
                   </option>
                 ))}
               </select>
@@ -119,19 +123,28 @@ export function TopNavbar({
           ) : (
             <div className="hidden md:flex items-center gap-4">
               <Link href="/login">
-                <Button className="bg-blue-600 hover:bg-blue-700 text-white">Sign In</Button>
+                <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+                  Sign In
+                </Button>
               </Link>
             </div>
           )}
 
           <div className="flex items-center gap-3">
+            {/* Theme Toggle - always visible */}
+            <ThemeToggle />
+
             {isLoggedIn && user ? (
               <>
                 <div className="hidden sm:flex items-center gap-3">
                   <div className="flex flex-col items-end">
-                    <p className="text-sm font-medium text-white">{user.username || "User"}</p>
+                    <p className="text-sm font-medium text-white">
+                      {user.username || "User"}
+                    </p>
                     <p className="text-xs text-white/70 capitalize">
-                      {activeAccount ? formatAccountType(activeAccount.account_type) : "Loading..."}
+                      {activeAccount
+                        ? formatAccountType(activeAccount.account_type)
+                        : "Loading..."}
                     </p>
                   </div>
                   {user.image && (
@@ -155,12 +168,18 @@ export function TopNavbar({
                   onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                   className="sm:hidden p-2 hover:bg-white/10 rounded-lg transition-colors"
                 >
-                  {isMobileMenuOpen ? <X className="w-5 h-5 text-white" /> : <Menu className="w-5 h-5 text-white" />}
+                  {isMobileMenuOpen ? (
+                    <X className="w-5 h-5 text-white" />
+                  ) : (
+                    <Menu className="w-5 h-5 text-white" />
+                  )}
                 </button>
               </>
             ) : (
               <Link href="/login">
-                <Button className="bg-blue-600 hover:bg-blue-700 text-white">Sign In</Button>
+                <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+                  Sign In
+                </Button>
               </Link>
             )}
           </div>
@@ -178,9 +197,13 @@ export function TopNavbar({
                 />
               )}
               <div>
-                <p className="text-sm font-medium text-white">{user.username || "User"}</p>
+                <p className="text-sm font-medium text-white">
+                  {user.username || "User"}
+                </p>
                 <p className="text-xs text-white/70 capitalize">
-                  {activeAccount ? formatAccountType(activeAccount.account_type) : "Loading..."}
+                  {activeAccount
+                    ? formatAccountType(activeAccount.account_type)
+                    : "Loading..."}
                 </p>
               </div>
             </div>
@@ -188,7 +211,9 @@ export function TopNavbar({
             {showBalance && activeAccount && (
               <div className="bg-white/10 rounded-lg p-3">
                 <p className="text-xs text-white/70 mb-1">Account Balance</p>
-                <p className="text-lg font-bold text-white">${formattedBalance}</p>
+                <p className="text-lg font-bold text-white">
+                  ${formattedBalance}
+                </p>
                 <select
                   value={activeAccount?.id || ""}
                   onChange={(e) => handleAccountChange(e.target.value)}
@@ -196,7 +221,8 @@ export function TopNavbar({
                 >
                   {accounts.map((account) => (
                     <option key={String(account.id)} value={String(account.id)}>
-                      {formatAccountType(account.account_type)} (${Number(account.balance).toFixed(2)})
+                      {formatAccountType(account.account_type)} ($
+                      {Number(account.balance).toFixed(2)})
                     </option>
                   ))}
                 </select>

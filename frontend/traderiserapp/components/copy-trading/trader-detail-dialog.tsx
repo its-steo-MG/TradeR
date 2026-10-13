@@ -95,10 +95,10 @@ export function TraderDetailDialog({ trader, open, onOpenChange }: TraderDetailD
 
   const riskClass =
     trader.risk_level === "low"
-      ? "text-emerald-400 bg-emerald-400/10 border-emerald-400/20"
+      ? "text-emerald-600 dark:text-emerald-400 bg-emerald-400/10 border-emerald-400/20"
       : trader.risk_level === "medium"
-        ? "text-amber-400 bg-amber-400/10 border-amber-400/20"
-        : "text-rose-400 bg-rose-400/10 border-rose-400/20"
+        ? "text-amber-600 dark:text-amber-400 bg-amber-400/10 border-amber-400/20"
+        : "text-rose-600 dark:text-rose-400 bg-rose-400/10 border-rose-400/20"
 
   const winRate = Number(trader.win_rate) || 0
   const avgReturn = Number(trader.average_return) || 0
@@ -121,7 +121,7 @@ export function TraderDetailDialog({ trader, open, onOpenChange }: TraderDetailD
           max-h-[92dvh] sm:max-h-[90dvh]
           p-0 gap-0 overflow-hidden
           flex flex-col
-          bg-slate-950/95 backdrop-blur-2xl border-white/10 text-white
+          bg-white dark:bg-zinc-950 border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white
           rounded-2xl
         "
       >
@@ -137,9 +137,9 @@ export function TraderDetailDialog({ trader, open, onOpenChange }: TraderDetailD
               {/* Profile Header */}
               <div className="flex flex-col sm:flex-row items-start gap-4">
                 <div className="relative p-1 rounded-full bg-gradient-to-br from-pink-500 to-blue-500 flex-shrink-0">
-                  <Avatar className="w-16 h-16 sm:w-20 sm:h-20 border-2 border-black">
+                  <Avatar className="w-16 h-16 sm:w-20 sm:h-20 border-2 border-white dark:border-zinc-950">
                     <AvatarImage src={`/.jpg?height=80&width=80&query=${displayName}`} />
-                    <AvatarFallback className="bg-slate-800 text-white font-bold text-lg sm:text-xl">
+                    <AvatarFallback className="bg-slate-200 text-slate-900 dark:bg-zinc-800 dark:text-white font-bold text-lg sm:text-xl">
                       {avatarFallback}
                     </AvatarFallback>
                   </Avatar>
@@ -147,63 +147,63 @@ export function TraderDetailDialog({ trader, open, onOpenChange }: TraderDetailD
                 <div className="space-y-2 flex-1 min-w-0">
                   <div className="flex items-center gap-2 min-w-0">
                     <h2 className="text-2xl sm:text-3xl font-bold truncate">{displayName}</h2>
-                    {trader.is_verified && <CheckCircle2 size={20} className="text-blue-400 flex-shrink-0" />}
+                    {trader.is_verified && <CheckCircle2 size={20} className="text-blue-600 dark:text-blue-400 flex-shrink-0" />}
                   </div>
                   <Badge variant="outline" className={`capitalize ${riskClass}`}>
                     {trader.risk_level} Risk
                   </Badge>
-                  <p className="text-sm sm:text-base text-white/60 leading-relaxed break-words">{trader.bio}</p>
+                  <p className="text-sm sm:text-base text-slate-500 dark:text-zinc-400 leading-relaxed break-words">{trader.bio}</p>
                 </div>
               </div>
 
               {/* Key Stats Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-                <div className="glass-card p-3 sm:p-4 space-y-1.5 sm:space-y-2 min-w-0">
-                  <div className="flex items-center gap-2 text-pink-400">
+                <div className="bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-3 sm:p-4 space-y-1.5 sm:space-y-2 min-w-0">
+                  <div className="flex items-center gap-2 text-pink-600 dark:text-pink-400">
                     <TrendingUp size={16} className="flex-shrink-0" />
-                    <span className="text-[10px] sm:text-xs text-white/50 uppercase font-semibold truncate">Win Rate</span>
+                    <span className="text-[10px] sm:text-xs text-slate-500 dark:text-zinc-400 uppercase font-semibold truncate">Win Rate</span>
                   </div>
                   <p className="text-xl sm:text-2xl font-bold">{winRate.toFixed(1)}%</p>
                 </div>
-                <div className="glass-card p-3 sm:p-4 space-y-1.5 sm:space-y-2 min-w-0">
-                  <div className="flex items-center gap-2 text-blue-400">
+                <div className="bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-3 sm:p-4 space-y-1.5 sm:space-y-2 min-w-0">
+                  <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
                     <Shield size={16} className="flex-shrink-0" />
-                    <span className="text-[10px] sm:text-xs text-white/50 uppercase font-semibold truncate">Avg Return</span>
+                    <span className="text-[10px] sm:text-xs text-slate-500 dark:text-zinc-400 uppercase font-semibold truncate">Avg Return</span>
                   </div>
-                  <p className="text-xl sm:text-2xl font-bold text-blue-400">+{avgReturn.toFixed(1)}%</p>
+                  <p className="text-xl sm:text-2xl font-bold text-blue-600 dark:text-blue-400">+{avgReturn.toFixed(1)}%</p>
                 </div>
-                <div className="glass-card p-3 sm:p-4 space-y-1.5 sm:space-y-2 min-w-0">
-                  <div className="flex items-center gap-2 text-amber-400">
+                <div className="bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-3 sm:p-4 space-y-1.5 sm:space-y-2 min-w-0">
+                  <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
                     <Users size={16} className="flex-shrink-0" />
-                    <span className="text-[10px] sm:text-xs text-white/50 uppercase font-semibold truncate">Subscribers</span>
+                    <span className="text-[10px] sm:text-xs text-slate-500 dark:text-zinc-400 uppercase font-semibold truncate">Subscribers</span>
                   </div>
                   <p className="text-xl sm:text-2xl font-bold">{subCount}</p>
                 </div>
-                <div className="glass-card p-3 sm:p-4 space-y-1.5 sm:space-y-2 min-w-0">
-                  <div className="flex items-center gap-2 text-emerald-400">
+                <div className="bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-3 sm:p-4 space-y-1.5 sm:space-y-2 min-w-0">
+                  <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
                     <Clock size={16} className="flex-shrink-0" />
-                    <span className="text-[10px] sm:text-xs text-white/50 uppercase font-semibold truncate">Min Alloc</span>
+                    <span className="text-[10px] sm:text-xs text-slate-500 dark:text-zinc-400 uppercase font-semibold truncate">Min Alloc</span>
                   </div>
                   <p className="text-xl sm:text-2xl font-bold">${minAlloc}</p>
                 </div>
-                <div className="glass-card p-3 sm:p-4 space-y-1.5 sm:space-y-2 min-w-0">
-                  <div className="flex items-center gap-2 text-purple-400">
+                <div className="bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-3 sm:p-4 space-y-1.5 sm:space-y-2 min-w-0">
+                  <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400">
                     <Calendar size={16} className="flex-shrink-0" />
-                    <span className="text-[10px] sm:text-xs text-white/50 uppercase font-semibold truncate">Max Alloc</span>
+                    <span className="text-[10px] sm:text-xs text-slate-500 dark:text-zinc-400 uppercase font-semibold truncate">Max Alloc</span>
                   </div>
                   <p className="text-xl sm:text-2xl font-bold">${maxAlloc}</p>
                 </div>
-                <div className="glass-card p-3 sm:p-4 space-y-1.5 sm:space-y-2 min-w-0">
-                  <div className="flex items-center gap-2 text-rose-400">
+                <div className="bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-3 sm:p-4 space-y-1.5 sm:space-y-2 min-w-0">
+                  <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
                     <Shield size={16} className="flex-shrink-0" />
-                    <span className="text-[10px] sm:text-xs text-white/50 uppercase font-semibold truncate">Fee</span>
+                    <span className="text-[10px] sm:text-xs text-slate-500 dark:text-zinc-400 uppercase font-semibold truncate">Fee</span>
                   </div>
                   <p className="text-xl sm:text-2xl font-bold">{perfFee}%</p>
                 </div>
               </div>
 
               {/* Equity Growth Chart */}
-              <div className="glass-card p-4 sm:p-6 space-y-4">
+              <div className="bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-4 sm:p-6 space-y-4">
                 <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
                   <TrendingUp size={18} className="text-pink-500" />
                   Equity Growth
@@ -222,21 +222,21 @@ export function TraderDetailDialog({ trader, open, onOpenChange }: TraderDetailD
 
             {/* Right Column: Start Copying Form (sticky only on large screens) */}
             <div className="min-w-0">
-              <div className="glass-card p-4 sm:p-6 space-y-5 sm:space-y-6 lg:sticky lg:top-0">
+              <div className="bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-4 sm:p-6 space-y-5 sm:space-y-6 lg:sticky lg:top-0">
                 <div className="space-y-2">
                   <h3 className="text-lg sm:text-xl font-bold text-gradient-pink">Start Copying</h3>
-                  <p className="text-sm text-white/50">
+                  <p className="text-sm text-slate-500 dark:text-zinc-400">
                     Set your parameters and automatically mirror this trader&apos;s signals
                   </p>
                 </div>
 
                 {/* Allocation Amount */}
                 <div className="space-y-3">
-                  <Label htmlFor="allocation" className="text-white/80">
+                  <Label htmlFor="allocation" className="text-slate-600 dark:text-zinc-300">
                     Allocation Amount (USD)
                   </Label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40">$</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-zinc-500">$</span>
                     <Input
                       id="allocation"
                       type="number"
@@ -245,10 +245,10 @@ export function TraderDetailDialog({ trader, open, onOpenChange }: TraderDetailD
                       max={maxAlloc}
                       value={allocation}
                       onChange={(e) => setAllocation(Number(e.target.value))}
-                      className="pl-8 h-11 text-base bg-black/40 border-white/10 focus:ring-pink-500/50"
+                      className="pl-8 h-11 text-base bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700 focus:ring-pink-500/50"
                     />
                   </div>
-                  <p className="text-xs text-white/40">
+                  <p className="text-xs text-slate-400 dark:text-zinc-500">
                     Range: ${minAlloc} — ${maxAlloc}
                   </p>
                 </div>
@@ -256,10 +256,10 @@ export function TraderDetailDialog({ trader, open, onOpenChange }: TraderDetailD
                 {/* Max Drawdown Slider */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-2">
-                    <Label htmlFor="drawdown" className="text-white/80">
+                    <Label htmlFor="drawdown" className="text-slate-600 dark:text-zinc-300">
                       Max Drawdown
                     </Label>
-                    <span className="text-sm font-bold text-pink-400">{maxDrawdown[0]}%</span>
+                    <span className="text-sm font-bold text-pink-600 dark:text-pink-400">{maxDrawdown[0]}%</span>
                   </div>
                   <Slider
                     id="drawdown"
@@ -270,12 +270,12 @@ export function TraderDetailDialog({ trader, open, onOpenChange }: TraderDetailD
                     step={5}
                     className="[&_[role=slider]]:bg-pink-500 [&_[role=slider]]:border-pink-600"
                   />
-                  <p className="text-xs text-white/40">Auto-pause if losses exceed this threshold</p>
+                  <p className="text-xs text-slate-400 dark:text-zinc-500">Auto-pause if losses exceed this threshold</p>
                 </div>
 
                 {/* Performance Fee Notice */}
-                <Alert className="bg-pink-500/10 border-pink-500/20">
-                  <AlertDescription className="text-xs text-white/70">
+                <Alert className="bg-pink-50 dark:bg-pink-950 border-pink-300 dark:border-pink-700">
+                  <AlertDescription className="text-xs text-slate-500 dark:text-zinc-400">
                     This trader charges a <strong>{perfFee}%</strong> performance fee on profits. Fees are deducted
                     automatically from winning trades.
                   </AlertDescription>
@@ -291,9 +291,9 @@ export function TraderDetailDialog({ trader, open, onOpenChange }: TraderDetailD
                 </Button>
 
                 {/* Risk Warning */}
-                <Alert className="bg-rose-500/10 border-rose-500/20">
-                  <AlertCircle className="h-4 w-4 text-rose-400" />
-                  <AlertDescription className="text-xs text-white/70">
+                <Alert className="bg-rose-50 dark:bg-rose-950 border-rose-300 dark:border-rose-700">
+                  <AlertCircle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                  <AlertDescription className="text-xs text-slate-500 dark:text-zinc-400">
                     Copy trading involves significant risk. Past performance does not guarantee future results.
                   </AlertDescription>
                 </Alert>

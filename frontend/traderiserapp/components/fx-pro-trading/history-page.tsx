@@ -65,33 +65,33 @@ export default function HistoryPage() {
     <div className="space-y-6 p-4 md:p-6">
       <h1 className="text-3xl font-bold text-foreground">Trade History</h1>
       <div className="grid grid-cols-2 gap-4">
-        <Card className="p-4 bg-card/50 border-border">
+        <Card className="p-4 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl border-white/40 dark:border-white/40 dark:border-white/10">
           <p className="text-sm text-muted-foreground">Total Realized P&L</p>
           <p className={`text-2xl font-bold ${totalRealizedPL >= 0 ? "text-green-500" : "text-red-500"}`}>
             ${totalRealizedPL.toFixed(2)}
           </p>
         </Card>
-        <Card className="p-4 bg-card/50 border-border">
+        <Card className="p-4 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl border-white/40 dark:border-white/40 dark:border-white/10">
           <p className="text-sm text-muted-foreground">Win Rate</p>
           <p className="text-2xl font-bold text-foreground">{winRate.toFixed(1)}%</p>
         </Card>
       </div>
       <div className="space-y-3">
         {isLoading ? (
-          <Card className="p-8 text-center bg-card/50 border-border">
+          <Card className="p-8 text-center bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl border-white/40 dark:border-white/40 dark:border-white/10">
             <p className="text-muted-foreground">Loading history...</p>
           </Card>
         ) : error ? (
-          <Card className="p-8 text-center bg-card/50 border-border">
+          <Card className="p-8 text-center bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl border-white/40 dark:border-white/40 dark:border-white/10">
             <p className="text-red-500">Failed to load history: {error}</p>
           </Card>
         ) : !trades || trades.length === 0 ? (
-          <Card className="p-8 text-center bg-card/50 border-border">
+          <Card className="p-8 text-center bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl border-white/40 dark:border-white/40 dark:border-white/10">
             <p className="text-muted-foreground">No trade history yet</p>
           </Card>
         ) : (
           trades.map((trade) => (
-            <Card key={trade.id} className="p-4 bg-card/50 border-border hover:border-primary/50 transition-colors">
+            <Card key={trade.id} className="p-4 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl border-white/40 dark:border-white/40 dark:border-white/10 hover:border-primary/50 transition-colors">
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <h3 className="font-semibold text-foreground">{trade.position.pair.name}</h3>

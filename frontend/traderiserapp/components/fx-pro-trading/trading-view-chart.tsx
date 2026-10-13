@@ -116,7 +116,7 @@ export function TradingViewChart({ pairId, timeFrame = "D" }: Props) {
 
   if (pairsLoading) {
     return (
-      <div className="h-[500px] w-full flex items-center justify-center bg-card/50 border-border rounded-2xl">
+      <div className="h-[500px] w-full flex items-center justify-center bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl border-white/40 dark:border-white/40 dark:border-white/10 rounded-2xl">
         Loading pair...
       </div>
     )
@@ -124,14 +124,14 @@ export function TradingViewChart({ pairId, timeFrame = "D" }: Props) {
 
   if (!pair) {
     return (
-      <div className="h-[500px] w-full flex items-center justify-center bg-card/50 border-border rounded-2xl">
+      <div className="h-[500px] w-full flex items-center justify-center bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl border-white/40 dark:border-white/40 dark:border-white/10 rounded-2xl">
         No pair selected
       </div>
     )
   }
 
   return (
-    <div className="relative rounded-2xl overflow-hidden bg-white/10 backdrop-blur-md border border-white/10 w-full">
+    <div className="relative rounded-2xl overflow-hidden bg-white/50 dark:bg-white/10 backdrop-blur-md border border-white/40 dark:border-white/10 w-full">
       <div ref={container} className="w-full" style={{ height: "500px" }} />
 
       {/* Live Price */}

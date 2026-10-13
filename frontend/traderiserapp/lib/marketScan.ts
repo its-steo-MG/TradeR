@@ -9,6 +9,7 @@
  *  - Supports a `restrict` option so the scanner can hunt across ALL markets
  *    for the exact prediction the user chose (e.g. "Over 4"), instead of
  *    inventing its own contract.
+ *  - Rise / Fall are barrier-free. Fixed 48% on both sides.
  * -------------------------------------------------------------------------- */
 
 import { getPayout } from "@/lib/contracts";
@@ -26,7 +27,9 @@ export type ContractKind =
   | "matches"
   | "differs"
   | "even"
-  | "odd";
+  | "odd"
+  | "rise"
+  | "fall";
 
 /** Limit the scan to a specific prediction (what the user picked). */
 export type ScanRestriction = {
@@ -134,7 +137,9 @@ export function baseProbability(kind: ContractKind, barrier?: number): number {
       return 0.9;
     case "even":
     case "odd":
-      return 0.5;
+    case "rise":
+    case "fall":
+      return 0.48;
     default:
       return 0.5;
   }
@@ -157,6 +162,10 @@ export function contractName(r: {
       return "Even";
     case "odd":
       return "Odd";
+    case "rise":
+      return "Rise";
+    case "fall":
+      return "Fall";
     default:
       return r.kind;
   }
@@ -171,7 +180,7 @@ function push(
   barrier: number | undefined,
   sampleSize: number,
 ) {
-  const payout = getPayout(kind as never, barrier);
+  const payout = kind === "rise" || kind === "fall" ? 1 / 0.48 : getPayout(kind as never, barrier);
   const base = baseProbability(kind, barrier);
   const edge = probability * payout - 1;
   const advantage = probability - base;
@@ -244,6 +253,11 @@ export function scoreMarket(
   const even = p[0] + p[2] + p[4] + p[6] + p[8];
   if (allowed(restrict, "even")) push(out, market, pct, "even", even, undefined, sampleSize);
   if (allowed(restrict, "odd")) push(out, market, pct, "odd", 1 - even, undefined, sampleSize);
+
+  // Rise / Fall: no barrier. Direction bias from the high vs low half of the digit distribution.
+  const riseProb = p.slice(5).reduce((a, v) => a + v, 0);
+  if (allowed(restrict, "rise")) push(out, market, pct, "rise", riseProb, undefined, sampleSize);
+  if (allowed(restrict, "fall")) push(out, market, pct, "fall", 1 - riseProb, undefined, sampleSize);
 
   return out.sort((a, b) => b.score - a.score);
 }

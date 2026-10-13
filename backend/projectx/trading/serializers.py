@@ -95,6 +95,7 @@ class UserRobotSerializer(serializers.ModelSerializer):
             'deriv_access_key',
             'is_used',
             'is_setting',
+            'is_upgraded',
         ]
 
 

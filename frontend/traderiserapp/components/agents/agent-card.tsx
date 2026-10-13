@@ -44,28 +44,28 @@ export default function AgentCard({ agent }: AgentCardProps) {
 
   const getMethodBadge = (method: string) => {
     const badges: Record<string, { label: string; color: string; bgColor: string }> = {
-      mpesa: { label: "M-Pesa", color: "text-blue-700", bgColor: "bg-blue-50" },
+      mpesa: { label: "M-Pesa", color: "text-blue-700 dark:text-blue-300", bgColor: "bg-blue-500/10 dark:bg-blue-500/15 backdrop-blur-md" },
       paypal: {
         label: "PayPal",
-        color: "text-indigo-700",
-        bgColor: "bg-indigo-50",
+        color: "text-indigo-700 dark:text-indigo-300",
+        bgColor: "bg-indigo-500/10 dark:bg-indigo-500/15 backdrop-blur-md",
       },
       bank: {
         label: "Bank",
-        color: "text-emerald-700",
-        bgColor: "bg-emerald-50",
+        color: "text-emerald-700 dark:text-emerald-300",
+        bgColor: "bg-emerald-500/10 dark:bg-emerald-500/15 backdrop-blur-md",
       },
       binance: {
         label: "Binance",
-        color: "text-amber-700",
-        bgColor: "bg-amber-50",
+        color: "text-amber-700 dark:text-amber-300",
+        bgColor: "bg-amber-500/10 dark:bg-amber-500/15 backdrop-blur-md",
       },
     }
     return (
       badges[method.toLowerCase()] || {
         label: method.charAt(0).toUpperCase() + method.slice(1),
-        color: "text-slate-700",
-        bgColor: "bg-slate-50",
+        color: "text-slate-700 dark:text-zinc-200",
+        bgColor: "bg-white/50 dark:bg-white/5 backdrop-blur-md",
       }
     )
   }
@@ -79,9 +79,9 @@ export default function AgentCard({ agent }: AgentCardProps) {
   }
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden hover:shadow-lg hover:border-purple-300 transition-all duration-300 flex flex-col h-full">
+    <div className="bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl border border-white/40 dark:border-white/10 rounded-2xl overflow-hidden hover:shadow-lg hover:border-purple-300 transition-all duration-300 flex flex-col h-full">
       {/* Banner Image */}
-      <div className="relative w-full h-32 sm:h-40 bg-slate-100">
+      <div className="relative w-full h-32 sm:h-40 bg-white/40 dark:bg-white/10 backdrop-blur-md">
         <Image
           src={imageSrc}
           alt={agent.name}
@@ -93,10 +93,10 @@ export default function AgentCard({ agent }: AgentCardProps) {
       </div>
 
       {/* Header */}
-      <div className="p-4 sm:p-6 border-b border-slate-200">
+      <div className="p-4 sm:p-6 border-b border-white/40 dark:border-white/10">
         <div className="flex items-start justify-between gap-3 sm:gap-4">
           <div className="flex-1 min-w-0 space-y-1">
-            <h3 className="text-base sm:text-lg font-bold text-slate-900 truncate">
+            <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white truncate">
               {agent.name}
             </h3>
 
@@ -106,7 +106,7 @@ export default function AgentCard({ agent }: AgentCardProps) {
               {badge.label}
             </span>
 
-            <div className="flex items-center gap-1 sm:gap-2 text-slate-600">
+            <div className="flex items-center gap-1 sm:gap-2 text-slate-600 dark:text-zinc-300">
               <MapPin className="w-3 h-3 sm:w-4 sm:h-4" />
               <span className="text-xs sm:text-sm font-medium">{agent.location}</span>
             </div>
@@ -117,22 +117,22 @@ export default function AgentCard({ agent }: AgentCardProps) {
             <span className="text-sm sm:text-base font-bold">
               {agent.rating.toFixed(1)}
             </span>
-            <span className="text-xs sm:text-sm text-slate-500">({agent.reviews})</span>
+            <span className="text-xs sm:text-sm text-slate-500 dark:text-zinc-400">({agent.reviews})</span>
           </div>
         </div>
       </div>
 
       {/* Rates */}
-      <div className="grid grid-cols-2 border-b border-slate-200">
-        <div className="p-4 sm:p-6 border-r border-slate-200">
-          <p className="text-xs text-slate-600 mb-1 sm:mb-2 font-semibold">Deposit Rate</p>
-          <p className="text-sm sm:text-base font-bold text-slate-900">
+      <div className="grid grid-cols-2 border-b border-white/40 dark:border-white/10">
+        <div className="p-4 sm:p-6 border-r border-white/40 dark:border-white/10">
+          <p className="text-xs text-slate-600 dark:text-zinc-300 mb-1 sm:mb-2 font-semibold">Deposit Rate</p>
+          <p className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
             1 USD = {agent.deposit_rate_kes_to_usd} KES
           </p>
         </div>
         <div className="p-4 sm:p-6">
-          <p className="text-xs text-slate-600 mb-1 sm:mb-2 font-semibold">Withdrawal Rate</p>
-          <p className="text-sm sm:text-base font-bold text-slate-900">
+          <p className="text-xs text-slate-600 dark:text-zinc-300 mb-1 sm:mb-2 font-semibold">Withdrawal Rate</p>
+          <p className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
             1 USD = {agent.withdrawal_rate_usd_to_kes} KES
           </p>
         </div>
@@ -140,7 +140,7 @@ export default function AgentCard({ agent }: AgentCardProps) {
 
       {/* Verified */}
       {agent.verified && (
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200 flex items-center gap-1 sm:gap-2 text-green-700">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-white/40 dark:border-white/10 flex items-center gap-1 sm:gap-2 text-emerald-700 dark:text-emerald-300 dark:text-emerald-300">
           <Shield className="w-3 h-3 sm:w-4 sm:h-4" />
           <span className="text-xs sm:text-sm font-medium">Verified Agent</span>
         </div>
@@ -148,9 +148,9 @@ export default function AgentCard({ agent }: AgentCardProps) {
 
       {/* Response Time */}
       {agent.response_time && (
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200">
-          <p className="text-xs text-slate-600 mb-1 sm:mb-2 font-semibold">Response Time</p>
-          <p className="text-xs sm:text-sm font-medium text-slate-900">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-white/40 dark:border-white/10">
+          <p className="text-xs text-slate-600 dark:text-zinc-300 mb-1 sm:mb-2 font-semibold">Response Time</p>
+          <p className="text-xs sm:text-sm font-medium text-slate-900 dark:text-white">
             {agent.response_time}
           </p>
         </div>
@@ -158,11 +158,11 @@ export default function AgentCard({ agent }: AgentCardProps) {
 
       {/* Transaction Limits */}
       {(agent.min_amount || agent.max_amount) && (
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200">
-          <p className="text-xs text-slate-600 mb-1 sm:mb-2 font-semibold">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-white/40 dark:border-white/10">
+          <p className="text-xs text-slate-600 dark:text-zinc-300 mb-1 sm:mb-2 font-semibold">
             Transaction Limits
           </p>
-          <p className="text-xs sm:text-sm font-medium text-slate-900">
+          <p className="text-xs sm:text-sm font-medium text-slate-900 dark:text-white">
             {agent.min_amount ? `${Number(agent.min_amount).toLocaleString()}` : "No min"} -{" "}
             {agent.max_amount ? `${Number(agent.max_amount).toLocaleString()}` : "No max"}
           </p>
@@ -171,14 +171,14 @@ export default function AgentCard({ agent }: AgentCardProps) {
 
       {/* Instructions */}
       {agent.instructions && (
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200 bg-blue-50 max-h-40 overflow-y-auto">
-          <p className="text-xs text-blue-700">{agent.instructions}</p>
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-white/40 dark:border-white/10 bg-blue-500/10 dark:bg-blue-500/15 backdrop-blur-md max-h-40 overflow-y-auto">
+          <p className="text-xs text-blue-700 dark:text-blue-300">{agent.instructions}</p>
         </div>
       )}
 
       {/* Payment Info */}
-      <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200">
-        <p className="text-xs text-slate-600 mb-2 font-semibold">Payment Details</p>
+      <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-white/40 dark:border-white/10">
+        <p className="text-xs text-slate-600 dark:text-zinc-300 mb-2 font-semibold">Payment Details</p>
         <PaymentInfoDisplay
           method={agent.method}
           agent={{

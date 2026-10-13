@@ -15,27 +15,18 @@ interface TradeData {
   status: string;
 }
 
+const card = "bg-white dark:bg-zinc-950 border-slate-200 dark:border-zinc-800";
+
 export default function TradingStats() {
   const [positions, setPositions] = useState<TradeData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    totalTrades: 0,
-    winRate: 0,
-    avgReturn: 0,
-    drawdown: 0,
-  });
+  const [stats, setStats] = useState({ totalTrades: 0, winRate: 0, avgReturn: 0, drawdown: 0 });
 
-  // Safe helper functions with proper types
-  const formatFloatingPL = (value: number | string | null | undefined): string => {
+  const formatFloatingPL = (value: number | string | null | undefined) => {
     const num = Number(value || 0);
-    const sign = num > 0 ? "+" : "";
-    return `${sign}${num.toFixed(2)}`;
+    return `${num > 0 ? "+" : ""}${num.toFixed(2)}`;
   };
-
-  const getPLColor = (value: number | string | null | undefined): string => {
-    const num = Number(value || 0);
-    return num >= 0 ? "text-green-400" : "text-red-400";
-  };
+  const getPLColor = (value: number | string | null | undefined) => Number(value || 0) >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400";
 
   useEffect(() => {
     const fetchData = async () => {
@@ -43,44 +34,29 @@ export default function TradingStats() {
         const response = await api.getForexPositions();
         if (response.data?.positions) {
           setPositions(response.data.positions);
-
-          const closedPositions = response.data.positions.filter((p: TradeData) => p.status === "closed");
-
-          const winningTrades = closedPositions.filter((p: TradeData) => Number(p.floating_p_l) > 0).length;
-          const winRate = closedPositions.length > 0 ? (winningTrades / closedPositions.length) * 100 : 0;
-
-          const totalPL = closedPositions.reduce((sum: number, p: TradeData) => sum + Number(p.floating_p_l || 0), 0);
-          const avgReturn = closedPositions.length > 0 ? totalPL / closedPositions.length : 0;
-
+          const closed = response.data.positions.filter((p: TradeData) => p.status === "closed");
+          const winning = closed.filter((p: TradeData) => Number(p.floating_p_l) > 0).length;
+          const totalPL = closed.reduce((sum: number, p: TradeData) => sum + Number(p.floating_p_l || 0), 0);
           setStats({
             totalTrades: response.data.positions.length,
-            winRate: Math.round(winRate * 10) / 10,
-            avgReturn: Math.round(avgReturn * 100) / 100,
+            winRate: Math.round((closed.length ? (winning / closed.length) * 100 : 0) * 10) / 10,
+            avgReturn: Math.round((closed.length ? totalPL / closed.length : 0) * 100) / 100,
             drawdown: -8.3,
           });
         }
-      } catch (error) {
-        console.error("[v0] Failed to fetch trading data:", error);
       } finally {
         setLoading(false);
       }
     };
-
     fetchData();
   }, []);
 
   const STATS_DISPLAY = [
-    { label: "Total Trades", value: stats.totalTrades.toString(), icon: Target, color: "text-blue-400" },
-    { label: "Win Rate", value: `${stats.winRate}%`, icon: TrendingUp, color: "text-green-400" },
-    {
-      label: "Avg Return",
-      value: `${stats.avgReturn > 0 ? "+" : ""}${stats.avgReturn}%`,
-      icon: Zap,
-      color: "text-amber-400",
-    },
-    { label: "Drawdown", value: `${stats.drawdown}%`, icon: TrendingDown, color: "text-red-400" },
+    { label: "Total Trades", value: stats.totalTrades.toString(), icon: Target, color: "text-blue-600 dark:text-blue-400" },
+    { label: "Win Rate", value: `${stats.winRate}%`, icon: TrendingUp, color: "text-emerald-600 dark:text-emerald-400" },
+    { label: "Avg Return", value: `${stats.avgReturn > 0 ? "+" : ""}${stats.avgReturn}%`, icon: Zap, color: "text-amber-600 dark:text-amber-400" },
+    { label: "Drawdown", value: `${stats.drawdown}%`, icon: TrendingDown, color: "text-rose-600 dark:text-rose-400" },
   ];
-
   const CHART_DATA = [
     { month: "Jan", balance: 10000, trades: 45 },
     { month: "Feb", balance: 12500, trades: 52 },
@@ -92,84 +68,55 @@ export default function TradingStats() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i} className="bg-slate-800/30 border-slate-700/50">
-              <CardContent className="pt-6">
-                <div className="h-20 bg-slate-700/30 rounded-lg animate-pulse" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[...Array(4)].map((_, i) => (
+          <Card key={i} className={card}><CardContent className="pt-6"><div className="h-20 bg-slate-100 dark:bg-zinc-800 rounded-lg animate-pulse" /></CardContent></Card>
+        ))}
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {STATS_DISPLAY.map((stat, i) => {
           const Icon = stat.icon;
           return (
-            <Card key={i} className="bg-slate-800/30 border-slate-700/50">
+            <Card key={i} className={card}>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-slate-400">{stat.label}</CardTitle>
+                <CardTitle className="text-sm font-medium text-slate-500 dark:text-zinc-400">{stat.label}</CardTitle>
                 <Icon className={`w-4 h-4 ${stat.color}`} />
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-white">{stat.value}</div>
-              </CardContent>
+              <CardContent><div className="text-2xl font-bold">{stat.value}</div></CardContent>
             </Card>
           );
         })}
       </div>
 
-      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="bg-slate-800/30 border-slate-700/50">
-          <CardHeader>
-            <CardTitle>Balance History</CardTitle>
-            <CardDescription>Last 6 months performance</CardDescription>
-          </CardHeader>
+        <Card className={card}>
+          <CardHeader><CardTitle>Balance History</CardTitle><CardDescription>Last 6 months performance</CardDescription></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={CHART_DATA}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                <XAxis dataKey="month" stroke="rgba(255,255,255,0.5)" />
-                <YAxis stroke="rgba(255,255,255,0.5)" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "rgba(15, 23, 42, 0.9)",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    borderRadius: "8px",
-                  }}
-                />
+                <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-slate-200 dark:text-zinc-800" />
+                <XAxis dataKey="month" stroke="currentColor" />
+                <YAxis stroke="currentColor" />
+                <Tooltip contentStyle={{ backgroundColor: "var(--background)", borderRadius: "8px" }} />
                 <Line type="monotone" dataKey="balance" stroke="#ec4899" strokeWidth={2} dot={{ fill: "#ec4899" }} />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
-
-        <Card className="bg-slate-800/30 border-slate-700/50">
-          <CardHeader>
-            <CardTitle>Trade Volume</CardTitle>
-            <CardDescription>Monthly trade count</CardDescription>
-          </CardHeader>
+        <Card className={card}>
+          <CardHeader><CardTitle>Trade Volume</CardTitle><CardDescription>Monthly trade count</CardDescription></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={CHART_DATA}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                <XAxis dataKey="month" stroke="rgba(255,255,255,0.5)" />
-                <YAxis stroke="rgba(255,255,255,0.5)" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "rgba(15, 23, 42, 0.9)",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    borderRadius: "8px",
-                  }}
-                />
+                <CartesianGrid strokeDasharray="3 3" stroke="currentColor" />
+                <XAxis dataKey="month" stroke="currentColor" />
+                <YAxis stroke="currentColor" />
+                <Tooltip contentStyle={{ backgroundColor: "var(--background)", borderRadius: "8px" }} />
                 <Bar dataKey="trades" fill="#8b5cf6" radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -177,36 +124,23 @@ export default function TradingStats() {
         </Card>
       </div>
 
-      {/* Recent Trades */}
-      <Card className="bg-slate-800/30 border-slate-700/50">
-        <CardHeader>
-          <CardTitle>Recent Trades</CardTitle>
-          <CardDescription>Your latest trading activity</CardDescription>
-        </CardHeader>
+      <Card className={card}>
+        <CardHeader><CardTitle>Recent Trades</CardTitle><CardDescription>Your latest trading activity</CardDescription></CardHeader>
         <CardContent>
           <div className="space-y-4">
             {positions.slice(0, 3).map((trade, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between p-3 bg-slate-700/20 rounded-lg border border-slate-700/30"
-              >
+              <div key={i} className="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900">
                 <div>
-                  <p className="font-semibold text-white">
-                    {typeof trade.pair === "string" ? trade.pair : (trade.pair as { name?: string }).name ?? "N/A"}
-                  </p>
-                  <p className="text-sm text-slate-400">
-                    {trade.direction.toUpperCase()} • {trade.volume_lots} lots
-                  </p>
+                  <p className="font-semibold">{typeof trade.pair === "string" ? trade.pair : (trade.pair as { name?: string }).name ?? "N/A"}</p>
+                  <p className="text-sm text-slate-500 dark:text-zinc-400">{trade.direction.toUpperCase()} • {trade.volume_lots} lots</p>
                 </div>
                 <div className="text-right">
-                  <p className={`font-semibold ${getPLColor(trade.floating_p_l)}`}>
-                    {formatFloatingPL(trade.floating_p_l)}
-                  </p>
-                  <p className="text-xs text-slate-400">{trade.status}</p>
+                  <p className={`font-semibold ${getPLColor(trade.floating_p_l)}`}>{formatFloatingPL(trade.floating_p_l)}</p>
+                  <p className="text-xs text-slate-500 dark:text-zinc-400">{trade.status}</p>
                 </div>
               </div>
             ))}
-            {positions.length === 0 && <p className="text-center text-slate-400 py-8">No trades yet</p>}
+            {positions.length === 0 && <p className="text-center text-slate-500 dark:text-zinc-400 py-8">No trades yet</p>}
           </div>
         </CardContent>
       </Card>

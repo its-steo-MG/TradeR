@@ -46,24 +46,13 @@ export function TradingModeSelector({
     setLoginType((stored === "demo" ? "demo" : "real") as "real" | "demo");
   }, []);
 
-  // --------------------------------------------------------------
-  // FILTERING LOGIC
-  // 1. Real account  → only purchased robots
-  // 2. Demo account  → all (purchased + demo-available)
-  // 3. ALWAYS hide S-Digit and Bulk robots from this selector
-  //    Only show: normal robots + Elite robots
-  // --------------------------------------------------------------
   const visibleRobots = userRobots.filter((ur) => {
-    // Hide S-Digit and Bulk robots
     if (ur.robot.is_s_digit_robot || ur.robot.is_bulk_robot) {
       return false;
     }
-
     if (loginType === "real") {
-      return ur.purchased_at !== null; // only real purchases
+      return ur.purchased_at !== null;
     }
-
-    // demo mode – show everything that is not s-digit / bulk
     return true;
   });
 
@@ -77,26 +66,28 @@ export function TradingModeSelector({
 
   return (
     <div className="space-y-4 w-full">
-      {/* ---------- Trading Mode ---------- */}
       <div>
-        <label className="text-xs text-white/60 mb-1 block">Trading Mode</label>
+        <label className="text-xs text-slate-500 dark:text-zinc-400 mb-1 block">
+          Trading Mode
+        </label>
         <Select value={mode} onValueChange={handleModeChange}>
-          <SelectTrigger className="w-full bg-white/5 border-white/10 text-white">
+          <SelectTrigger className="w-full bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700 text-slate-900 dark:text-white">
             <SelectValue placeholder="Select mode" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700">
             <SelectItem value="manual">Manual</SelectItem>
             <SelectItem value="robot">Robot</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      {/* ---------- Robot Selector (only when robot mode) ---------- */}
       {mode === "robot" && (
         <div>
-          <label className="text-xs text-white/60 mb-1 block">Select Robot</label>
+          <label className="text-xs text-slate-500 dark:text-zinc-400 mb-1 block">
+            Select Robot
+          </label>
           {visibleRobots.length === 0 ? (
-            <p className="text-sm text-white/60">
+            <p className="text-sm text-slate-500 dark:text-zinc-400">
               {loginType === "demo"
                 ? "No demo robots available"
                 : "You haven't purchased any normal/Elite robots yet"}
@@ -106,21 +97,22 @@ export function TradingModeSelector({
               value={selectedRobot?.toString() ?? ""}
               onValueChange={(v) => onRobotSelect(v ? Number(v) : null)}
             >
-              <SelectTrigger className="w-full bg-white/5 border-white/10 text-white">
+              <SelectTrigger className="w-full bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700 text-slate-900 dark:text-white">
                 <SelectValue placeholder="Select a robot" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700">
                 {visibleRobots.map((ur) => (
-                  <SelectItem
-                    key={ur.robot.id}
-                    value={ur.robot.id.toString()}
-                  >
+                  <SelectItem key={ur.robot.id} value={ur.robot.id.toString()}>
                     {ur.robot.name}
                     {ur.robot.is_elite_robot && (
-                      <span className="ml-2 text-xs text-amber-400">(Elite)</span>
+                      <span className="ml-2 text-xs text-amber-500 dark:text-amber-400">
+                        (Elite)
+                      </span>
                     )}
                     {ur.purchased_at === null && loginType === "demo" && (
-                      <span className="ml-2 text-xs text-green-400">(Demo)</span>
+                      <span className="ml-2 text-xs text-green-600 dark:text-green-400">
+                        (Demo)
+                      </span>
                     )}
                   </SelectItem>
                 ))}

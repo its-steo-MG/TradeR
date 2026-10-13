@@ -46,7 +46,7 @@ export default function PlaceOrderModal({ pairId, direction: initDir, timeFrame,
 
   return (
     <div className="fixed inset-0 bg-black/10 flex items-center justify-center z-50 p-4">
-      <div className="bg-black rounded-xl p-6 w-full max-w-md">
+      <div className="bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl border border-white/40 dark:border-white/40 dark:border-white/10 rounded-xl p-6 w-full max-w-md">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold">Place Order</h2>
           <button onClick={onClose} className="p-1 hover:bg-muted rounded">
@@ -59,7 +59,7 @@ export default function PlaceOrderModal({ pairId, direction: initDir, timeFrame,
             <select
               value={direction}
               onChange={(e) => setDirection(e.target.value as "buy" | "sell")}
-              className="w-full px-3 py-2 bg-muted border border-border rounded"
+              className="w-full px-3 py-2 bg-white/60 dark:bg-white/60 dark:bg-zinc-900/60/60 backdrop-blur-md border border-white/40 dark:border-white/40 dark:border-white/10 text-slate-900 dark:text-white rounded"
             >
               <option value="buy">Buy</option>
               <option value="sell">Sell</option>
@@ -73,7 +73,7 @@ export default function PlaceOrderModal({ pairId, direction: initDir, timeFrame,
               min="0.01"
               value={volume}
               onChange={(e) => setVolume(e.target.value)}
-              className="w-full px-3 py-2 bg-muted border border-border rounded"
+              className="w-full px-3 py-2 bg-white/60 dark:bg-white/60 dark:bg-zinc-900/60/60 backdrop-blur-md border border-white/40 dark:border-white/40 dark:border-white/10 text-slate-900 dark:text-white rounded"
             />
           </div>
           <div>
@@ -84,7 +84,7 @@ export default function PlaceOrderModal({ pairId, direction: initDir, timeFrame,
               value={sl}
               onChange={(e) => setSl(e.target.value)}
               placeholder="e.g. 1.0800"
-              className="w-full px-3 py-2 bg-muted border border-border rounded"
+              className="w-full px-3 py-2 bg-white/60 dark:bg-white/60 dark:bg-zinc-900/60/60 backdrop-blur-md border border-white/40 dark:border-white/40 dark:border-white/10 text-slate-900 dark:text-white rounded"
             />
           </div>
           <div>
@@ -95,7 +95,7 @@ export default function PlaceOrderModal({ pairId, direction: initDir, timeFrame,
               value={tp}
               onChange={(e) => setTp(e.target.value)}
               placeholder="e.g. 1.1000"
-              className="w-full px-3 py-2 bg-muted border border-border rounded"
+              className="w-full px-3 py-2 bg-white/60 dark:bg-white/60 dark:bg-zinc-900/60/60 backdrop-blur-md border border-white/40 dark:border-white/40 dark:border-white/10 text-slate-900 dark:text-white rounded"
             />
           </div>
           <div>
@@ -104,7 +104,7 @@ export default function PlaceOrderModal({ pairId, direction: initDir, timeFrame,
               type="text"
               value={timeFrame === "M1" ? "1 Minute" : timeFrame === "M5" ? "5 Minutes" : timeFrame === "M15" ? "15 Minutes" : timeFrame === "H1" ? "1 Hour" : timeFrame === "H4" ? "4 Hours" : "24 Hours"}
               readOnly
-              className="w-full px-3 py-2 bg-muted border border-border rounded text-muted-foreground"
+              className="w-full px-3 py-2 bg-white/60 dark:bg-white/60 dark:bg-zinc-900/60/60 backdrop-blur-md border border-white/40 dark:border-white/40 dark:border-white/10 text-slate-900 dark:text-white rounded text-muted-foreground"
             />
           </div>
           {error && <p className="text-red-500 text-sm">{error}</p>}

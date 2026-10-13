@@ -29,6 +29,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  const handleLogout = () => {
+    localStorage.clear();
+    window.location.href = "/login";
+  };
+
   useEffect(() => {
     const loadSession = () => {
       setIsLoading(true);
@@ -65,19 +70,23 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         setUser(normalizedUser);
 
         const activeId = localStorage.getItem("active_account_id");
-        let account = normalizedUser.accounts.find((acc) => String(acc.id) === String(activeId));
+        let account = normalizedUser.accounts.find(
+          (acc) => String(acc.id) === String(activeId)
+        );
 
         if (!account) {
-          // Default: prefer standard > mt5 real > first account
-          account = normalizedUser.accounts.find((a) => a.account_type === "standard") ||
-                    normalizedUser.accounts.find((a) => a.account_type === "mt5") ||
-                    normalizedUser.accounts[0];
+          account =
+            normalizedUser.accounts.find((a) => a.account_type === "standard") ||
+            normalizedUser.accounts.find((a) => a.account_type === "mt5") ||
+            normalizedUser.accounts[0];
         }
 
         if (account) {
           setActiveAccount(account);
           setLoginType(
-            account.account_type === "demo" || account.account_type === "mt5-demo" ? "demo" : "real"
+            account.account_type === "demo" || account.account_type === "mt5-demo"
+              ? "demo"
+              : "real"
           );
         }
       } catch (err) {
@@ -100,8 +109,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
     localStorage.setItem("active_account_id", String(account.id));
     localStorage.setItem("account_type", account.account_type);
-    localStorage.setItem("login_type", 
-      account.account_type === "demo" || account.account_type === "mt5-demo" ? "demo" : "real"
+    localStorage.setItem(
+      "login_type",
+      account.account_type === "demo" || account.account_type === "mt5-demo"
+        ? "demo"
+        : "real"
     );
 
     const updatedUser: User = {
@@ -116,33 +128,42 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     setUser(updatedUser);
     setActiveAccount(account);
     setLoginType(
-      account.account_type === "demo" || account.account_type === "mt5-demo" ? "demo" : "real"
+      account.account_type === "demo" || account.account_type === "mt5-demo"
+        ? "demo"
+        : "real"
     );
     localStorage.setItem("user_session", JSON.stringify(updatedUser));
     window.dispatchEvent(new Event("session-updated"));
   };
 
-  // ====================== PROPER ACCOUNT FILTERING ======================
-  const realAccounts = (user?.accounts || []).filter((acc) => 
-    acc.account_type !== "demo" && acc.account_type !== "mt5-demo"
+  const realAccounts = (user?.accounts || []).filter(
+    (acc) => acc.account_type !== "demo" && acc.account_type !== "mt5-demo"
   );
 
-  const demoAccounts = (user?.accounts || []).filter((acc) => 
-    acc.account_type === "demo" || acc.account_type === "mt5-demo"
+  const demoAccounts = (user?.accounts || []).filter(
+    (acc) => acc.account_type === "demo" || acc.account_type === "mt5-demo"
   );
 
   const availableAccounts = loginType === "real" ? realAccounts : demoAccounts;
 
   if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center text-white">Loading...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+        Loading...
+      </div>
+    );
   }
 
   if (error) {
-    return <div className="min-h-screen flex items-center justify-center text-red-400">{error}</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background text-destructive">
+        {error}
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-black text-white">
+    <div className="min-h-screen flex flex-col bg-background text-foreground">
       <TopNavbar
         isLoggedIn={isLoggedIn}
         user={user}
@@ -165,9 +186,3 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     </div>
   );
 }
-
-// Add this logout function if missing
-const handleLogout = () => {
-  localStorage.clear();
-  window.location.href = "/login";
-};

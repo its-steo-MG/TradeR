@@ -53,14 +53,17 @@ export default function WelcomePage() {
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-8 md:py-12 relative overflow-hidden">
       {/* Background — black + green */}
-      <div className="fixed inset-0 -z-10">
-        <div className="absolute inset-0 bg-gradient-to-br from-black via-[#06120a] to-[#0a1a0f]" />
-        <div className="absolute -top-32 -right-20 w-[700px] h-[700px] bg-emerald-500/25 rounded-full blur-[160px]" />
-        <div className="absolute -bottom-40 -left-20 w-[600px] h-[600px] bg-green-600/20 rounded-full blur-[150px]" />
-        <div className="absolute top-1/3 left-1/4 w-[500px] h-[500px] bg-teal-500/15 rounded-full blur-[140px]" />
-        <div className="absolute bottom-1/4 right-1/3 w-[400px] h-[400px] bg-emerald-600/15 rounded-full blur-[130px]" />
-        <div className="absolute inset-0 bg-[radial-gradient(#ffffff08_1px,transparent_1px)] bg-[length:36px_36px]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(0,0,0,0.55)_100%)]" />
+      <div className="fixed inset-0 z-0 dark:block hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950 to-black" />
+        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-purple-950/30 to-pink-950/20" />
+        <div className="absolute top-1/4 -left-40 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl animate-float" />
+        <div className="absolute bottom-1/4 -right-40 w-96 h-96 bg-pink-600/8 rounded-full blur-3xl animate-float delay-1000" />
+        <div className="absolute top-1/2 left-1/3 w-96 h-96 bg-purple-700/8 rounded-full blur-3xl animate-float delay-500" />
+      </div>
+      <div className="fixed inset-0 z-0 block dark:hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-slate-100" />
+        <div className="absolute top-1/4 -left-40 w-96 h-96 bg-purple-400/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 -right-40 w-96 h-96 bg-pink-400/8 rounded-full blur-3xl" />
       </div>
 
       <div className="w-full max-w-5xl mx-auto relative z-10">
@@ -104,11 +107,14 @@ export default function WelcomePage() {
 
         {/* Heading */}
         <div className="text-center mb-14 md:mb-20">
-          <div className="drop-on-top relative inline-flex items-center gap-3 bg-white/5 border border-white/15 backdrop-blur-2xl px-6 py-3 rounded-full mb-6 mx-auto shadow-[0_0_30px_rgba(16,185,129,0.2)]">
+          <div className="drop-on-top relative inline-flex items-center gap-3 bg-white/5 border border-white/15 backdrop-blur-2xl px-6 py-3 rounded-full mb-6 mx-auto shadow-[0_0_30px_rgba(168,85,247,0.25)]">
             <span className="relative z-[1] flex items-center gap-3">
-              <div className="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-pulse shadow-[0_0_12px_#34d399]" />
-              <span className="uppercase text-emerald-300/90 text-sm font-medium tracking-[3px]">
-                V4 • ADVANCED MULTI-BROKER
+              <div className="w-2.5 h-2.5 bg-fuchsia-400 rounded-full animate-pulse shadow-[0_0_12px_#e879f9]" />
+              <span className="uppercase text-white/90 text-sm font-medium tracking-[3px]">
+                V4.1 • ADVANCED MULTI-BROKER
+              </span>
+              <span className="drop-on-top relative overflow-hidden rounded-full border border-white/40 bg-gradient-to-r from-fuchsia-500 via-pink-500 to-blue-500 px-4 py-1.5 text-xs font-extrabold uppercase tracking-widest text-white shadow-lg shadow-pink-500/40">
+                <span className="relative z-[1]">Beta</span>
               </span>
             </span>
           </div>
@@ -118,7 +124,7 @@ export default function WelcomePage() {
             <span className="bg-gradient-to-r from-emerald-400 via-green-400 to-teal-400 bg-clip-text text-transparent">
               RISER
             </span>{" "}
-            V4
+            V4.1
           </h1>
 
           <p className="text-xl md:text-2xl text-white/70 font-light max-w-2xl mx-auto">
@@ -203,7 +209,7 @@ export default function WelcomePage() {
         </div>
 
         <p className="text-center text-white/40 text-sm mt-10">
-          V4 Platform • Deriv + TradeRiser + MT5
+          V4.1 Beta • Deriv + TradeRiser + MT5
         </p>
       </div>
 

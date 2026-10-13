@@ -1,0 +1,27 @@
+// In robotRunner.ts, replace these four spots.
+
+// 1) placeOne payload type
+// FROM:
+digit_contract_type: cfg.contractKind as "over" | "under" | "matches" | "differs" | "even" | "odd",
+digit_barrier: ["over", "under", "matches", "differs"].includes(cfg.contractKind)
+// TO:
+digit_contract_type: cfg.contractKind as "over" | "under" | "matches" | "differs" | "even" | "odd" | "rise" | "fall",
+digit_barrier: ["over", "under", "matches", "differs", "rise", "fall"].includes(cfg.contractKind)
+
+// 2) isWinningDigit barrier check in placeOne
+// FROM:
+["over", "under", "matches", "differs"].includes(cfg.contractKind)
+// TO:
+["over", "under", "matches", "differs", "rise", "fall"].includes(cfg.contractKind)
+
+// 3) BulkBatchConfig type
+// FROM:
+contractKind: "over" | "under" | "matches" | "differs" | "even" | "odd";
+// TO:
+contractKind: "over" | "under" | "matches" | "differs" | "even" | "odd" | "rise" | "fall";
+
+// 4) startBulkBatch usesBarrier
+// FROM:
+const usesBarrier = ["over", "under", "matches", "differs"].includes(cfg.contractKind);
+// TO:
+const usesBarrier = ["over", "under", "matches", "differs", "rise", "fall"].includes(cfg.contractKind);

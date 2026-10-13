@@ -11,18 +11,18 @@ type Props = {
   onConfigure?: () => void;
   hidden?: boolean;
   defaultExpanded?: boolean;
+  onClose?: () => void;
 };
 
 type Phase = "idle" | "open" | "won" | "lost";
 
-export default function RobotDock({ hidden, defaultExpanded }: Props) {
+export default function RobotDock({ hidden, defaultExpanded, onClose }: Props) {
   const { isRunning, transactions } = useRobotRunner();
   const { armed, minimized } = useRobotArm();
   const isArmed = !!armed && minimized && !isRunning;
   const [expanded, setExpanded] = useState(false);
   const [paused, setPaused] = useState(false);
 
-  // Deriv-like contract status: running (blue) -> Won (green) / Lost (red)
   const [phase, setPhase] = useState<Phase>("idle");
   const [pnl, setPnl] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -40,18 +40,15 @@ export default function RobotDock({ hidden, defaultExpanded }: Props) {
     if (defaultExpanded) setExpanded(true);
   }, [defaultExpanded]);
 
-  // Tell the rest of the app when the run panel is open (hides the AI FAB).
   useEffect(() => {
     setRunPanelOpen(expanded);
     return () => setRunPanelOpen(false);
   }, [expanded]);
 
-  // Arming from the config panel must collapse straight into the dock.
   useEffect(() => {
     if (isArmed) setExpanded(false);
   }, [isArmed]);
 
-  // While a contract is open, fill the bar smoothly (never reaching 100%).
   useEffect(() => {
     if (!latestOpen) return;
     setPhase("open");
@@ -62,7 +59,6 @@ export default function RobotDock({ hidden, defaultExpanded }: Props) {
     return () => clearInterval(iv);
   }, [latestOpen, latest?.id]);
 
-  // When a contract settles, flash Won/Lost with the matching colour.
   useEffect(() => {
     if (!lastSettled || lastSettled.id === lastSettledId.current) return;
     lastSettledId.current = lastSettled.id;
@@ -116,10 +112,10 @@ export default function RobotDock({ hidden, defaultExpanded }: Props) {
 
   const labelColor =
     phase === "won"
-      ? "text-emerald-400"
+      ? "text-emerald-600 dark:text-emerald-400"
       : phase === "lost"
-        ? "text-rose-400"
-        : "text-white";
+        ? "text-rose-600 dark:text-rose-400"
+        : "text-slate-900 dark:text-white";
 
   const barColor =
     phase === "won"
@@ -130,7 +126,7 @@ export default function RobotDock({ hidden, defaultExpanded }: Props) {
 
   const barWrap = "fixed inset-x-0 bottom-3 z-50 px-3 sm:px-4 pointer-events-none";
   const barInner =
-    "pointer-events-auto mx-auto w-full rounded-2xl border border-slate-700 bg-slate-900/95 backdrop-blur-md shadow-2xl ring-1 ring-black/40";
+    "pointer-events-auto mx-auto w-full rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-2xl";
   const runBtn =
     "flex h-10 w-[92px] shrink-0 items-center justify-center gap-1.5 rounded-bl-2xl bg-emerald-600 text-[12px] font-bold text-white transition-colors hover:bg-emerald-500";
   const pauseBtn =
@@ -139,14 +135,13 @@ export default function RobotDock({ hidden, defaultExpanded }: Props) {
     "flex h-10 w-[92px] shrink-0 items-center justify-center gap-1.5 rounded-br-2xl bg-rose-600 text-[12px] font-bold text-white transition-colors hover:bg-rose-500 disabled:opacity-50";
   const centerCell = "flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-3";
   const chevBtn =
-    "mx-auto flex h-7 w-full items-center justify-center rounded-t-2xl border-x border-t border-slate-800 bg-slate-900/95 text-slate-400 backdrop-blur-md hover:text-white";
+    "mx-auto flex h-7 w-full items-center justify-center rounded-t-2xl border-x border-t border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white";
 
   return (
     <>
       {!expanded && (
         <div className={barWrap}>
           <div className={barInner}>
-            {/* expand arrow */}
             <button
               onClick={() => (isArmed ? restoreConfigPanel() : setExpanded(true))}
               title={isArmed ? "Edit robot settings" : "Open run panel"}
@@ -155,7 +150,6 @@ export default function RobotDock({ hidden, defaultExpanded }: Props) {
               <ChevronUp className="h-4 w-4" />
             </button>
 
-            {/* Deriv-style minimised bar: Pause | Contract + progress | Stop */}
             <div className="flex items-center justify-between px-2 py-2">
               {isArmed ? (
                 <button onClick={runArmed} className={runBtn} title="Start the robot">
@@ -163,23 +157,21 @@ export default function RobotDock({ hidden, defaultExpanded }: Props) {
                   Run
                 </button>
               ) : (
-              <button onClick={togglePause} className={pauseBtn}>
-                {paused ? (
-                  <Play className="h-4 w-4 fill-current" />
-                ) : (
-                  <Pause className="h-4 w-4 fill-current" />
-                )}
-                {paused ? "Resume" : "Pause"}
-              </button>
+                <button onClick={togglePause} className={pauseBtn}>
+                  {paused ? (
+                    <Play className="h-4 w-4 fill-current" />
+                  ) : (
+                    <Pause className="h-4 w-4 fill-current" />
+                  )}
+                  {paused ? "Resume" : "Pause"}
+                </button>
               )}
 
               <div className={centerCell}>
-                <span
-                  className={`truncate text-[11px] font-semibold transition-colors ${labelColor}`}
-                >
+                <span className={`truncate text-[11px] font-semibold transition-colors ${labelColor}`}>
                   {label}
                 </span>
-                <div className="h-1.5 w-full max-w-[160px] overflow-hidden rounded-full bg-slate-800">
+                <div className="h-1.5 w-full max-w-[160px] overflow-hidden rounded-full bg-slate-200 dark:bg-zinc-800">
                   <div
                     className={`h-full rounded-full transition-all duration-300 ${barColor}`}
                     style={{ width: `${progress}%` }}
@@ -200,7 +192,7 @@ export default function RobotDock({ hidden, defaultExpanded }: Props) {
         </div>
       )}
 
-      <RunPanel open={expanded} onClose={() => setExpanded(false)} />
+      <RunPanel open={expanded} onClose={() => { setExpanded(false); onClose?.(); }} />
     </>
   );
 }
