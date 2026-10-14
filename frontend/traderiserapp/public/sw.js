@@ -1,7 +1,6 @@
 // public/sw.js
-// Auto-activate so the new version loads immediately on Android and iPhone.
 
-self.addEventListener("install", () => {
+self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
 
@@ -9,7 +8,7 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
 
-// ===== PUSH SUPPORT =====
+// ===== REAL PUSH SUPPORT =====
 self.addEventListener("push", (event) => {
   if (!event.data) return;
 

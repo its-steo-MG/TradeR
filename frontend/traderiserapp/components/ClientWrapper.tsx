@@ -7,7 +7,6 @@ import { AlertCircle, X, Phone, PhoneOff } from "lucide-react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { TraderPulseWidget } from "@/components/traderpulse/TraderPulseWidget";
-import UpdateAvailable from "@/components/UpdateAvailable";
 
 interface User {
   kyc_status?: "pending" | "approved" | "rejected";
