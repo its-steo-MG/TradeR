@@ -13,7 +13,7 @@ export default function UpdateAvailable() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
 
-    let reg: ServiceWorkerRegistration | null = null;
+    let reg: ServiceWorkerRegistration | null | undefined = null;
 
     const check = async () => {
       reg = await navigator.serviceWorker.getRegistration();
