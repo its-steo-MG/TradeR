@@ -40,7 +40,7 @@ class FeedItem(models.Model):
 
     content_type = models.CharField(max_length=20, choices=CONTENT_TYPES, default='text')
     text = models.TextField()
-    image = models.URLField(blank=True, null=True)
+    image = models.TextField(blank=True, null=True)
     video = models.URLField(blank=True, null=True)
     
     likes = models.IntegerField(default=0)

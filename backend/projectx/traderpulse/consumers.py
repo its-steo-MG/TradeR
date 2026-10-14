@@ -60,11 +60,12 @@ class PulseConsumer(AsyncWebsocketConsumer):
                 await self.send(text_data=json.dumps({"type": "error", "message": "Login required to post"}))
                 return
             content = (data.get("content") or "").strip()
+            image = (data.get("image") or "").strip() or None
             reply_to = (data.get("reply_to") or "").strip()
             if reply_to and not content.startswith("@"):
                 content = f"@{reply_to} {content}"
-            if content:
-                post = await self.create_real_post(content)
+            if content or image:
+                post = await self.create_real_post(content or "", image)
                 await self.channel_layer.group_send(
                     self.room_group_name,
                     {"type": "new_post", "post": post},
@@ -96,11 +97,12 @@ class PulseConsumer(AsyncWebsocketConsumer):
         return FeedItemSerializer(posts, many=True).data
 
     @database_sync_to_async
-    def create_real_post(self, content):
+    def create_real_post(self, content, image=None):
         post = FeedItem.objects.create(
             real_user=self.user,
-            text=content.strip(),
-            content_type="text",
+            text=(content or "").strip() or "📸",
+            image=image,
+            content_type="image" if image else "text",
             is_ai_generated=False,
             likes=0,
         )
