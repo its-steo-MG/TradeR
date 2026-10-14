@@ -266,7 +266,6 @@ export default function ClientWrapper({ children }: { children: React.ReactNode 
 
       {children}
       {!isAuthPage && <TraderPulseWidget />}
-      <UpdateAvailable />
     </div>
   );
 }
