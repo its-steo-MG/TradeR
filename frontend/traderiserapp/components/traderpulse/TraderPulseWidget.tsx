@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MessageCircle, X, Send, Users, Heart, CornerUpLeft } from "lucide-react";
+import { MessageCircle, X, Send, Users, Heart, CornerUpLeft, ImagePlus } from "lucide-react";
 
 interface Sender {
   username?: string;
@@ -38,10 +38,12 @@ export function TraderPulseWidget() {
   const [unread, setUnread] = useState(0);
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [liked, setLiked] = useState<Record<string, boolean>>({});
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
   const lastTap = useRef<{ id: string; time: number }>({ id: "", time: 0 });
-  const swipeStart = useRef<{ x: number; id: string } | null>(null);
+  const swipeStart = useRef<{ x: number; y: number; id: string } | null>(null);
 
   useEffect(() => {
     setLoggedIn(!!localStorage.getItem("access_token"));
@@ -85,7 +87,7 @@ export function TraderPulseWidget() {
             setError(data.message || "Something went wrong");
             return;
           }
-          if (data.id && data.text) {
+          if (data.id && (data.text || data.image)) {
             setPosts((prev) => [...prev, data as FeedPost].slice(-100));
             if (!open) setUnread((n) => n + 1);
           }
@@ -118,11 +120,39 @@ export function TraderPulseWidget() {
 
   const send = () => {
     const content = text.trim();
-    if (!content || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    wsRef.current.send(JSON.stringify({ action: "post", content, reply_to: replyTo || "" }));
+    if ((!content && !imagePreview) || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    wsRef.current.send(
+      JSON.stringify({
+        action: "post",
+        content,
+        image: imagePreview || "",
+        reply_to: replyTo || "",
+      })
+    );
     setText("");
+    setImagePreview(null);
     setReplyTo(null);
     setError("");
+  };
+
+  const onPickImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("Only images are allowed");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setError("Image must be under 2MB");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImagePreview(typeof reader.result === "string" ? reader.result : null);
+      setError("");
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
   };
 
   const like = (postId: string) => {
@@ -135,14 +165,19 @@ export function TraderPulseWidget() {
     wsRef.current?.send(JSON.stringify({ action: "like", post_id: postId }));
   };
 
-  const onPointerDown = (e: React.PointerEvent, id: string) => {
-    swipeStart.current = { x: e.clientX, id };
+  const onTouchStart = (e: React.TouchEvent, id: string) => {
+    const t = e.touches[0];
+    swipeStart.current = { x: t.clientX, y: t.clientY, id };
   };
 
-  const onPointerUp = (e: React.PointerEvent, username: string) => {
+  const onTouchEnd = (e: React.TouchEvent, username: string) => {
     if (!swipeStart.current) return;
-    const dx = e.clientX - swipeStart.current.x;
-    if (Math.abs(dx) > 50) setReplyTo(username);
+    const t = e.changedTouches[0];
+    const dx = t.clientX - swipeStart.current.x;
+    const dy = t.clientY - swipeStart.current.y;
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
+      setReplyTo(username);
+    }
     swipeStart.current = null;
   };
 
@@ -186,8 +221,8 @@ export function TraderPulseWidget() {
                 <div key={p.id} className={`flex ${mine ? "justify-start" : "justify-end"}`}>
                   <div
                     onDoubleClick={() => like(String(p.id))}
-                    onPointerDown={(e) => onPointerDown(e, String(p.id))}
-                    onPointerUp={(e) => onPointerUp(e, username)}
+                    onTouchStart={(e) => onTouchStart(e, String(p.id))}
+                    onTouchEnd={(e) => onTouchEnd(e, username)}
                     onClick={() => onTap(String(p.id))}
                     className={`drop-on-top relative !flex max-w-[85%] cursor-pointer select-none flex-col overflow-hidden rounded-2xl border px-3 py-2.5 text-sm backdrop-blur-md ${
                       mine
@@ -208,9 +243,21 @@ export function TraderPulseWidget() {
                     {p.image && (
                       <img src={p.image} alt="" className="relative z-[1] mt-2 max-h-40 w-full rounded-xl object-cover" />
                     )}
-                    <p className="relative z-[1] mt-1 flex items-center gap-1 text-[11px] opacity-70">
-                      <Heart className={`h-3 w-3 ${liked[String(p.id)] ? "fill-red-500 text-red-500" : ""}`} />
-                      {p.likes || 0}
+                    <p className="relative z-[1] mt-1 flex items-center justify-between gap-2 text-[11px] opacity-70">
+                      <span className="flex items-center gap-1">
+                        <Heart className={`h-3 w-3 ${liked[String(p.id)] ? "fill-red-500 text-red-500" : ""}`} />
+                        {p.likes || 0}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setReplyTo(username);
+                        }}
+                        className="flex items-center gap-1 rounded-full px-2 py-0.5 hover:bg-white/30 dark:hover:bg-white/10"
+                      >
+                        <CornerUpLeft className="h-3 w-3" /> Reply
+                      </button>
                     </p>
                   </div>
                 </div>
@@ -232,21 +279,43 @@ export function TraderPulseWidget() {
               </div>
             )}
             {loggedIn ? (
-              <div className="flex gap-2">
-                <input
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && send()}
-                  placeholder={replyTo ? `Reply to @${replyTo}` : "Share a thought..."}
-                  className="h-10 flex-1 rounded-xl border border-white/40 bg-white/60 px-3 text-sm dark:border-white/10 dark:bg-white/5"
-                />
-                <button
-                  onClick={send}
-                  disabled={!text.trim()}
-                  className="drop-on-top relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-pink-600 text-white disabled:opacity-50"
-                >
-                  <Send className="relative z-[1] h-4 w-4" />
-                </button>
+              <div className="space-y-2">
+                {imagePreview && (
+                  <div className="relative inline-block">
+                    <img src={imagePreview} alt="preview" className="h-16 w-16 rounded-xl object-cover" />
+                    <button
+                      onClick={() => setImagePreview(null)}
+                      className="absolute -right-1 -top-1 rounded-full bg-black/70 p-0.5 text-white"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPickImage} />
+                  <button
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/40 bg-white/60 dark:border-white/10 dark:bg-white/5"
+                    aria-label="Attach image"
+                  >
+                    <ImagePlus className="h-4 w-4" />
+                  </button>
+                  <input
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && send()}
+                    placeholder={replyTo ? `Reply to @${replyTo}` : "Share a thought..."}
+                    className="h-10 flex-1 rounded-xl border border-white/40 bg-white/60 px-3 text-sm dark:border-white/10 dark:bg-white/5"
+                  />
+                  <button
+                    onClick={send}
+                    disabled={!text.trim() && !imagePreview}
+                    className="drop-on-top relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-pink-600 text-white disabled:opacity-50"
+                  >
+                    <Send className="relative z-[1] h-4 w-4" />
+                  </button>
+                </div>
               </div>
             ) : (
               <p className="text-center text-xs text-muted-foreground">Log in to post</p>
