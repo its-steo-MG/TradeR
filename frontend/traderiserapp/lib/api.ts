@@ -882,6 +882,7 @@ export const createAgentDeposit = async (data: {
   amount_kes?: number
   amount_usd_input?: number
   transaction_code?: string
+  bank_reference?: string          // ← add this
   binance_tx_hash?: string
   screenshot?: File
   method: string
@@ -890,7 +891,9 @@ export const createAgentDeposit = async (data: {
   fd.append("agent", data.agent_id.toString())
   fd.append("account", data.account.toString())
   fd.append("method", data.method)
+
   const methodLower = data.method.toLowerCase()
+
   if (methodLower === "binance") {
     if (data.amount_usd_input !== undefined) {
       fd.append("amount_usd_input", data.amount_usd_input.toString())
@@ -905,14 +908,21 @@ export const createAgentDeposit = async (data: {
     if (data.amount_kes !== undefined) {
       fd.append("amount_kes", data.amount_kes.toString())
     }
-    if (methodLower === "mpesa" || methodLower === "bank_transfer") {
+
+    if (methodLower === "bank_transfer" || methodLower === "bank") {
+      // Bank transfer needs bank_reference
+      if (data.bank_reference) {
+        fd.append("bank_reference", data.bank_reference)
+      }
+      if (data.screenshot) fd.append("screenshot", data.screenshot)
+    } else if (methodLower === "mpesa") {
       if (data.transaction_code) fd.append("transaction_code", data.transaction_code)
       if (data.screenshot) fd.append("screenshot", data.screenshot)
-    }
-    else if (methodLower === "paypal") {
+    } else if (methodLower === "paypal") {
       if (data.transaction_code) fd.append("paypal_transaction_id", data.transaction_code)
     }
   }
+
   return apiRequestWithFile<AgentDeposit>("/agents/deposit/", fd)
 }
 export const verifyAgentDeposit = (data: { deposit_id: number; action: string }) =>

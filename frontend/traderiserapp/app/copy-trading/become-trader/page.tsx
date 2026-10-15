@@ -30,11 +30,24 @@ export default function BecomeTraderPage() {
     e.preventDefault()
     setIsSubmitting(true)
 
+    const minAlloc = Number(formData.min_allocation)
+    const maxAlloc = Number(formData.max_allocation)
+
+    if (maxAlloc < minAlloc) {
+      toast({
+        title: "Invalid Allocation",
+        description: "Maximum allocation must be greater than or equal to minimum allocation.",
+        variant: "destructive",
+      })
+      setIsSubmitting(false)
+      return
+    }
+
     const result = await applyToBecomeTrader({
       bio: formData.bio,
       risk_level: formData.risk_level as "low" | "medium" | "high",
-      min_allocation: Number(formData.min_allocation),
-      max_allocation: Number(formData.max_allocation),
+      min_allocation: minAlloc,
+      max_allocation: maxAlloc,
       performance_fee_percent: Number(formData.performance_fee),
     })
 
@@ -229,8 +242,8 @@ export default function BecomeTraderPage() {
                   <Input
                     id="min_allocation"
                     type="number"
-                    min={10}
-                    step={5}
+                    min={1}
+                    step={1}
                     value={formData.min_allocation}
                     onChange={(e) => setFormData({ ...formData, min_allocation: e.target.value })}
                     placeholder="10"
@@ -238,7 +251,7 @@ export default function BecomeTraderPage() {
                     required
                   />
                 </div>
-                <p className="text-xs text-slate-400 dark:text-zinc-500">Lowest amount users can allocate to copy you</p>
+                <p className="text-xs text-slate-400 dark:text-zinc-500">Lowest amount users can allocate to copy you (any amount ≥ $1)</p>
               </div>
 
               {/* Max Allocation */}
@@ -251,9 +264,8 @@ export default function BecomeTraderPage() {
                   <Input
                     id="max_allocation"
                     type="number"
-                    min={10}
-                    max={5000}
-                    step={50}
+                    min={1}
+                    step={1}
                     value={formData.max_allocation}
                     onChange={(e) => setFormData({ ...formData, max_allocation: e.target.value })}
                     placeholder="1000"
@@ -261,7 +273,7 @@ export default function BecomeTraderPage() {
                     required
                   />
                 </div>
-                <p className="text-xs text-slate-400 dark:text-zinc-500">Highest amount users can allocate to copy you</p>
+                <p className="text-xs text-slate-400 dark:text-zinc-500">Highest amount users can allocate to copy you (must be ≥ min)</p>
               </div>
             </div>
 

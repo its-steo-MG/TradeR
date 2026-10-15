@@ -18,15 +18,15 @@ class Trader(models.Model):
         default='medium'
     )
     
-    # Updated: More flexible allocation
+    # Flexible allocation - trader chooses any positive amounts
     min_allocation = models.DecimalField(
         max_digits=12, decimal_places=2, default=Decimal('10.00'),
-        validators=[MinValueValidator(Decimal('10.00'))],
-        help_text="Minimum amount a user can allocate to copy you (e.g. 10 USD)"
+        validators=[MinValueValidator(Decimal('1.00'))],
+        help_text="Minimum amount a user can allocate to copy you"
     )
-    max_allocation = models.DecimalField(          # ← NEW FIELD
+    max_allocation = models.DecimalField(
         max_digits=12, decimal_places=2, default=Decimal('1000.00'),
-        validators=[MinValueValidator(Decimal('10.00')), MaxValueValidator(Decimal('5000.00'))],
+        validators=[MinValueValidator(Decimal('1.00'))],
         help_text="Maximum amount a user can allocate to copy you"
     )
     
@@ -39,6 +39,15 @@ class Trader(models.Model):
 
     def __str__(self):
         return f"Trader: {self.user.username}"
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.max_allocation < self.min_allocation:
+            raise ValidationError("Maximum allocation must be greater than or equal to minimum allocation")
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
 
     @property
     def win_rate(self):
@@ -54,7 +63,7 @@ class Trader(models.Model):
         if not trades.exists():
             return Decimal('0.00')
         total_profit = trades.aggregate(total=Sum('profit'))['total'] or Decimal('0.00')
-        return (total_profit / Decimal(trades.count()))  # Average profit per trade
+        return (total_profit / Decimal(trades.count()))
 
     @property
     def subscriber_count(self):
@@ -78,7 +87,6 @@ class CopySubscription(models.Model):
         return f"{self.user.username} copies {self.trader.user.username} (${self.allocated_amount})"
 
     def clean(self):
-        """Validate allocated amount against trader's min/max and account balance"""
         from django.core.exceptions import ValidationError
 
         if self.allocated_amount < self.trader.min_allocation:
@@ -92,11 +100,10 @@ class CopySubscription(models.Model):
             raise ValidationError("Allocated amount exceeds available account balance")
 
     def save(self, *args, **kwargs):
-        self.clean()  # Run validation before saving
+        self.clean()
         super().save(*args, **kwargs)
 
     def check_drawdown(self):
-        # Simple peak drawdown calculation
         pnl = self.current_pnl
         current_value = self.allocated_amount + pnl
         if not hasattr(self, '_peak_value'):
@@ -143,17 +150,14 @@ class CopiedTrade(models.Model):
             fee_percent = self.subscription.trader.performance_fee_percent / Decimal('100.00')
             fee_amount = self.profit * fee_percent
 
-            # Deduct fee from recorded profit
             self.profit -= fee_amount
             self.fee_paid = fee_amount
             self.save(update_fields=['profit', 'fee_paid'])
 
-            # Deduct fee from subscriber balance
             sub_account = self.subscription.account
             sub_account.balance -= fee_amount
             sub_account.save()
 
-            # Create debit transaction for subscriber
             Transaction.objects.create(
                 account=sub_account,
                 amount=-fee_amount,
@@ -161,7 +165,6 @@ class CopiedTrade(models.Model):
                 description=f"Performance fee for copied trade from {self.signal.trader.user.username}"
             )
 
-            # Credit fee to trader's account
             trader_account = self.signal.trader.user.accounts.filter(
                 account_type__in=['standard', 'pro-fx']
             ).first()

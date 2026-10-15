@@ -150,8 +150,17 @@ export default function WithdrawalModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center px-4 bg-black/70"
+      style={{ WebkitTransform: "translateZ(0)", transform: "translateZ(0)" }}
+    >
+      <div
+        className="relative w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 shadow-2xl"
+        style={{
+          WebkitTransform: "translateZ(0)",
+          transform: "translateZ(0)",
+        }}
+      >
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-600 to-purple-700 p-5 text-white">
           <div className="flex items-center justify-between">
@@ -180,7 +189,7 @@ export default function WithdrawalModal({
           </div>
         </div>
 
-        <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
+        <div className="p-6 space-y-5">
           {/* Step: Amount */}
           {step === "amount" && (
             <>
@@ -191,7 +200,7 @@ export default function WithdrawalModal({
                 <select
                   value={accountId || ""}
                   onChange={(e) => setAccountId(Number(e.target.value))}
-                  className="w-full p-3 rounded-xl border-2 border-purple-200 dark:border-purple-800 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900 transition bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white"
+                  className="w-full p-3 rounded-xl border border-slate-300 dark:border-zinc-700 focus:border-purple-600 focus:ring-2 focus:ring-purple-500/10 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white"
                 >
                   {accounts.map((a) => (
                     <option key={a.id} value={a.id}>
@@ -213,7 +222,7 @@ export default function WithdrawalModal({
                   placeholder="10.00"
                   min="10"
                   step="0.01"
-                  className="w-full p-4 text-2xl font-bold text-center rounded-xl border-2 border-purple-200 dark:border-purple-800 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900 transition bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500"
+                  className="w-full p-4 text-2xl font-bold text-center rounded-xl border border-slate-300 dark:border-zinc-700 focus:border-purple-600 focus:ring-2 focus:ring-purple-500/10 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500"
                 />
                 <p className="text-center mt-3 text-lg">
                   <span className="text-slate-500 dark:text-zinc-400">≈</span>{" "}
@@ -224,14 +233,9 @@ export default function WithdrawalModal({
               <button
                 onClick={() => setStep("details")}
                 disabled={!isAmountOk()}
-                className="
-                  drop-on-top relative w-full py-4
-                  bg-gradient-to-r from-purple-600 to-purple-700
-                  disabled:from-slate-300 text-white font-bold text-lg
-                  rounded-xl shadow-lg
-                "
+                className="w-full py-4 bg-gradient-to-r from-purple-600 to-purple-700 disabled:from-slate-300 text-white font-bold text-lg rounded-xl"
               >
-                <span className="relative z-[1]">Continue →</span>
+                Continue →
               </button>
             </>
           )}
@@ -245,7 +249,7 @@ export default function WithdrawalModal({
                   value={paypalEmail}
                   onChange={(e) => setPaypalEmail(e.target.value)}
                   placeholder="your@email.com"
-                  className="w-full p-4 rounded-xl border-2 border-purple-200 dark:border-purple-800 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900 transition bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500"
+                  className="w-full p-4 rounded-xl border border-slate-300 dark:border-zinc-700 focus:border-purple-600 focus:ring-2 focus:ring-purple-500/10 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500"
                 />
               )}
 
@@ -256,28 +260,28 @@ export default function WithdrawalModal({
                     value={bankName}
                     onChange={(e) => setBankName(e.target.value)}
                     placeholder="Bank Name"
-                    className="w-full p-4 rounded-xl border-2 border-purple-200 dark:border-purple-800 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900 transition bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500"
+                    className="w-full p-4 rounded-xl border border-slate-300 dark:border-zinc-700 focus:border-purple-600 focus:ring-2 focus:ring-purple-500/10 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500"
                   />
                   <input
                     type="text"
                     value={accName}
                     onChange={(e) => setAccName(e.target.value)}
                     placeholder="Account Name"
-                    className="w-full p-4 rounded-xl border-2 border-purple-200 dark:border-purple-800 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900 transition bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500"
+                    className="w-full p-4 rounded-xl border border-slate-300 dark:border-zinc-700 focus:border-purple-600 focus:ring-2 focus:ring-purple-500/10 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500"
                   />
                   <input
                     type="text"
                     value={accNumber}
                     onChange={(e) => setAccNumber(e.target.value)}
                     placeholder="Account Number"
-                    className="w-full p-4 rounded-xl border-2 border-purple-200 dark:border-purple-800 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900 transition bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500"
+                    className="w-full p-4 rounded-xl border border-slate-300 dark:border-zinc-700 focus:border-purple-600 focus:ring-2 focus:ring-purple-500/10 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500"
                   />
                   <input
                     type="text"
                     value={swift}
                     onChange={(e) => setSwift(e.target.value)}
                     placeholder="SWIFT (optional)"
-                    className="w-full p-4 rounded-xl border-2 border-purple-200 dark:border-purple-800 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900 transition bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500"
+                    className="w-full p-4 rounded-xl border border-slate-300 dark:border-zinc-700 focus:border-purple-600 focus:ring-2 focus:ring-purple-500/10 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500"
                   />
                 </>
               )}
@@ -288,7 +292,7 @@ export default function WithdrawalModal({
                   value={mpesaPhone}
                   onChange={(e) => setMpesaPhone(e.target.value)}
                   placeholder="0712345678"
-                  className="w-full p-4 rounded-xl border-2 border-purple-200 dark:border-purple-800 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900 transition bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500"
+                  className="w-full p-4 rounded-xl border border-slate-300 dark:border-zinc-700 focus:border-purple-600 focus:ring-2 focus:ring-purple-500/10 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500"
                 />
               )}
 
@@ -302,7 +306,7 @@ export default function WithdrawalModal({
                     value={binanceAddress}
                     onChange={(e) => setBinanceAddress(e.target.value)}
                     placeholder="0xYourBinanceAddress... (BEP20 recommended)"
-                    className="w-full p-4 rounded-xl border-2 border-purple-200 dark:border-purple-800 focus:border-purple-600 focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900 transition bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500"
+                    className="w-full p-4 rounded-xl border border-slate-300 dark:border-zinc-700 focus:border-purple-600 focus:ring-2 focus:ring-purple-500/10 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500"
                   />
                   <p className="text-xs text-amber-600 dark:text-amber-300 mt-1">
                     Paste your USDT (BEP20) or ERC20 wallet address
@@ -313,20 +317,13 @@ export default function WithdrawalModal({
               <button
                 onClick={requestWithdraw}
                 disabled={loading}
-                className="
-                  drop-on-top relative w-full py-4
-                  bg-gradient-to-r from-pink-500 to-purple-600
-                  text-white font-bold text-lg rounded-xl shadow-lg
-                  flex items-center justify-center gap-3 disabled:opacity-50
-                "
+                className="w-full py-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-bold text-lg rounded-xl flex items-center justify-center gap-3 disabled:opacity-50"
               >
-                <span className="relative z-[1] flex items-center gap-3">
-                  {loading ? (
-                    <Loader2 className="w-6 h-6 animate-spin" />
-                  ) : (
-                    "Send Request"
-                  )}
-                </span>
+                {loading ? (
+                  <Loader2 className="w-6 h-6 animate-spin" />
+                ) : (
+                  "Send Request"
+                )}
               </button>
             </div>
           )}
@@ -340,20 +337,15 @@ export default function WithdrawalModal({
                 value={otp}
                 onChange={(e) => setOtp(e.target.value.slice(0, 6))}
                 placeholder="000000"
-                className="w-full p-5 text-3xl tracking-widest text-center rounded-xl border-2 border-purple-300 focus:border-purple-600 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white"
+                className="w-full p-5 text-3xl tracking-widest text-center rounded-xl border border-purple-300 focus:border-purple-600 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white"
                 maxLength={6}
               />
               <button
                 onClick={verifyOtp}
                 disabled={loading || otp.length !== 6}
-                className="
-                  drop-on-top relative w-full py-4
-                  bg-gradient-to-r from-purple-600 to-pink-600
-                  text-white font-bold text-lg rounded-xl shadow-lg
-                  disabled:opacity-50
-                "
+                className="w-full py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-lg rounded-xl disabled:opacity-50"
               >
-                <span className="relative z-[1]">Verify OTP</span>
+                Verify OTP
               </button>
             </div>
           )}
@@ -363,7 +355,7 @@ export default function WithdrawalModal({
             <div className="text-center py-10 space-y-6">
               <div className="w-20 h-20 mx-auto bg-emerald-100 dark:bg-emerald-950 rounded-full flex items-center justify-center">
                 <svg
-                  className="w-12 h-12 text-emerald-600 dark:text-emerald-300 dark:text-emerald-400"
+                  className="w-12 h-12 text-emerald-600 dark:text-emerald-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -384,13 +376,9 @@ export default function WithdrawalModal({
               </p>
               <button
                 onClick={onClose}
-                className="
-                  drop-on-top relative w-full py-4
-                  bg-gradient-to-r from-purple-600 to-purple-700
-                  text-white font-bold text-lg rounded-xl
-                "
+                className="w-full py-4 bg-gradient-to-r from-purple-600 to-purple-700 text-white font-bold text-lg rounded-xl"
               >
-                <span className="relative z-[1]">Close</span>
+                Close
               </button>
             </div>
           )}

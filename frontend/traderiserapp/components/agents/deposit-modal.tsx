@@ -41,6 +41,7 @@ interface CreateDepositPayload {
   amount_kes?: number
   amount_usd_input?: number
   transaction_code?: string
+  bank_reference?: string
   binance_tx_hash?: string
   screenshot?: File
 }
@@ -68,6 +69,7 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
 
   const method = agent.method.toLowerCase()
   const isBinance = method === "binance"
+  const isBank = method === "bank_transfer" || method === "bank"
 
   useEffect(() => {
     const fetchAccounts = async () => {
@@ -125,11 +127,15 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
     if (!selectedAccount) return toast.error("Please select an account")
     if (!transactionCode.trim()) {
       return toast.error(
-        isBinance ? "Binance Tx Hash is required" : "Transaction code is required"
+        isBinance
+          ? "Binance Tx Hash is required"
+          : isBank
+          ? "Bank reference is required"
+          : "Transaction code is required"
       )
     }
     if (
-      (isBinance || method === "mpesa" || method === "bank_transfer") &&
+      (isBinance || method === "mpesa" || isBank) &&
       !screenshot
     ) {
       return toast.error("Screenshot proof is required")
@@ -147,6 +153,9 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
       if (isBinance) {
         payload.amount_usd_input = amountNum
         payload.binance_tx_hash = transactionCode.trim()
+      } else if (isBank) {
+        payload.amount_kes = amountNum
+        payload.bank_reference = transactionCode.trim()
       } else {
         payload.amount_kes = amountNum
         payload.transaction_code = transactionCode.trim()
@@ -196,14 +205,23 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
     !!amount &&
     !!selectedAccount &&
     !!transactionCode.trim() &&
-    (isBinance || !!screenshot)
+    (isBinance || isBank || method === "mpesa" ? !!screenshot : true)
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
-      <div className="bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl rounded-2xl max-w-md w-full p-6 space-y-6 relative max-h-[90vh] overflow-y-auto">
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center px-4 bg-black/70"
+      style={{ WebkitTransform: "translateZ(0)", transform: "translateZ(0)" }}
+    >
+      <div
+        className="relative w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl p-6 space-y-6 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 shadow-2xl"
+        style={{
+          WebkitTransform: "translateZ(0)",
+          transform: "translateZ(0)",
+        }}
+      >
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:text-zinc-200"
+          className="absolute top-4 right-4 text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:text-zinc-200 z-10"
         >
           <X className="w-6 h-6" />
         </button>
@@ -226,7 +244,7 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
               placeholder={isBinance ? "50.00" : "6500"}
               min="10"
               step="0.01"
-              className="w-full p-3 rounded-xl border border-white/40 dark:border-white/10 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white"
+              className="w-full p-3 rounded-xl border border-slate-300 dark:border-zinc-700 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white"
             />
             <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
               {isBinance
@@ -248,7 +266,7 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
               <select
                 value={selectedAccount ?? ""}
                 onChange={(e) => setSelectedAccount(Number(e.target.value))}
-                className="w-full p-3 rounded-xl border border-white/40 dark:border-white/10 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white"
+                className="w-full p-3 rounded-xl border border-slate-300 dark:border-zinc-700 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white"
               >
                 {accounts.map((acc) => (
                   <option key={acc.id} value={acc.id}>
@@ -259,25 +277,33 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
             </div>
           )}
 
-          {/* Transaction Code */}
+          {/* Transaction Code / Bank Reference */}
           <div>
             <p className="text-sm font-medium text-slate-700 dark:text-zinc-200 mb-2">
               {isBinance
                 ? "Binance Transaction Hash (TxID)"
+                : isBank
+                ? "Bank Reference"
                 : "Transaction Code / Reference"}
             </p>
             <input
               type="text"
               value={transactionCode}
               onChange={(e) => setTransactionCode(e.target.value)}
-              placeholder={isBinance ? "0xabc123..." : "Enter code"}
-              className="w-full p-3 rounded-xl border border-white/40 dark:border-white/10 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-xl text-slate-900 dark:text-white"
+              placeholder={
+                isBinance
+                  ? "0xabc123..."
+                  : isBank
+                  ? "e.g. TR-DEP-20261015-482917"
+                  : "Enter code"
+              }
+              className="w-full p-3 rounded-xl border border-slate-300 dark:border-zinc-700 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 bg-white dark:bg-zinc-900 text-slate-900 dark:text-white"
             />
           </div>
 
           {/* Screenshot */}
-          {(isBinance || method === "mpesa" || method === "bank_transfer") && (
-            <div className="border-2 border-dashed border-white/50 dark:border-white/15 rounded-xl p-6 text-center space-y-2 bg-white/50 dark:bg-white/5 backdrop-blur-md">
+          {(isBinance || method === "mpesa" || isBank) && (
+            <div className="border-2 border-dashed border-slate-300 dark:border-zinc-700 rounded-xl p-6 text-center space-y-2 bg-slate-50 dark:bg-zinc-900">
               {preview ? (
                 <div className="space-y-2">
                   <div className="relative w-full h-32 rounded-lg overflow-hidden">
@@ -312,27 +338,20 @@ export default function DepositModal({ agent, onClose, onSuccess }: DepositModal
             </div>
           )}
 
-          {/* Submit — Liquid Glass */}
+          {/* Submit */}
           <button
             type="submit"
             disabled={loading || !isFormValid}
-            className="
-              drop-on-top relative w-full py-3
-              bg-purple-600 hover:bg-purple-700 disabled:bg-slate-300
-              text-white font-semibold rounded-xl
-              flex items-center justify-center gap-2
-            "
+            className="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-300 text-white font-semibold rounded-xl flex items-center justify-center gap-2"
           >
-            <span className="relative z-[1] flex items-center gap-2">
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                "Submit Deposit"
-              )}
-            </span>
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              "Submit Deposit"
+            )}
           </button>
         </form>
       </div>
