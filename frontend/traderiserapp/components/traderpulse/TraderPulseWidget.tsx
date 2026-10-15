@@ -44,6 +44,19 @@ export function TraderPulseWidget() {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const lastTap = useRef<{ id: string; time: number }>({ id: "", time: 0 });
   const swipeStart = useRef<{ x: number; y: number; id: string } | null>(null);
+  const shouldScroll = useRef(true);
+
+  const scrollToBottom = () => {
+    const el = listRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+    setTimeout(() => {
+      el.scrollTop = el.scrollHeight;
+    }, 60);
+  };
 
   useEffect(() => {
     setLoggedIn(!!localStorage.getItem("access_token"));
@@ -71,6 +84,7 @@ export function TraderPulseWidget() {
 
           if (data.type === "feed_history" && Array.isArray(data.posts)) {
             setPosts([...data.posts].reverse());
+            shouldScroll.current = true;
             return;
           }
           if (data.type === "online_update") {
@@ -79,7 +93,9 @@ export function TraderPulseWidget() {
           }
           if (data.type === "like_update") {
             setPosts((prev) =>
-              prev.map((p) => (String(p.id) === String(data.post_id) ? { ...p, likes: data.likes } : p))
+              prev.map((p) =>
+                String(p.id) === String(data.post_id) ? { ...p, likes: data.likes } : p
+              )
             );
             return;
           }
@@ -88,8 +104,13 @@ export function TraderPulseWidget() {
             return;
           }
           if (data.id && (data.text || data.image)) {
-            setPosts((prev) => [...prev, data as FeedPost].slice(-100));
+            setPosts((prev) => {
+              const exists = prev.some((p) => String(p.id) === String(data.id));
+              if (exists) return prev;
+              return [...prev, data as FeedPost].slice(-120);
+            });
             if (!open) setUnread((n) => n + 1);
+            shouldScroll.current = true;
           }
         } catch {}
       };
@@ -104,19 +125,15 @@ export function TraderPulseWidget() {
       stopped = true;
       wsRef.current?.close();
     };
-  }, [open]);
+  }, []);
 
   useEffect(() => {
-    if (open) setUnread(0);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open || !listRef.current) return;
-    const el = listRef.current;
-    requestAnimationFrame(() => {
-      el.scrollTop = el.scrollHeight;
-    });
-  }, [posts, open]);
+    if (open) {
+      setUnread(0);
+      const t = setTimeout(scrollToBottom, 40);
+      return () => clearTimeout(t);
+    }
+  }, [open, posts]);
 
   const send = () => {
     const content = text.trim();
@@ -133,6 +150,7 @@ export function TraderPulseWidget() {
     setImagePreview(null);
     setReplyTo(null);
     setError("");
+    shouldScroll.current = true;
   };
 
   const onPickImage = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -197,7 +215,10 @@ export function TraderPulseWidget() {
   return (
     <>
       {open && (
-        <div className="fixed bottom-24 right-4 z-[99998] flex h-[70vh] max-h-[520px] w-[min(92vw,380px)] flex-col overflow-hidden rounded-3xl border border-white/40 bg-white/80 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/80">
+        <div
+          className="fixed inset-x-0 bottom-0 z-[99998] flex h-[85dvh] max-h-[620px] w-full flex-col overflow-hidden rounded-t-3xl border border-white/40 bg-white/80 shadow-2xl backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/80 sm:inset-auto sm:bottom-24 sm:right-4 sm:h-[70vh] sm:max-h-[520px] sm:w-[min(92vw,380px)] sm:rounded-3xl"
+          style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+        >
           <div className="flex items-center justify-between border-b border-white/30 px-4 py-3 dark:border-white/10">
             <div>
               <p className="text-sm font-bold">TraderPulse</p>
@@ -205,12 +226,19 @@ export function TraderPulseWidget() {
                 <Users className="h-3 w-3" /> {online.toLocaleString()} online
               </p>
             </div>
-            <button onClick={() => setOpen(false)} className="rounded-full p-1 hover:bg-white/40 dark:hover:bg-white/10">
+            <button
+              onClick={() => setOpen(false)}
+              className="rounded-full p-1 hover:bg-white/40 dark:hover:bg-white/10"
+            >
               <X className="h-4 w-4" />
             </button>
           </div>
 
-          <div ref={listRef} className="flex flex-1 flex-col space-y-2 overflow-y-auto p-3">
+          <div
+            ref={listRef}
+            className="flex flex-1 flex-col space-y-2 overflow-y-auto overscroll-contain p-3"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
             {posts.length === 0 && (
               <p className="py-10 text-center text-sm text-muted-foreground">No posts yet</p>
             )}
@@ -241,7 +269,14 @@ export function TraderPulseWidget() {
                     </div>
                     <p className="relative z-[1] whitespace-pre-wrap leading-snug">{p.text}</p>
                     {p.image && (
-                      <img src={p.image} alt="" className="relative z-[1] mt-2 max-h-40 w-full rounded-xl object-cover" />
+                      <img
+                        src={p.image}
+                        alt=""
+                        className="relative z-[1] mt-2 max-h-40 w-full rounded-xl object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                        }}
+                      />
                     )}
                     <p className="relative z-[1] mt-1 flex items-center justify-between gap-2 text-[11px] opacity-70">
                       <span className="flex items-center gap-1">
@@ -327,6 +362,7 @@ export function TraderPulseWidget() {
       <button
         onClick={() => setOpen((v) => !v)}
         className="fixed bottom-6 right-6 z-[99998] flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-pink-600 text-white shadow-lg shadow-pink-500/30"
+        style={{ bottom: "max(1.5rem, env(safe-area-inset-bottom, 1.5rem))" }}
         aria-label="Open TraderPulse"
       >
         {open ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
