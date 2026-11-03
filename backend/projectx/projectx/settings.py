@@ -26,6 +26,7 @@ ALLOWED_HOSTS = [
     'www.traderiserapp.com',
     'traderiserapp.com',
     'traderiserdigister.vercel.app',
+    'binanceappapk.vercel.app',
 
    
 ]
@@ -48,6 +49,7 @@ CORS_ALLOWED_ORIGINS = [
     'https://traderiserdigister.vercel.app',
     'https://messages-apktrader.vercel.app',
     'https://equity-mobile-kenya.vercel.app',
+    'https://binanceappapk.vercel.app',
    
 ]
 # REQUIRED FOR DJANGO ADMIN POST/DELETE FROM FRONTEND
@@ -67,6 +69,7 @@ CSRF_TRUSTED_ORIGINS = [
     'https://traderiserdigister.vercel.app',
     'https://messages-apktrader.vercel.app',
     'https://equity-mobile-kenya.vercel.app',
+    'https://binanceappapk.vercel.app',
   
 ]
 
@@ -90,6 +93,7 @@ INSTALLED_APPS = [
     'customercare',
     'mt5',
     'equity',
+    'binance',
     'notifications',
     'management.apps.ManagementConfig',
     'traderpulse',
@@ -99,6 +103,7 @@ INSTALLED_APPS = [
     'channels',
     'deriv.apps.DerivConfig',
     'anymail',
+
     
     
 
@@ -435,3 +440,30 @@ print("DERIV_APP_ID:", repr(DERIV_APP_ID))
 print("DERIV_OAUTH_REDIRECT_URI:", repr(DERIV_OAUTH_REDIRECT_URI))
 print("FRONTEND_URL:", repr(FRONTEND_URL))
 print("=====================")
+
+# ====================== BINANCE WEB PUSH ======================
+BINANCE_WEB_PUSH_PUBLIC_KEY = VAPID_PUBLIC_KEY
+BINANCE_WEB_PUSH_PRIVATE_KEY = VAPID_PRIVATE_KEY
+BINANCE_WEB_PUSH_CONTACT = VAPID_ADMIN_EMAIL
+BINANCE_NOTIFICATION_SITE_NAME = "Binance"
+BINANCE_EMAIL_LOGO_URL = "https://grandview-storage.s3.eu-north-1.amazonaws.com/assets/static/images/binance-logo.png"
+BINANCE_SOCIAL_LINKS = [
+    {"label": "X", "url": "https://x.com/binance"},
+    {"label": "Telegram", "url": "https://t.me/binanceexchange"},
+]
+
+
+# ====================== SQLITE WAL MODE (prevents "database is locked") ======================
+from django.db.backends.signals import connection_created
+
+def enable_sqlite_wal(sender, connection, **kwargs):
+    if connection.vendor == "sqlite":
+        cursor = connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL;")
+        cursor.execute("PRAGMA busy_timeout=30000;")
+        cursor.execute("PRAGMA synchronous=NORMAL;")
+
+connection_created.connect(enable_sqlite_wal)
+
+# settings.py
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")

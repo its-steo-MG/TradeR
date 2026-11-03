@@ -21,6 +21,7 @@ urlpatterns = [
     path('api/mt5/', include('mt5.urls')),
     path('api/notifications/', include('notifications.urls')),
     path('api/equity/', include('equity.urls')),
+    path('api/binance/', include('binance.urls')),
 ]
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

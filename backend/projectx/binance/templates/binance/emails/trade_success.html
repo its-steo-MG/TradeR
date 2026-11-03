@@ -1,0 +1,133 @@
+{% load tz %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light only">
+  <meta name="supported-color-schemes" content="light">
+  <title>{{ heading }}</title>
+  <style>
+    :root { color-scheme: light only; }
+    body { background-color: #ffffff !important; color: #000000 !important; }
+    table, td { background-color: transparent; }
+    .email-body { background-color: #ffffff !important; }
+  </style>
+</head>
+<body style="margin:0;padding:0;background:#ffffff !important;color:#000000 !important;font-family:Arial,Helvetica,sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" class="email-body" style="background:#ffffff !important;">
+  <tr>
+    <td align="center" style="padding:16px 12px;background:#ffffff !important;">
+      <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="width:100%;max-width:600px;background:#ffffff !important;">
+        <!-- Dark header card with logo + BINANCE -->
+        <tr>
+          <td style="padding:0 0 8px 0;background:#ffffff !important;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#222126;">
+              <tr>
+                <td align="center" style="padding:16px 12px;background:#222126;">
+                  <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 auto;">
+                    <tr>
+                      <td style="padding-right:6px;vertical-align:middle;">
+                        {% if logo_url %}
+                          <img src="{{ logo_url }}" alt="Binance" height="18" style="display:block;height:18px;border:0;">
+                        {% else %}
+                          <span style="color:#f0b90b;font-size:14px;">&#9670;</span>
+                        {% endif %}
+                      </td>
+                      <td style="vertical-align:middle;">
+                        <span style="color:#f0b90b;font-size:15px;font-weight:bold;letter-spacing:1.5px;">BINANCE</span>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <!-- Rest of email body stays white -->
+        <tr>
+          <td style="padding:22px 12px 8px;font-size:15px;line-height:1.45;background:#ffffff !important;color:#000000 !important;">
+            <h1 style="font-size:27px;line-height:1.2;margin:0 0 14px;font-weight:bold;color:#000000 !important;">{{ heading }}</h1>
+            {% if kind == "sell" %}
+              <p style="margin:0 0 18px;color:#000000 !important;">Dear {{ greeting_name|default:"Binancian" }},</p>
+              <p style="margin:0 0 20px;color:#000000 !important;">Your sell order of {{ crypto_amount }} {{ asset }} has been successfully completed. Please note that the payment cannot be cancelled, recalled, or refunded.</p>
+            {% elif kind == "received" %}
+              <p style="margin:0 0 18px;color:#000000 !important;">Dear {{ greeting_name|default:"Binancian" }},</p>
+              <p style="margin:0 0 20px;color:#000000 !important;">You have received {{ crypto_amount }} {{ asset }} in your Binance wallet. Please note that the payment cannot be cancelled, recalled, or refunded.</p>
+            {% else %}
+              <p style="margin:0 0 20px;color:#000000 !important;">Hello, Your purchase of {{ crypto_amount }} {{ asset }} is successful. Please be aware that the payment cannot be cancelled, recalled, or refunded.</p>
+            {% endif %}
+            <p style="margin:0 0 20px;color:#000000 !important;">
+              <strong>Transaction details:</strong><br>
+              Name: {{ full_name|upper }}<br>
+              Transaction ID: {{ reference }}<br>
+              Date & Time: {{ when_utc }} (UTC+0)
+            </p>
+            {% if kind == "sell" %}
+              <p style="margin:0 0 20px;color:#000000 !important;">
+                <strong>You sell:</strong><br>
+                Amount: {{ crypto_amount }}{{ asset }}<br>
+                Exchange Rate: 1{{ asset }}&asymp;{{ rate }}{{ fiat }}<br>
+                Fee: {{ fee }}{{ fiat }}<br>
+                You received: {{ fiat_amount }}{{ fiat }}
+              </p>
+            {% elif kind == "received" %}
+              <p style="margin:0 0 20px;color:#000000 !important;">
+                <strong>You received:</strong><br>
+                Amount: {{ crypto_amount }} {{ asset }}<br>
+                Network: BEP20<br>
+                Reference: {{ reference }}
+              </p>
+            {% else %}
+              <p style="margin:0 0 20px;color:#000000 !important;">
+                <strong>You paid:</strong><br>
+                Amount: {{ fiat_amount }}{{ fiat }}<br>
+                Exchange Rate: 1{{ asset }}&asymp;{{ rate }}{{ fiat }}<br>
+                Fee: {{ fee }}{{ fiat }}
+              </p>
+              <p style="margin:0 0 20px;color:#000000 !important;">
+                <strong>You received:</strong><br>
+                Final Amount: {{ crypto_amount }}{{ asset }}
+              </p>
+            {% endif %}
+            <p style="margin:0 0 20px;color:#000000 !important;">
+              Don&rsquo;t recognize this activity? Please <a href="{{ password_reset_url }}" style="color:#c99400;">reset your password</a> and contact <a href="{{ support_url }}" style="color:#c99400;">customer support</a> immediately.
+            </p>
+            <p style="margin:0 0 30px;font-style:italic;color:#000000 !important;">This is an automated message, please do not reply.</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 12px 24px;background:#ffffff !important;">
+            <hr style="border:0;border-top:1px solid #f0b90b;margin:0 0 18px;">
+            <p style="text-align:center;color:#f0b90b;font-weight:bold;font-size:15px;margin:0 0 14px;">Stay connected!</p>
+            {% if social_links %}
+              <p style="text-align:center;margin:0 0 18px;">
+                {% for s in social_links %}
+                  <a href="{{ s.url }}" style="color:#848e9c;text-decoration:none;font-size:13px;margin:0 8px;">{{ s.label }}</a>
+                {% endfor %}
+              </p>
+            {% endif %}
+            <p style="font-size:12px;line-height:1.5;margin:0 0 14px;color:#555555 !important;">
+              To stay secure, setup your anti-phishing code {% if anti_phishing_url %}<a href="{{ anti_phishing_url }}" style="color:#c99400;">here</a>{% endif %}
+            </p>
+            <p style="font-size:12px;line-height:1.5;margin:0 0 14px;color:#555555 !important;">
+              <strong>Disclaimer:</strong> Digital asset prices are subject to high market risk and price volatility. The value of your investment may go down or up, and you may not get back the amount invested. You are solely responsible for your investment decisions. Past performance is not a reliable predictor of future performance. This material should not be construed as financial advice.
+            </p>
+            <p style="font-size:12px;line-height:1.5;margin:0 0 14px;color:#555555 !important;">
+              <strong>Kindly note:</strong> Please be aware of phishing sites and always make sure you are visiting the official Binance website when entering sensitive data.
+            </p>
+            {% if legal_notice %}
+              <p style="font-size:12px;line-height:1.5;margin:0 0 14px;color:#555555 !important;">{{ legal_notice }}</p>
+            {% endif %}
+            <p style="font-size:12px;line-height:1.5;margin:0 0 18px;color:#555555 !important;">
+              For more information about how we process data, please see our <a href="{{ privacy_url }}" style="color:#c99400;">Privacy policy</a>.
+            </p>
+            <p style="text-align:center;font-size:12px;margin:0;color:#555555 !important;">&copy; {{ year }} Binance.com, All Rights Reserved.</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>

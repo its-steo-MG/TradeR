@@ -134,6 +134,11 @@ def create_equity_message_on_marketer_withdrawal(sender, instance, **kwargs):
     if instance.status != 'completed':
         return
 
+    # Only Equity-style messages for bank/Equity withdrawals.
+    # Skip Binance, M-Pesa, PayPal, and any other method.
+    if instance.payment_method != 'bank_transfer':
+        return
+
     user = instance.user
 
     is_marketer = (

@@ -1,0 +1,78 @@
+{% load tz %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="supported-color-schemes" content="light">
+  <title>{{ title }}</title>
+  <style>
+    :root { color-scheme: light; }
+    body, table, td { background-color: #ffffff !important; color: #000000 !important; }
+  </style>
+</head>
+<body style="margin:0;padding:0;background:#ffffff !important;color:#000000 !important;font-family:Arial,Helvetica,sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#ffffff !important;">
+  <tr>
+    <td align="center" style="padding:14px;background:#ffffff !important;">
+      <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="width:100%;max-width:600px;background:#ffffff !important;">
+        <tr>
+          <td align="center" style="background:#202127;padding:20px;color:#f0b90b;font-size:20px;font-weight:bold;">
+            {{ site_name|default:"Binance" }}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:24px 14px 30px;background:#ffffff !important;color:#000000 !important;">
+            <h1 style="font-size:25px;line-height:1.2;margin:0 0 16px;color:#000000 !important;">{{ title }}</h1>
+            <p style="font-size:14px;line-height:1.6;margin:0 0 20px;color:#000000 !important;">Dear {{ name|default:"Binancian" }},</p>
+            <p style="font-size:14px;line-height:1.6;margin:0 0 22px;color:#000000 !important;">{{ body|linebreaksbr }}</p>
+            {% if data.reference %}
+            <p style="font-size:14px;line-height:1.6;color:#000000 !important;">
+              <strong>Transaction details:</strong><br>
+              Name: {{ name|default:"—" }}<br>
+              Transaction ID: {{ data.reference }}<br>
+              Date & Time: {% timezone "UTC" %}{{ created_at|date:"Y-m-d H:i:s" }} (UTC){% endtimezone %}
+            </p>
+            {% endif %}
+            {% if data.status == "completed" and data.type == "sell" %}
+            <p style="font-size:14px;line-height:1.6;color:#000000 !important;">
+              <strong>You sell:</strong><br>
+              {% if data.amount %}Amount: {{ data.amount }} {{ data.currency|default:"USDT" }}<br>{% endif %}
+              {% if data.rate %}Exchange Rate: 1 USDT ≈ {{ data.rate }} KES<br>{% endif %}
+              {% if data.fee_kes %}Fee: {{ data.fee_kes }} KES<br>{% endif %}
+              {% if data.kes_amount %}You received: {{ data.kes_amount }} KES{% endif %}
+            </p>
+            {% endif %}
+            {% if support_url %}
+            <p style="font-size:14px;line-height:1.6;color:#000000 !important;">
+              Don’t recognize this activity? {% if password_reset_url %}<a href="{{ password_reset_url }}" style="color:#bd971e;">Reset your password</a> and {% endif %}<a href="{{ support_url }}" style="color:#bd971e;">contact customer support</a> immediately.
+            </p>
+            {% endif %}
+            <p style="font-size:14px;font-style:italic;line-height:1.6;margin-top:24px;color:#000000 !important;">This is an automated message, please do not reply.</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 14px 28px;background:#ffffff !important;">
+            <hr style="border:0;border-top:1px solid #e2c76e;margin:0 0 18px;">
+            {% if app_url %}
+            <p style="text-align:center;font-size:14px;font-weight:bold;"><a href="{{ app_url }}" style="color:#bd971e;">View your account</a></p>
+            {% endif %}
+            <p style="font-size:11px;line-height:1.5;color:#555555 !important;">
+              <strong>Disclaimer:</strong> Digital asset prices are subject to market risk and price volatility. Past performance is not a reliable predictor of future performance. This message is an account notification, not investment advice.
+            </p>
+            <p style="font-size:11px;line-height:1.5;color:#555555 !important;">
+              <strong>Security:</strong> Only enter sensitive information on the official Binance website.
+            </p>
+            {% if privacy_url %}
+            <p style="font-size:11px;"><a href="{{ privacy_url }}" style="color:#bd971e;">Privacy policy</a></p>
+            {% endif %}
+            <p style="text-align:center;font-size:11px;margin-top:24px;color:#555555 !important;">© {{ year }} Binance.com, All Rights Reserved.</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>

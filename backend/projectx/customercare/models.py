@@ -188,11 +188,23 @@ class AdminEmail(models.Model):
         ('all', 'All Users (Broadcast)'),
     ]
 
+    NOTIFICATION_TYPE_CHOICES = [
+        ('email', 'Email only'),
+        ('push', 'Push Notification only'),
+        ('both', 'Email + Push Notification'),
+    ]
+
     subject = models.CharField(max_length=200)
-    message = models.TextField(help_text="Plain text message")
+    message = models.TextField(help_text="Plain text message (also used as push body)")
     html_message = models.TextField(blank=True, null=True)
 
     recipient_type = models.CharField(max_length=10, choices=RECIPIENT_CHOICES, default='single')
+    notification_type = models.CharField(
+        max_length=10,
+        choices=NOTIFICATION_TYPE_CHOICES,
+        default='email',
+        help_text="Choose how to deliver this message to the recipient(s)"
+    )
     target_user = models.ForeignKey(
         User, 
         on_delete=models.SET_NULL, 
@@ -211,10 +223,9 @@ class AdminEmail(models.Model):
 
     class Meta:
         ordering = ['-sent_at']
-        verbose_name = "Admin Email"
-        verbose_name_plural = "Admin Emails"
+        verbose_name = "Admin Notification"
+        verbose_name_plural = "Admin Notifications"
 
     def __str__(self):
-        if self.recipient_type == 'all':
-            return f"Broadcast: {self.subject}"
-        return f"To {self.target_user.username if self.target_user else 'Unknown'}: {self.subject}"
+        prefix = "Broadcast" if self.recipient_type == 'all' else f"To {self.target_user.username if self.target_user else 'Unknown'}"
+        return f"{prefix} [{self.get_notification_type_display()}]: {self.subject}"
