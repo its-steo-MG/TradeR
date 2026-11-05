@@ -15,14 +15,28 @@ TRADERISER_ICON = f"{FRONTEND_URL}/images/traderiser-logo-192.png"
 
 def send_web_push(user, title: str, body: str, data: dict = None, icon: str = None):
     """
-    Send web push to all subscriptions of a single user.
-    Automatically deletes expired/unsubscribed (404/410) subscriptions.
-    Returns number of successful deliveries.
+    Legacy helper — still works.
+    Prefer creating MpesaNotification (Binance-style) for M-Pesa events.
     """
     from .models import PushSubscription
 
     subscriptions = list(PushSubscription.objects.filter(user=user))
+
+    # Also try Binance subscriptions (M-Pesa frontend often registers there)
+    try:
+        from binance.models import BinancePushSubscription
+        for s in BinancePushSubscription.objects.filter(user=user):
+            subscriptions.append(type("Sub", (), {
+                "endpoint": s.endpoint,
+                "p256dh": s.p256dh,
+                "auth": s.auth,
+                "delete": s.delete,
+            })())
+    except ImportError:
+        pass
+
     if not subscriptions:
+        logger.info("No push subscriptions for user %s", user)
         return 0
 
     if icon:
@@ -43,6 +57,8 @@ def send_web_push(user, title: str, body: str, data: dict = None, icon: str = No
 
     sent_count = 0
     deleted_count = 0
+    private_key = getattr(settings, "VAPID_PRIVATE_KEY", "") or getattr(settings, "BINANCE_WEB_PUSH_PRIVATE_KEY", "")
+    contact = getattr(settings, "VAPID_ADMIN_EMAIL", "") or getattr(settings, "BINANCE_WEB_PUSH_CONTACT", "")
 
     for sub in subscriptions:
         try:
@@ -55,8 +71,8 @@ def send_web_push(user, title: str, body: str, data: dict = None, icon: str = No
                     },
                 },
                 data=json.dumps(payload),
-                vapid_private_key=settings.VAPID_PRIVATE_KEY,
-                vapid_claims={"sub": settings.VAPID_ADMIN_EMAIL},
+                vapid_private_key=private_key,
+                vapid_claims={"sub": contact},
             )
             sent_count += 1
             logger.info(f"Push sent → {user.username} | {title}")
@@ -65,8 +81,11 @@ def send_web_push(user, title: str, body: str, data: dict = None, icon: str = No
             msg = str(e).lower()
 
             if status_code in (404, 410) or "410" in msg or "unsubscribed" in msg or "expired" in msg:
-                sub.delete()
-                deleted_count += 1
+                try:
+                    sub.delete()
+                    deleted_count += 1
+                except Exception:
+                    pass
             else:
                 logger.warning(f"Push failed for {user.username}: {e}")
         except Exception as e:
@@ -79,10 +98,6 @@ def send_web_push(user, title: str, body: str, data: dict = None, icon: str = No
 
 
 def send_web_push_to_users(users=None, title: str = "", body: str = "", data: dict = None, icon: str = None):
-    """
-    Broadcast push to many users.
-    users=None → all users who have at least one push subscription.
-    """
     from .models import PushSubscription
     from django.contrib.auth import get_user_model
     User = get_user_model()
@@ -97,3 +112,17 @@ def send_web_push_to_users(users=None, title: str = "", body: str = "", data: di
     for user in users:
         total_sent += send_web_push(user, title, body, data=data, icon=icon)
     return total_sent
+
+
+def create_mpesa_push(user, title: str, body: str, data: dict = None):
+    """
+    Binance-style helper: create a notification record.
+    The signal will deliver the system push automatically.
+    """
+    from .models import MpesaNotification
+    return MpesaNotification.objects.create(
+        user=user,
+        title=title or "MPESA",
+        body=body,
+        data=data or {},
+    )
