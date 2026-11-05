@@ -13,7 +13,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .models import MpesaUser, MpesaTransaction
 from .serializers import MpesaUserSerializer, MpesaTransactionSerializer
 from accounts.authentication import SuspendedUserJWTAuthentication
-from notifications.utils import create_mpesa_push
+from notifications.utils import send_web_push
 
 logger = logging.getLogger(__name__)
 
@@ -159,8 +159,8 @@ class MpesaTransactionDetailView(APIView):
 
     def get(self, request, pk):
         try:
-            transaction_obj = MpesaTransaction.objects.get(pk=pk, mpesa_user=request.user.mpesa_user)
-            serializer = MpesaTransactionSerializer(transaction_obj)
+            transaction = MpesaTransaction.objects.get(pk=pk, mpesa_user=request.user.mpesa_user)
+            serializer = MpesaTransactionSerializer(transaction)
             return Response(serializer.data)
         except MpesaTransaction.DoesNotExist:
             return Response({'error': 'Transaction not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -191,25 +191,30 @@ class SendMoneyView(APIView):
             amount = Decimal(str(amount))
             if amount <= 0:
                 return Response({'error': 'Amount must be greater than 0'}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception:
+        except:
             return Response({'error': 'Invalid amount'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Calculate transaction fee
         fee = calculate_mpesa_send_fee(amount)
         total_debit = amount + fee
 
+        # Check PIN
         if not sender.check_pin(pin):
             return Response({'error': 'Invalid PIN'}, status=status.HTTP_401_UNAUTHORIZED)
 
+        # Check daily limit
         if amount > sender.get_remaining_daily_limit():
             return Response({
                 'error': f'Daily limit exceeded. You can only send up to {sender.get_remaining_daily_limit():,.2f} KSH today.'
             }, status=status.HTTP_400_BAD_REQUEST)
 
+        # Check sufficient balance (amount + fee)
         if sender.balance < total_debit:
             return Response({
                 'error': f'Insufficient balance. You need at least Ksh {total_debit:,.2f} (including Ksh {fee} fee)'
             }, status=status.HTTP_400_BAD_REQUEST)
 
+        # Find recipient
         try:
             recipient = MpesaUser.objects.get(phone_number=recipient_phone.strip())
             if recipient.pk == sender.pk:
@@ -217,14 +222,18 @@ class SendMoneyView(APIView):
         except MpesaUser.DoesNotExist:
             return Response({'error': 'This phone number is not registered on M-Pesa'}, status=status.HTTP_404_NOT_FOUND)
 
+        # Process transaction
         with transaction.atomic():
+            # Deduct amount + fee from sender
             sender.balance -= total_debit
             sender.record_daily_withdrawal(amount)
             sender.save(update_fields=['balance'])
 
+            # Credit recipient
             recipient.balance += amount
             recipient.save(update_fields=['balance'])
 
+            # Create transaction for sender
             withdrawal = MpesaTransaction.objects.create(
                 mpesa_user=sender,
                 transaction_type='withdrawal',
@@ -236,6 +245,7 @@ class SendMoneyView(APIView):
                 category='family_friends',
             )
 
+            # Create transaction for recipient
             deposit = MpesaTransaction.objects.create(
                 mpesa_user=recipient,
                 transaction_type='deposit',
@@ -246,16 +256,15 @@ class SendMoneyView(APIView):
                 category='family_friends',
             )
 
-        # ===== BINANCE-STYLE PUSH: create notification records =====
-        # Signal will deliver the system push after commit
+        # ===== SEND PUSH NOTIFICATIONS =====
         try:
             now = timezone.localtime()
             date_str = f"{now.day}/{now.month}/{now.strftime('%y')}"
             hour = now.strftime("%I").lstrip("0") or "12"
             time_str = f"{hour}:{now.strftime('%M')} {now.strftime('%p')}"
 
-            # Sender notification
-            create_mpesa_push(
+            # 1. Notify the SENDER
+            send_web_push(
                 user=sender.user,
                 title="MPESA",
                 body=(
@@ -269,11 +278,11 @@ class SendMoneyView(APIView):
                     "type": "send_money",
                     "mpesa_id": withdrawal.mpesa_id,
                     "amount": str(amount),
-                },
+                }
             )
 
-            # Recipient notification
-            create_mpesa_push(
+            # 2. Notify the RECIPIENT
+            send_web_push(
                 user=recipient.user,
                 title="MPESA",
                 body=(
@@ -286,10 +295,11 @@ class SendMoneyView(APIView):
                     "type": "receive_money",
                     "mpesa_id": deposit.mpesa_id,
                     "amount": str(amount),
-                },
+                }
             )
         except Exception as push_err:
-            logger.error(f"Failed to create M-Pesa push notification: {push_err}")
+            # Never fail the transaction because of a push error
+            logger.error(f"Failed to send M-Pesa push: {push_err}")
 
         return Response({
             'message': 'Send money successful',
@@ -304,11 +314,13 @@ class SendMoneyView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+# ====================== RECIPIENT LOOKUP ======================
 class RecipientLookupView(APIView):
     permission_classes = [IsAuthenticated]
     authentication_classes = [SuspendedUserJWTAuthentication]
 
     def post(self, request):
+        """Lookup recipient by phone number before sending money"""
         try:
             sender = request.user.mpesa_user
         except MpesaUser.DoesNotExist:

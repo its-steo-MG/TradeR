@@ -15,25 +15,13 @@ TRADERISER_ICON = f"{FRONTEND_URL}/images/traderiser-logo-192.png"
 
 def send_web_push(user, title: str, body: str, data: dict = None, icon: str = None):
     """
-    Legacy helper — still works.
-    Prefer creating MpesaNotification (Binance-style) for M-Pesa events.
+    Send a web push using only the subscriptions registered for this user
+    via the M-Pesa (or general) PushSubscription model.
+    Binance subscriptions are intentionally excluded so iOS shows the correct origin.
     """
     from .models import PushSubscription
 
     subscriptions = list(PushSubscription.objects.filter(user=user))
-
-    # Also try Binance subscriptions (M-Pesa frontend often registers there)
-    try:
-        from binance.models import BinancePushSubscription
-        for s in BinancePushSubscription.objects.filter(user=user):
-            subscriptions.append(type("Sub", (), {
-                "endpoint": s.endpoint,
-                "p256dh": s.p256dh,
-                "auth": s.auth,
-                "delete": s.delete,
-            })())
-    except ImportError:
-        pass
 
     if not subscriptions:
         logger.info("No push subscriptions for user %s", user)
@@ -115,10 +103,6 @@ def send_web_push_to_users(users=None, title: str = "", body: str = "", data: di
 
 
 def create_mpesa_push(user, title: str, body: str, data: dict = None):
-    """
-    Binance-style helper: create a notification record.
-    The signal will deliver the system push automatically.
-    """
     from .models import MpesaNotification
     return MpesaNotification.objects.create(
         user=user,
