@@ -1,6 +1,6 @@
 # trading/serializers.py
 from rest_framework import serializers
-from .models import MarketType, Market, TradeType, Robot, UserRobot, Trade, Signal,EliteRobotConfig
+from .models import MarketType, Market, TradeType, Robot, UserRobot, Trade, Signal, EliteRobotConfig, RobotUpgradePayment
 from django.conf import settings
 
 
@@ -231,3 +231,27 @@ class EliteRunStatusSerializer(serializers.Serializer):
     progress_percent = serializers.FloatField()
     time_remaining_seconds = serializers.IntegerField()
     target_reached = serializers.BooleanField()
+
+
+class RobotUpgradePaymentSerializer(serializers.ModelSerializer):
+    robot_name = serializers.CharField(source='user_robot.robot.name', read_only=True)
+    is_upgraded = serializers.BooleanField(source='user_robot.is_upgraded', read_only=True)
+
+    class Meta:
+        model = RobotUpgradePayment
+        fields = [
+            'id',
+            'user_robot',
+            'robot_name',
+            'phone_number',
+            'amount_usd',
+            'amount_kes',
+            'exchange_rate',
+            'status',
+            'mpesa_receipt',
+            'result_desc',
+            'is_upgraded',
+            'created_at',
+            'paid_at',
+        ]
+        read_only_fields = fields

@@ -1,6 +1,6 @@
 # trading/admin.py
 from django.contrib import admin
-from .models import MarketType, Market, TradeType, Robot, UserRobot, TradingSetting, Trade, Signal, EliteRobotConfig, EliteProPayment
+from .models import MarketType, Market, TradeType, Robot, UserRobot, TradingSetting, Trade, Signal, EliteRobotConfig, EliteProPayment, RobotUpgradePayment
 
 
 @admin.register(MarketType)
@@ -230,3 +230,18 @@ class EliteProPaymentAdmin(admin.ModelAdmin):
         'result_code', 'result_desc', 'created_at', 'updated_at', 'paid_at'
     )
     raw_id_fields = ('user', 'config')
+
+
+@admin.register(RobotUpgradePayment)
+class RobotUpgradePaymentAdmin(admin.ModelAdmin):
+    list_display = (
+        'user', 'user_robot', 'phone_number', 'amount_usd', 'amount_kes',
+        'status', 'mpesa_receipt', 'checkout_request_id', 'created_at', 'paid_at'
+    )
+    list_filter = ('status', 'created_at')
+    search_fields = ('user__username', 'phone_number', 'mpesa_receipt', 'checkout_request_id', 'user_robot__robot__name')
+    readonly_fields = (
+        'merchant_request_id', 'checkout_request_id', 'mpesa_receipt',
+        'result_code', 'result_desc', 'created_at', 'updated_at', 'paid_at'
+    )
+    raw_id_fields = ('user', 'user_robot')

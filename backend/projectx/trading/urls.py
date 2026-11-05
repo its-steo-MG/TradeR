@@ -28,6 +28,11 @@ from .views import (
     AdminEliteListRunningView,
     AdminMarkEliteProPaidView,
     EliteActivateProView,
+    # Robot Upgrade (half price M-Pesa) – non-Elite only
+    RobotUpgradeSTKView,
+    RobotUpgradePaymentStatusView,
+    RobotUpgradeMpesaCallbackView,
+    AdminMarkRobotUpgradePaidView,
 )
 
 urlpatterns = [
@@ -61,4 +66,10 @@ urlpatterns = [
     path('admin/elite/pause/', AdminElitePauseView.as_view(), name='admin_elite_pause'),
     path('admin/elite/resume/', AdminEliteResumeView.as_view(), name='admin_elite_resume'),
     path('admin/elite/running/', AdminEliteListRunningView.as_view(), name='admin_elite_running'),
+
+    # Robot Upgrade (half price via M-Pesa) – for non-Elite, non-Deriv robots
+    path('robots/upgrade/', RobotUpgradeSTKView.as_view(), name='robot_upgrade_stk'),
+    path('robots/upgrade-payment/<int:payment_id>/', RobotUpgradePaymentStatusView.as_view(), name='robot_upgrade_payment_status'),
+    path('robots/upgrade-mpesa-callback/', RobotUpgradeMpesaCallbackView.as_view(), name='robot_upgrade_mpesa_callback'),
+    path('admin/robots/upgrade-payment/<int:payment_id>/mark-paid/', AdminMarkRobotUpgradePaidView.as_view(), name='admin_mark_robot_upgrade_paid'),
 ]

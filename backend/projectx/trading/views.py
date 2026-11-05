@@ -2010,3 +2010,255 @@ class AdminEliteListRunningView(APIView):
                 'paused_at': c.paused_at,
             })
         return Response({'running': data, 'count': len(data)}, status=status.HTTP_200_OK)
+
+
+# ====================== ROBOT UPGRADE (half price via M-Pesa) ======================
+# For non-Elite, non-Deriv robots only. Elite flow is left completely unchanged.
+
+from .models import RobotUpgradePayment
+from .serializers import RobotUpgradePaymentSerializer
+
+
+class RobotUpgradeSTKView(APIView):
+    """
+    Initiate M-Pesa STK Push to upgrade a purchased robot for half its effective price.
+    Body: { "user_robot_id": <int>, "phone_number": "07XXXXXXXX" }
+    Not available for Deriv robots or the Elite robot.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user_robot_id = request.data.get('user_robot_id')
+        raw_phone = (request.data.get('phone_number') or '').strip()
+
+        if not user_robot_id:
+            return Response({'error': 'user_robot_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        if not raw_phone:
+            return Response({'error': 'phone_number is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user_robot = UserRobot.objects.select_related('robot').get(
+                id=user_robot_id, user=request.user
+            )
+        except UserRobot.DoesNotExist:
+            return Response({'error': 'User robot not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        robot = user_robot.robot
+
+        if robot.is_elite_robot:
+            return Response(
+                {'error': 'Use the Elite upgrade flow for the Elite robot'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if robot.is_deriv_robot:
+            return Response(
+                {'error': 'Deriv robots cannot be upgraded this way'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if user_robot.is_upgraded:
+            return Response({'error': 'This robot is already upgraded'}, status=status.HTTP_400_BAD_REQUEST)
+
+        full_price = robot.effective_price
+        half_price = (full_price / Decimal('2')).quantize(Decimal('0.01'))
+
+        if half_price <= 0:
+            return Response({'error': 'Invalid robot price'}, status=status.HTTP_400_BAD_REQUEST)
+
+        amount_kes, rate = _usd_to_kes(half_price)
+
+        payment = RobotUpgradePayment.objects.create(
+            user=request.user,
+            user_robot=user_robot,
+            phone_number=raw_phone,
+            amount_usd=half_price,
+            amount_kes=amount_kes,
+            exchange_rate=rate,
+            status='pending',
+        )
+
+        try:
+            upgrade_callback = getattr(settings, 'ROBOT_UPGRADE_MPESA_CALLBACK_URL', None)
+            client = PaymentClient(callback_url=upgrade_callback) if upgrade_callback else PaymentClient()
+
+            normalized = client.normalize_mpesa_phone(raw_phone)
+            payment.phone_number = normalized
+            payment.save(update_fields=['phone_number'])
+
+            transaction_id = f'RUPG{payment.id}'
+
+            stk_response = client.initiate_stk_push(
+                phone_number=normalized,
+                amount=amount_kes,
+                transaction_id=transaction_id,
+            )
+
+            if str(stk_response.get('ResponseCode', '1')) not in ('0',):
+                payment.status = 'failed'
+                payment.result_desc = (
+                    stk_response.get('error')
+                    or stk_response.get('ResponseDescription')
+                    or stk_response.get('errorMessage')
+                    or str(stk_response)
+                )
+                payment.save()
+                return Response(
+                    {'error': payment.result_desc or 'Failed to initiate M-Pesa payment'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            payment.merchant_request_id = stk_response.get('MerchantRequestID', '')
+            payment.checkout_request_id = stk_response.get('CheckoutRequestID', '')
+            payment.status = 'processing'
+            payment.save()
+
+            return Response({
+                'message': 'STK Push sent. Enter your M-Pesa PIN on your phone.',
+                'payment_id': payment.id,
+                'checkout_request_id': payment.checkout_request_id,
+                'amount_usd': str(half_price),
+                'amount_kes': amount_kes,
+                'exchange_rate': str(rate),
+                'phone_number': normalized,
+                'robot_name': robot.name,
+            }, status=status.HTTP_200_OK)
+
+        except ValueError as e:
+            payment.status = 'failed'
+            payment.result_desc = str(e)
+            payment.save()
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(f'Robot Upgrade STK error: {e}', exc_info=True)
+            payment.status = 'failed'
+            payment.result_desc = str(e)
+            payment.save()
+            return Response(
+                {'error': 'Could not reach M-Pesa. Please try again.'},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
+
+
+class RobotUpgradePaymentStatusView(APIView):
+    """Poll payment status after STK Push for robot upgrade."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, payment_id):
+        payment = RobotUpgradePayment.objects.filter(
+            id=payment_id, user=request.user
+        ).select_related('user_robot', 'user_robot__robot').first()
+        if not payment:
+            return Response({'error': 'Payment not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({
+            'payment_id': payment.id,
+            'status': payment.status,
+            'amount_kes': payment.amount_kes,
+            'amount_usd': str(payment.amount_usd),
+            'mpesa_receipt': payment.mpesa_receipt,
+            'result_desc': payment.result_desc,
+            'is_upgraded': payment.user_robot.is_upgraded,
+            'robot_name': payment.user_robot.robot.name,
+        })
+
+
+class RobotUpgradeMpesaCallbackView(APIView):
+    """
+    Safaricom STK callback for Robot Upgrade.
+    On ResultCode 0 → store receipt. Admin must mark paid to set is_upgraded.
+    """
+    permission_classes = []
+
+    def post(self, request):
+        try:
+            body = request.data
+            stk = body.get('Body', {}).get('stkCallback', {})
+            checkout_id = stk.get('CheckoutRequestID', '')
+            result_code = str(stk.get('ResultCode', ''))
+            result_desc = stk.get('ResultDesc', '')
+
+            payment = RobotUpgradePayment.objects.filter(
+                checkout_request_id=checkout_id
+            ).select_related('user_robot').first()
+
+            if not payment:
+                logger.warning(f'Robot Upgrade M-Pesa callback unknown CheckoutRequestID: {checkout_id}')
+                return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
+            if payment.status == 'success':
+                return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
+            payment.result_code = result_code
+            payment.result_desc = result_desc
+
+            if result_code == '0':
+                items = stk.get('CallbackMetadata', {}).get('Item', [])
+                receipt = ''
+                for item in items:
+                    if item.get('Name') == 'MpesaReceiptNumber':
+                        receipt = str(item.get('Value', ''))
+                        break
+
+                payment.mpesa_receipt = receipt
+                payment.result_desc = result_desc or 'STK completed – awaiting admin confirmation'
+                if payment.status != 'success':
+                    payment.status = 'processing'
+                payment.save()
+                logger.info(
+                    f'Robot Upgrade STK receipt for user={payment.user_id} '
+                    f'robot={payment.user_robot.robot.name} receipt={receipt}'
+                )
+            else:
+                payment.status = 'failed' if result_code != '1032' else 'cancelled'
+                payment.save()
+
+            return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
+        except Exception as e:
+            logger.error(f'Robot Upgrade M-Pesa callback error: {e}', exc_info=True)
+            return Response({'ResultCode': 0, 'ResultDesc': 'Accepted'})
+
+
+class AdminMarkRobotUpgradePaidView(APIView):
+    """
+    Admin only. Mark a Robot Upgrade payment as paid and set user_robot.is_upgraded = True.
+    """
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def post(self, request, payment_id=None):
+        pid = payment_id or request.data.get('payment_id')
+        if not pid:
+            return Response({'error': 'payment_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        payment = RobotUpgradePayment.objects.filter(id=pid).select_related(
+            'user_robot', 'user_robot__robot', 'user'
+        ).first()
+        if not payment:
+            return Response({'error': 'Payment not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if payment.status == 'success' and payment.user_robot.is_upgraded:
+            return Response({
+                'message': 'Already marked as paid and upgraded',
+                'payment_id': payment.id,
+                'status': payment.status,
+                'is_upgraded': True,
+            })
+
+        payment.status = 'success'
+        payment.paid_at = timezone.now()
+        note = (request.data.get('note') or 'Marked paid by admin').strip()
+        payment.result_desc = note
+        payment.save(update_fields=['status', 'paid_at', 'result_desc'])
+
+        user_robot = payment.user_robot
+        if not user_robot.is_upgraded:
+            user_robot.is_upgraded = True
+            user_robot.save(update_fields=['is_upgraded'])
+
+        return Response({
+            'message': f'Payment marked paid. {payment.user.username} robot "{user_robot.robot.name}" is now upgraded.',
+            'payment_id': payment.id,
+            'status': payment.status,
+            'is_upgraded': True,
+            'robot_name': user_robot.robot.name,
+        })

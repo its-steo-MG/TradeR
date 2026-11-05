@@ -406,3 +406,50 @@ class EliteProPayment(models.Model):
 
     def __str__(self):
         return f"{self.user.username} Pro {self.status} {self.amount_kes} KES"
+
+
+class RobotUpgradePayment(models.Model):
+    """
+    Tracks M-Pesa STK Push payments for upgrading a purchased robot
+    (half of the robot's effective price). Not used for Deriv or Elite robots.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('processing', 'STK Sent'),
+        ('success', 'Paid'),
+        ('failed', 'Failed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='robot_upgrade_payments'
+    )
+    user_robot = models.ForeignKey(
+        UserRobot,
+        on_delete=models.CASCADE,
+        related_name='upgrade_payments'
+    )
+    phone_number = models.CharField(max_length=15, help_text="2547XXXXXXXX format")
+    amount_usd = models.DecimalField(max_digits=10, decimal_places=2, help_text="Half of robot effective price")
+    amount_kes = models.PositiveIntegerField(help_text="KES amount sent to M-Pesa")
+    exchange_rate = models.DecimalField(max_digits=10, decimal_places=4, help_text="USD to KES rate used")
+
+    # M-Pesa fields
+    merchant_request_id = models.CharField(max_length=64, blank=True, default='')
+    checkout_request_id = models.CharField(max_length=64, blank=True, default='', db_index=True)
+    mpesa_receipt = models.CharField(max_length=64, blank=True, default='')
+    result_code = models.CharField(max_length=10, blank=True, default='')
+    result_desc = models.CharField(max_length=255, blank=True, default='')
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user.username} Upgrade {self.user_robot.robot.name} {self.status} {self.amount_kes} KES"

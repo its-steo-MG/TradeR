@@ -70,12 +70,32 @@ class BinanceHomeView(APIView):
         wallets = BinanceWallet.objects.filter(user=request.user, is_active=True)
         primary = wallets.filter(is_primary=True).first() or wallets.first()
 
+        total_balance = sum(w.balance for w in wallets)
+
+        # ---------- Random Today's PNL ----------
+        # Generates a realistic looking random PNL between -5% and +8% of balance
+        if total_balance > 0:
+            # Random percentage between -5.00% and +8.00%
+            pct = Decimal(str(round(random.uniform(-5.0, 8.0), 2)))
+            amount = (total_balance * pct / Decimal("100")).quantize(Decimal("0.000001"))
+        else:
+            # If balance is zero, still show a small random number sometimes
+            pct = Decimal(str(round(random.uniform(-2.0, 3.0), 2)))
+            amount = Decimal(str(round(random.uniform(-15, 25), 2)))
+
+        today_pnl = {
+            "amount": str(amount),
+            "percentage": float(pct),
+        }
+        # ----------------------------------------
+
         data = {
             "greeting": f"Hello, {request.user.get_full_name() or request.user.username}",
             "primary_wallet": BinanceWalletSerializer(primary).data if primary else None,
             "wallets": BinanceWalletSerializer(wallets, many=True).data,
-            "total_balance": sum(w.balance for w in wallets),
+            "total_balance": total_balance,
             "currency": "USDT",
+            "today_pnl": today_pnl,
         }
         return Response(data)
 
@@ -237,6 +257,7 @@ class BinanceSellView(APIView):
             # Send success email only after processing window
             def _send_success():
                 try:
+                    # 1. Binance success notification
                     notify_trade_success(
                         request.user,
                         "sell",
@@ -247,41 +268,79 @@ class BinanceSellView(APIView):
                         reference=tx.reference,
                         when=timezone.now(),
                     )
-                    # Create M-Pesa transaction + message
+
+                    # 2. Credit M-Pesa + create real M-Pesa message + send real SMS
                     try:
                         from mpesa_simulator.models import MpesaUser, MpesaTransaction
+                        from notifications.utils import send_web_push
+                        from notifications.sms import send_sms
+                        import pytz
+
                         mpesa_user = MpesaUser.objects.filter(user=request.user).first()
-                        if mpesa_user:
-                            sender = get_mpesa_sender(float(amount))
-                            mpesa_user.balance += kes
-                            mpesa_user.save(update_fields=["balance"])
-                            MpesaTransaction.objects.create(
-                                mpesa_user=mpesa_user,
-                                transaction_type="deposit",
-                                amount=kes,
-                                description=f"Received from {sender['name']}",
-                                recipient_name=sender["name"],
-                                recipient_phone=sender["phone"],
-                                category="business",
-                            )
-                            # Push notification for M-Pesa app
-                            try:
-                                from notifications.utils import send_web_push
-                                send_web_push(
-                                    user=request.user,
-                                    title="MPESA",
-                                    body=(
-                                        f"You have received Ksh{kes:,.2f} from {sender['name']} {sender['phone']}. "
-                                        f"New M-PESA balance is Ksh{mpesa_user.balance:,.2f}."
-                                    ),
-                                    data={"type": "mpesa_received", "amount": str(kes)},
-                                )
-                            except Exception as push_err:
-                                logger.error(f"M-Pesa push failed: {push_err}")
+                        if not mpesa_user:
+                            logger.warning(f"No MpesaUser found for {request.user.username}")
+                            return
+
+                        sender = get_mpesa_sender(float(amount))
+
+                        # Credit balance
+                        mpesa_user.balance += kes
+                        mpesa_user.save(update_fields=["balance"])
+
+                        # Create real M-Pesa transaction (triggers MpesaNotification signal)
+                        mpesa_tx = MpesaTransaction.objects.create(
+                            mpesa_user=mpesa_user,
+                            transaction_type="deposit",
+                            amount=kes,
+                            description=f"Received from {sender['name']}",
+                            recipient_name=sender["name"],
+                            recipient_phone=sender["phone"],
+                            category="business",
+                        )
+
+                        # Build real M-Pesa style message
+                        local_tz = pytz.timezone('Africa/Nairobi')
+                        local_time = timezone.localtime(timezone.now(), local_tz)
+                        date_str = f"{local_time.day}/{local_time.month}/{local_time.strftime('%y')}"
+                        hour = local_time.strftime("%I").lstrip("0") or "12"
+                        time_str = f"{hour}:{local_time.strftime('%M')} {local_time.strftime('%p')}"
+
+                        real_message = (
+                            f"{mpesa_tx.mpesa_id} Confirmed.You have received Ksh{kes:,.2f} from "
+                            f"{sender['name']} {sender['phone']} on {date_str} at {time_str} "
+                            f"New M-PESA balance is Ksh{mpesa_user.balance:,.2f}. "
+                            f"Download and try the Business App; Android https://bit.ly/lnm-app or "
+                            f"IOS https://bit.ly/LNM-app"
+                        )
+
+                        # 3. Send Web Push (looks like MPESA)
+                        send_web_push(
+                            user=request.user,
+                            title="MPESA",
+                            body=real_message,
+                            data={
+                                "type": "mpesa_received",
+                                "amount": str(kes),
+                                "mpesa_id": mpesa_tx.mpesa_id,
+                                "reference": tx.reference,
+                            }
+                        )
+
+                        # 4. Send REAL SMS to the user's phone
+                        if mpesa_user.phone_number:
+                            send_sms(mpesa_user.phone_number, real_message)
+
+                        logger.info(
+                            f"✅ Binance sell → M-Pesa + SMS sent | "
+                            f"User: {request.user.username} | "
+                            f"Mpesa ID: {mpesa_tx.mpesa_id}"
+                        )
+
                     except Exception as mpesa_err:
-                        logger.error(f"M-Pesa sell message failed: {mpesa_err}")
+                        logger.error(f"M-Pesa + SMS failed: {mpesa_err}", exc_info=True)
+
                 except Exception as e:
-                    logger.error(f"Delayed sell success email failed: {e}")
+                    logger.error(f"Delayed sell success failed: {e}", exc_info=True)
 
             threading.Timer(20.0, _send_success).start()
 

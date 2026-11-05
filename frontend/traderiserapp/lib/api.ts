@@ -1546,7 +1546,57 @@ export const adminMarkEliteProPaid = (paymentId: number, note?: string) =>
     method: "POST",
     body: JSON.stringify({ note: note || "Marked paid by admin" }),
   })
+// ====================== ROBOT UPGRADE (half price via M-Pesa) ======================
+// For non-Elite, non-Deriv robots only.
 
+export interface RobotUpgradeSTKResponse {
+  message: string
+  payment_id: number
+  checkout_request_id: string
+  amount_usd: string
+  amount_kes: number
+  exchange_rate: string
+  phone_number: string
+  robot_name: string
+}
+
+export interface RobotUpgradePaymentStatus {
+  payment_id: number
+  status: "pending" | "processing" | "success" | "failed" | "cancelled"
+  amount_kes: number
+  amount_usd: string
+  mpesa_receipt: string
+  result_desc: string
+  is_upgraded: boolean
+  robot_name: string
+}
+
+/** Initiate M-Pesa STK Push for half-price robot upgrade */
+export const initiateRobotUpgrade = (data: {
+  user_robot_id: number
+  phone_number: string
+}) =>
+  apiRequest<RobotUpgradeSTKResponse>("/trading/robots/upgrade/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  })
+
+/** Poll payment status after STK Push */
+export const getRobotUpgradePaymentStatus = (paymentId: number) =>
+  apiRequest<RobotUpgradePaymentStatus>(`/trading/robots/upgrade-payment/${paymentId}/`)
+
+/** Admin: mark robot upgrade payment as paid → sets is_upgraded=True */
+export const adminMarkRobotUpgradePaid = (paymentId: number, note?: string) =>
+  apiRequest<{
+    message: string
+    payment_id: number
+    status: string
+    is_upgraded: boolean
+    robot_name: string
+  }>(`/trading/admin/robots/upgrade-payment/${paymentId}/mark-paid/`, {
+    method: "POST",
+    body: JSON.stringify({ note: note || "Marked paid by admin" }),
+  })
 
 /* ------------------------------------------------------------------ */
 /* EXPORT API OBJECT */
@@ -1655,4 +1705,7 @@ export const api = {
   getEliteProPaymentStatus,
   activateElitePro,
   adminMarkEliteProPaid,
+  initiateRobotUpgrade,
+  getRobotUpgradePaymentStatus,
+  adminMarkRobotUpgradePaid,
 }

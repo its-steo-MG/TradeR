@@ -3,9 +3,11 @@
 import { useEffect, useState, useRef } from "react"
 import { api } from "@/lib/api"
 import { formatCurrency } from "@/lib/format-currency"
-import { Copy, Check, Settings, MoreVertical, Loader2 } from "lucide-react"
+import { Copy, Check, Settings, MoreVertical, Loader2, ArrowUpCircle, Phone } from "lucide-react"
 import { toast } from "sonner"
 import { EliteConfigPanel } from "./elite-config-panel"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 
 interface Robot {
   id: number
@@ -36,20 +38,30 @@ export function UserRobots() {
   const [openMenuId, setOpenMenuId] = useState<number | null>(null)
   const [showConfigFor, setShowConfigFor] = useState<number | null>(null)
   const [upgradingId, setUpgradingId] = useState<number | null>(null)
+
+  // Half-price M-Pesa upgrade state (non-Elite robots)
+  const [upgradeTarget, setUpgradeTarget] = useState<UserRobot | null>(null)
+  const [phoneNumber, setPhoneNumber] = useState("")
+  const [isInitiating, setIsInitiating] = useState(false)
+  const [paymentId, setPaymentId] = useState<number | null>(null)
+  const [paymentStatus, setPaymentStatus] = useState<string | null>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
   const menuRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    const fetchUserRobots = async () => {
-      try {
-        const { data, error } = await api.getUserRobots()
-        if (error) throw new Error(error)
-        setUserRobots(data as UserRobot[])
-      } catch {
-        toast.error("Failed to load your robots")
-      } finally {
-        setIsLoading(false)
-      }
+  const fetchUserRobots = async () => {
+    try {
+      const { data, error } = await api.getUserRobots()
+      if (error) throw new Error(error)
+      setUserRobots(data as UserRobot[])
+    } catch {
+      toast.error("Failed to load your robots")
+    } finally {
+      setIsLoading(false)
     }
+  }
+
+  useEffect(() => {
     fetchUserRobots()
   }, [])
 
@@ -61,6 +73,13 @@ export function UserRobots() {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
+  // Cleanup poll on unmount
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current)
+    }
+  }, [])
+
   const copyToClipboard = (id: number, key: string) => {
     navigator.clipboard.writeText(key)
     setCopiedId(id)
@@ -68,6 +87,7 @@ export function UserRobots() {
     setTimeout(() => setCopiedId(null), 2000)
   }
 
+  // ===== Existing Elite upgrade (full price from wallet) – unchanged =====
   const handleUpgradeToElite = async (userRobot: UserRobot) => {
     const fullPrice = Number(userRobot.robot.price)
     if (!window.confirm(`Upgrade to Elite?\n\nThis will charge $${formatCurrency(fullPrice)} and unlock Settings.`)) return
@@ -76,12 +96,95 @@ export function UserRobots() {
       const accountType = localStorage.getItem("account_type") || "standard"
       const res = await api.upgradeElite(accountType)
       if (res?.error) throw new Error(res.error)
-      setUserRobots((prev) => prev.map((ur) => (ur.id === userRobot.id ? { ...ur, is_used: false, is_upgraded: true } : ur)))
+      setUserRobots((prev) =>
+        prev.map((ur) => (ur.id === userRobot.id ? { ...ur, is_used: false, is_upgraded: true } : ur))
+      )
       toast.success("Upgrade successful! Settings unlocked.")
     } catch (err: any) {
       toast.error(err.message || "Upgrade failed")
     } finally {
       setUpgradingId(null)
+    }
+  }
+
+  // ===== NEW: Half-price M-Pesa upgrade for normal robots =====
+  const openUpgradeModal = (userRobot: UserRobot) => {
+    setUpgradeTarget(userRobot)
+    setPhoneNumber("")
+    setPaymentId(null)
+    setPaymentStatus(null)
+  }
+
+  const closeUpgradeModal = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current)
+      pollRef.current = null
+    }
+    setUpgradeTarget(null)
+    setPhoneNumber("")
+    setPaymentId(null)
+    setPaymentStatus(null)
+    setIsInitiating(false)
+  }
+
+  const startMpesaUpgrade = async () => {
+    if (!upgradeTarget) return
+    const phone = phoneNumber.trim()
+    if (!phone) {
+      toast.error("Please enter your M-Pesa phone number")
+      return
+    }
+
+    setIsInitiating(true)
+    try {
+      const res = await api.initiateRobotUpgrade({
+        user_robot_id: upgradeTarget.id,
+        phone_number: phone,
+      })
+      if (res?.error) throw new Error(res.error)
+
+      const pid = res.data?.payment_id
+      if (!pid) throw new Error("No payment_id returned")
+
+      setPaymentId(pid)
+      setPaymentStatus("processing")
+      toast.success("STK Push sent! Enter your M-Pesa PIN on your phone.")
+
+      // Start polling
+      if (pollRef.current) clearInterval(pollRef.current)
+      pollRef.current = setInterval(async () => {
+        try {
+          const statusRes = await api.getRobotUpgradePaymentStatus(pid)
+          if (statusRes?.error) return
+
+          const status = statusRes.data?.status
+          const isUpgraded = statusRes.data?.is_upgraded
+          setPaymentStatus(status)
+
+          if (status === "success" || isUpgraded) {
+            if (pollRef.current) {
+              clearInterval(pollRef.current)
+              pollRef.current = null
+            }
+            // Refresh list so banner appears
+            await fetchUserRobots()
+            toast.success("Robot upgraded successfully!")
+            closeUpgradeModal()
+          } else if (status === "failed" || status === "cancelled") {
+            if (pollRef.current) {
+              clearInterval(pollRef.current)
+              pollRef.current = null
+            }
+            toast.error(statusRes.data?.result_desc || "Payment failed or was cancelled")
+          }
+        } catch {
+          // ignore transient poll errors
+        }
+      }, 3000)
+    } catch (err: any) {
+      toast.error(err.message || "Failed to initiate payment")
+    } finally {
+      setIsInitiating(false)
     }
   }
 
@@ -97,84 +200,224 @@ export function UserRobots() {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {userRobots.map((userRobot) => {
-        const { robot, purchased_at, deriv_access_key, is_used = false, is_setting = false, is_upgraded = false } = userRobot
-        const purchaseDate = purchased_at ? new Date(purchased_at).toLocaleDateString() : "Unknown"
-        const isDerivRobot = robot.is_deriv_robot || !!deriv_access_key
-        const isEliteRobot = !!robot.is_elite_robot
-        const isPermanentlyElite = !!is_setting
-        const showAsElite = isEliteRobot && (isPermanentlyElite || !is_used)
-        const showSettings = isEliteRobot && !is_used && !isPermanentlyElite
-        const showUpgradeTag = isEliteRobot && is_used && !isPermanentlyElite
-        const showConfigPanel = isEliteRobot && (showConfigFor === userRobot.id || isPermanentlyElite)
+    <>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {userRobots.map((userRobot) => {
+          const { robot, purchased_at, deriv_access_key, is_used = false, is_setting = false, is_upgraded = false } = userRobot
+          const purchaseDate = purchased_at ? new Date(purchased_at).toLocaleDateString() : "Unknown"
+          const isDerivRobot = robot.is_deriv_robot || !!deriv_access_key
+          const isEliteRobot = !!robot.is_elite_robot
+          const isPermanentlyElite = !!is_setting
+          const showAsElite = isEliteRobot && (isPermanentlyElite || !is_used)
+          const showSettings = isEliteRobot && !is_used && !isPermanentlyElite
+          const showUpgradeTag = isEliteRobot && is_used && !isPermanentlyElite
+          const showConfigPanel = isEliteRobot && (showConfigFor === userRobot.id || isPermanentlyElite)
 
-        return (
-          <div key={userRobot.id} className={`relative rounded-3xl p-6 flex flex-col overflow-hidden border bg-white text-slate-900 dark:bg-zinc-950 dark:text-white ${showAsElite ? "border-amber-400 dark:border-amber-600" : "border-slate-200 dark:border-zinc-800"}`}>
-            {robot.image && <img src={robot.image} alt={robot.name} className="w-full h-40 object-cover rounded-2xl mb-4" />}
-            {is_upgraded && (
-              <div className="absolute top-4 right-4 z-10">
-                <span className="drop-on-top relative inline-flex items-center overflow-hidden rounded-full border border-cyan-300/70 bg-gradient-to-r from-cyan-400 via-sky-500 to-blue-500 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white shadow-lg shadow-cyan-500/40">
-                  <span className="relative z-[1]">Upgraded</span>
-                </span>
-              </div>
-            )}
-            <div className="flex-1">
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-lg font-bold">{robot.name}</h3>
-                  {showAsElite && <span className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 px-2.5 py-0.5 rounded-full font-semibold">ELITE</span>}
-                  {isDerivRobot && <span className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 px-2.5 py-0.5 rounded-full">DERIV PREMIUM</span>}
-                  {isPermanentlyElite && <span className="text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 px-2.5 py-0.5 rounded-full">Configured</span>}
+          // Half-price upgrade button for normal robots only
+          const canShowHalfPriceUpgrade =
+            !isEliteRobot && !isDerivRobot && !is_upgraded
+
+          const halfPrice = Number(robot.effective_price || robot.price) / 2
+
+          return (
+            <div
+              key={userRobot.id}
+              className={`relative rounded-3xl p-6 flex flex-col overflow-hidden border bg-white text-slate-900 dark:bg-zinc-950 dark:text-white ${
+                showAsElite ? "border-amber-400 dark:border-amber-600" : "border-slate-200 dark:border-zinc-800"
+              }`}
+            >
+              {robot.image && (
+                <img src={robot.image} alt={robot.name} className="w-full h-40 object-cover rounded-2xl mb-4" />
+              )}
+
+              {/* Upgraded banner – works for both Elite and normal robots */}
+              {is_upgraded && (
+                <div className="absolute top-4 right-4 z-10">
+                  <span className="drop-on-top relative inline-flex items-center overflow-hidden rounded-full border border-cyan-300/70 bg-gradient-to-r from-cyan-400 via-sky-500 to-blue-500 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white shadow-lg shadow-cyan-500/40">
+                    <span className="relative z-[1]">Upgraded</span>
+                  </span>
                 </div>
-                {showSettings && (
-                  <div className="relative" ref={openMenuId === userRobot.id ? menuRef : null}>
-                    <button onClick={() => setOpenMenuId(openMenuId === userRobot.id ? null : userRobot.id)} className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 dark:text-zinc-400 dark:hover:text-amber-300">
-                      <MoreVertical size={18} />
-                    </button>
-                    {openMenuId === userRobot.id && (
-                      <div className="absolute right-0 top-full mt-1 w-52 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 shadow-xl z-20 overflow-hidden">
-                        <button onClick={() => { setShowConfigFor(userRobot.id); setOpenMenuId(null) }} className="w-full flex items-center gap-2 px-4 py-3 text-sm text-left hover:bg-amber-50 dark:hover:bg-amber-950">
-                          <Settings size={15} className="text-amber-600 dark:text-amber-400" /> Configure to Elite
-                        </button>
-                      </div>
+              )}
+
+              <div className="flex-1">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-lg font-bold">{robot.name}</h3>
+                    {showAsElite && (
+                      <span className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 px-2.5 py-0.5 rounded-full font-semibold">
+                        ELITE
+                      </span>
+                    )}
+                    {isDerivRobot && (
+                      <span className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 px-2.5 py-0.5 rounded-full">
+                        DERIV PREMIUM
+                      </span>
+                    )}
+                    {isPermanentlyElite && (
+                      <span className="text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 px-2.5 py-0.5 rounded-full">
+                        Configured
+                      </span>
                     )}
                   </div>
+
+                  {showSettings && (
+                    <div className="relative" ref={openMenuId === userRobot.id ? menuRef : null}>
+                      <button
+                        onClick={() => setOpenMenuId(openMenuId === userRobot.id ? null : userRobot.id)}
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 dark:text-zinc-400 dark:hover:text-amber-300"
+                      >
+                        <MoreVertical size={18} />
+                      </button>
+                      {openMenuId === userRobot.id && (
+                        <div className="absolute right-0 top-full mt-1 w-52 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 shadow-xl z-20 overflow-hidden">
+                          <button
+                            onClick={() => {
+                              setShowConfigFor(userRobot.id)
+                              setOpenMenuId(null)
+                            }}
+                            className="w-full flex items-center gap-2 px-4 py-3 text-sm text-left hover:bg-amber-50 dark:hover:bg-amber-950"
+                          >
+                            <Settings size={15} className="text-amber-600 dark:text-amber-400" /> Configure to Elite
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <p className="text-sm text-slate-500 dark:text-zinc-400 mb-4">{robot.description}</p>
+              </div>
+
+              <div className="mt-6 pt-6 border-t border-slate-200 dark:border-zinc-800 space-y-4">
+                <div>
+                  <p className="text-sm text-slate-500 dark:text-zinc-400">Purchased</p>
+                  <p className="font-medium">{purchaseDate}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-500 dark:text-zinc-400">Price Paid</p>
+                  <p className="font-semibold">${formatCurrency(Number(userRobot.purchased_price || robot.price))}</p>
+                </div>
+
+                {isDerivRobot && deriv_access_key && (
+                  <div>
+                    <p className="text-sm text-amber-600 dark:text-amber-400 mb-2">Deriv Access Key</p>
+                    <div className="flex items-center gap-3 bg-slate-100 dark:bg-zinc-900 p-3 rounded-xl font-mono text-sm break-all border border-amber-200 dark:border-amber-800">
+                      <span className="flex-1">{deriv_access_key}</span>
+                      <button
+                        onClick={() => copyToClipboard(userRobot.id, deriv_access_key)}
+                        className="text-amber-600 dark:text-amber-400"
+                      >
+                        {copiedId === userRobot.id ? <Check size={18} /> : <Copy size={18} />}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Elite full-price upgrade button (existing) */}
+                {showUpgradeTag && (
+                  <button
+                    onClick={() => handleUpgradeToElite(userRobot)}
+                    disabled={upgradingId === userRobot.id}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-amber-100 dark:bg-amber-950 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 text-sm font-semibold disabled:opacity-60"
+                  >
+                    {upgradingId === userRobot.id ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" /> Processing…
+                      </>
+                    ) : (
+                      "Upgrade to Elite"
+                    )}
+                  </button>
+                )}
+
+                {/* NEW: Half-price M-Pesa upgrade for normal robots */}
+                {canShowHalfPriceUpgrade && (
+                  <button
+                    onClick={() => openUpgradeModal(userRobot)}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-sm font-semibold shadow-md hover:opacity-90 transition"
+                  >
+                    <ArrowUpCircle size={16} />
+                    Upgrade – ${formatCurrency(halfPrice)}
+                  </button>
+                )}
+
+                {showConfigPanel && showAsElite && (
+                  <EliteConfigPanel robotId={robot.id} robotName={robot.name} />
                 )}
               </div>
-              <p className="text-sm text-slate-500 dark:text-zinc-400 mb-4">{robot.description}</p>
             </div>
+          )
+        })}
+      </div>
 
-            <div className="mt-6 pt-6 border-t border-slate-200 dark:border-zinc-800 space-y-4">
-              <div>
-                <p className="text-sm text-slate-500 dark:text-zinc-400">Purchased</p>
-                <p className="font-medium">{purchaseDate}</p>
-              </div>
-              <div>
-                <p className="text-sm text-slate-500 dark:text-zinc-400">Price Paid</p>
-                <p className="font-semibold">${formatCurrency(Number(userRobot.purchased_price || robot.price))}</p>
-              </div>
-              {isDerivRobot && deriv_access_key && (
-                <div>
-                  <p className="text-sm text-amber-600 dark:text-amber-400 mb-2">Deriv Access Key</p>
-                  <div className="flex items-center gap-3 bg-slate-100 dark:bg-zinc-900 p-3 rounded-xl font-mono text-sm break-all border border-amber-200 dark:border-amber-800">
-                    <span className="flex-1">{deriv_access_key}</span>
-                    <button onClick={() => copyToClipboard(userRobot.id, deriv_access_key)} className="text-amber-600 dark:text-amber-400">
-                      {copiedId === userRobot.id ? <Check size={18} /> : <Copy size={18} />}
-                    </button>
-                  </div>
+      {/* ===== Upgrade Modal (Half-price M-Pesa) ===== */}
+      {upgradeTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-3xl bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 p-6 shadow-2xl">
+            <h3 className="text-xl font-bold mb-1">Upgrade Robot</h3>
+            <p className="text-sm text-slate-500 dark:text-zinc-400 mb-5">
+              Upgrade <span className="font-semibold text-slate-900 dark:text-white">{upgradeTarget.robot.name}</span> for{" "}
+              <span className="font-semibold text-cyan-600 dark:text-cyan-400">
+                ${formatCurrency(Number(upgradeTarget.robot.effective_price || upgradeTarget.robot.price) / 2)}
+              </span>{" "}
+              (half price) via M-Pesa.
+            </p>
+
+            {!paymentId ? (
+              <>
+                <label className="text-xs text-slate-600 dark:text-zinc-400 mb-1.5 block">M-Pesa Phone Number</label>
+                <div className="relative mb-5">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    placeholder="07XXXXXXXX or 2547XXXXXXXX"
+                    className="pl-10 bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700"
+                  />
                 </div>
-              )}
-              {showUpgradeTag && (
-                <button onClick={() => handleUpgradeToElite(userRobot)} disabled={upgradingId === userRobot.id} className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-amber-100 dark:bg-amber-950 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-200 text-sm font-semibold disabled:opacity-60">
-                  {upgradingId === userRobot.id ? <><Loader2 size={16} className="animate-spin" /> Processing…</> : "Upgrade to Elite"}
-                </button>
-              )}
-              {showConfigPanel && showAsElite && <EliteConfigPanel robotId={robot.id} robotName={robot.name} />}
-            </div>
+
+                <div className="flex gap-3">
+                  <Button variant="outline" className="flex-1 rounded-xl" onClick={closeUpgradeModal} disabled={isInitiating}>
+                    Cancel
+                  </Button>
+                  <Button
+                    className="flex-1 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white"
+                    onClick={startMpesaUpgrade}
+                    disabled={isInitiating}
+                  >
+                    {isInitiating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Sending STK…
+                      </>
+                    ) : (
+                      "Pay with M-Pesa"
+                    )}
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="text-center space-y-4">
+                <div className="w-14 h-14 mx-auto rounded-full bg-cyan-100 dark:bg-cyan-950 flex items-center justify-center">
+                  <Loader2 className="w-7 h-7 text-cyan-600 dark:text-cyan-400 animate-spin" />
+                </div>
+                <div>
+                  <p className="font-semibold">Waiting for payment…</p>
+                  <p className="text-sm text-slate-500 dark:text-zinc-400 mt-1">
+                    Enter your M-Pesa PIN on your phone.
+                    <br />
+                    Status: <span className="font-medium capitalize">{paymentStatus || "processing"}</span>
+                  </p>
+                  <p className="text-xs text-slate-400 dark:text-zinc-500 mt-3">
+                    After you pay, an admin will approve it. The “Upgraded” badge will appear automatically.
+                  </p>
+                </div>
+                <Button variant="outline" className="rounded-xl" onClick={closeUpgradeModal}>
+                  Close
+                </Button>
+              </div>
+            )}
           </div>
-        )
-      })}
-    </div>
+        </div>
+      )}
+    </>
   )
 }

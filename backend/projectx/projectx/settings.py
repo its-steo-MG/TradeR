@@ -467,3 +467,6 @@ connection_created.connect(enable_sqlite_wal)
 
 # settings.py
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+# Africa's Talking
+AFRICASTALKING_USERNAME = "Mpesa_app"          # change later to your live username
+AFRICASTALKING_API_KEY = "atsk_d60d65d748ed65bc74377852e432d711413f5c88ab50ed49fc04d553d8c483853fa0fb74"

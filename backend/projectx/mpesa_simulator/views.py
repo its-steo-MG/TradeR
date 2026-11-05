@@ -6,11 +6,16 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.db import transaction
 from decimal import Decimal
+from django.utils import timezone
+import logging
 
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import MpesaUser, MpesaTransaction
 from .serializers import MpesaUserSerializer, MpesaTransactionSerializer
 from accounts.authentication import SuspendedUserJWTAuthentication
+from notifications.utils import send_web_push
+
+logger = logging.getLogger(__name__)
 
 
 def calculate_mpesa_send_fee(amount: Decimal) -> Decimal:
@@ -241,7 +246,7 @@ class SendMoneyView(APIView):
             )
 
             # Create transaction for recipient
-            MpesaTransaction.objects.create(
+            deposit = MpesaTransaction.objects.create(
                 mpesa_user=recipient,
                 transaction_type='deposit',
                 amount=amount,
@@ -250,6 +255,51 @@ class SendMoneyView(APIView):
                 recipient_phone=sender.phone_number,
                 category='family_friends',
             )
+
+        # ===== SEND PUSH NOTIFICATIONS =====
+        try:
+            now = timezone.localtime()
+            date_str = f"{now.day}/{now.month}/{now.strftime('%y')}"
+            hour = now.strftime("%I").lstrip("0") or "12"
+            time_str = f"{hour}:{now.strftime('%M')} {now.strftime('%p')}"
+
+            # 1. Notify the SENDER
+            send_web_push(
+                user=sender.user,
+                title="MPESA",
+                body=(
+                    f"{withdrawal.mpesa_id} Confirmed. "
+                    f"Ksh {amount:,.2f} sent to {recipient.real_name} {recipient.phone_number} "
+                    f"on {date_str} at {time_str}. "
+                    f"New M-PESA balance is Ksh {sender.balance:,.2f}. "
+                    f"Transaction cost, Ksh {fee:,.2f}."
+                ),
+                data={
+                    "type": "send_money",
+                    "mpesa_id": withdrawal.mpesa_id,
+                    "amount": str(amount),
+                }
+            )
+
+            # 2. Notify the RECIPIENT
+            send_web_push(
+                user=recipient.user,
+                title="MPESA",
+                body=(
+                    f"{deposit.mpesa_id} Confirmed. "
+                    f"You have received Ksh {amount:,.2f} from {sender.real_name} {sender.phone_number} "
+                    f"on {date_str} at {time_str}. "
+                    f"New M-PESA balance is Ksh {recipient.balance:,.2f}."
+                ),
+                data={
+                    "type": "receive_money",
+                    "mpesa_id": deposit.mpesa_id,
+                    "amount": str(amount),
+                }
+            )
+        except Exception as push_err:
+            # Never fail the transaction because of a push error
+            logger.error(f"Failed to send M-Pesa push: {push_err}")
 
         return Response({
             'message': 'Send money successful',
