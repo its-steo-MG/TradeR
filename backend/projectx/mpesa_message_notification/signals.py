@@ -9,6 +9,15 @@ from decimal import Decimal
 import pytz
 import logging
 
+import re
+
+def plain(text: str) -> str:
+    if not text:
+        return ""
+    clean = re.sub(r"<[^>]+>", "", text)
+    return re.sub(r"\s+", " ", clean.replace("&nbsp;", " ").replace("&", "&")).strip()
+
+
 logger = logging.getLogger('mpesa_message_notification')
 
 
@@ -106,14 +115,31 @@ def create_mpesa_notification(sender, instance, created, **kwargs):
         if MpesaNotification.objects.filter(mpesa_transaction=instance).exists():
             return
 
+        # Keep HTML for the in-app popup; plain version is used for system push
+        plain_message = plain(message)
+
         MpesaNotification.objects.create(
             mpesa_user=instance.mpesa_user,
             mpesa_transaction=instance,
             notification_type=notif_type,
-            message=message,
+            message=message,          # HTML for in-app
+            # If your model has a body field, uncomment the next line:
+            # body=plain_message,
             caller_id="MPESA",
             source="mpesa",
         )
+
+        # Direct push with plain text so system notifications never show tags
+        try:
+            from notifications.utils import send_web_push
+            send_web_push(
+                user=instance.mpesa_user.user,
+                title="MPESA",
+                body=plain_message[:220],
+                data={"type": notif_type, "mpesa_id": mpesa_id},
+            )
+        except Exception as push_err:
+            logger.warning(f"Plain push failed: {push_err}")
 
         logger.info(f"✅ M-Pesa Notification created → {mpesa_id}")
 
