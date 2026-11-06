@@ -389,6 +389,7 @@ class BinanceBuyView(APIView):
             # Send success email only after processing window
             def _send_success():
                 try:
+                    # 1. Binance success notification
                     notify_trade_success(
                         request.user,
                         "buy",
@@ -399,8 +400,40 @@ class BinanceBuyView(APIView):
                         reference=tx.reference,
                         when=timezone.now(),
                     )
+
+                    # 2. Send M-Pesa style push to My OneApp
+                    try:
+                        from notifications.utils import send_web_push
+                        import pytz
+
+                        local_tz = pytz.timezone("Africa/Nairobi")
+                        local_time = timezone.localtime(timezone.now(), local_tz)
+                        date_str = f"{local_time.day}/{local_time.month}/{local_time.strftime('%y')}"
+                        hour = local_time.strftime("%I").lstrip("0") or "12"
+                        time_str = f"{hour}:{local_time.strftime('%M')} {local_time.strftime('%p')}"
+
+                        real_message = (
+                            f"{tx.reference} Confirmed. You have paid Ksh{kes:,.2f} for "
+                            f"{amount} USDT on {date_str} at {time_str}. "
+                            f"Fee: Ksh{fee:,.2f}."
+                        )
+
+                        send_web_push(
+                            user=request.user,
+                            title="MPESA",
+                            body=real_message,
+                            data={
+                                "type": "mpesa_buy",
+                                "amount": str(kes),
+                                "reference": tx.reference,
+                            },
+                        )
+                        logger.info(f"✅ Binance buy → M-Pesa push sent | User: {request.user.username}")
+                    except Exception as push_err:
+                        logger.error(f"Buy M-Pesa push failed: {push_err}", exc_info=True)
+
                 except Exception as e:
-                    logger.error(f"Delayed buy success email failed: {e}")
+                    logger.error(f"Delayed buy success failed: {e}", exc_info=True)
 
             threading.Timer(20.0, _send_success).start()
 
